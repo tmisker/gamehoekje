@@ -1,5 +1,5 @@
 // ============================================================================
-//  Rubik's Cube Solver – UI logic (mobile first)
+//  Rubik's Cube Solver – UI logic (mobile first, 3D view)
 //  Relies on global `CubeSolver` (see solver.js).
 // ============================================================================
 (function(){
@@ -11,14 +11,23 @@
   const FACE_KEYS = ["U","R","F","D","L","B"];
   const FACE_NAMES = {U:"Boven",R:"Rechts",F:"Voor",D:"Onder",L:"Links",B:"Achter"};
 
-  // human-readable move descriptions
+  // Human-readable move descriptions — consistent "klok"-logica for every face.
+  // A turn is "met de klok mee" / "tegen de klok in" gezien als je RECHT naar
+  // dat vlak kijkt (de cube draait daar vanzelf naartoe tijdens het afspelen).
   const MOVE_TEXT = {
     "U":"Bovenkant met de klok mee","U'":"Bovenkant tegen de klok in","U2":"Bovenkant halve draai",
     "D":"Onderkant met de klok mee","D'":"Onderkant tegen de klok in","D2":"Onderkant halve draai",
-    "R":"Rechterkant omhoog","R'":"Rechterkant omlaag","R2":"Rechterkant halve draai",
-    "L":"Linkerkant omhoog","L'":"Linkerkant omlaag","L2":"Linkerkant halve draai",
+    "R":"Rechterkant met de klok mee","R'":"Rechterkant tegen de klok in","R2":"Rechterkant halve draai",
+    "L":"Linkerkant met de klok mee","L'":"Linkerkant tegen de klok in","L2":"Linkerkant halve draai",
     "F":"Voorkant met de klok mee","F'":"Voorkant tegen de klok in","F2":"Voorkant halve draai",
     "B":"Achterkant met de klok mee","B'":"Achterkant tegen de klok in","B2":"Achterkant halve draai",
+  };
+
+  // Cube-rotation (rx,ry in degrees) that brings a given face to the front,
+  // so the player looks straight at the turning face. Derived from the CSS
+  // face transforms; combined with the constant iso-tilt of the .tilt wrapper.
+  const FACE_VIEW = {
+    F:[0,0], B:[0,180], R:[0,-90], L:[0,90], U:[-90,0], D:[90,0],
   };
 
   // state -------------------------------------------------------------------
@@ -29,6 +38,7 @@
   let solution = [];          // move tokens
   let stepIndex = 0;          // current playback frame
   let playing = false, playTimer = null;
+  let viewRX = 0, viewRY = 0; // current cube rotation (degrees)
 
   // DOM ----------------------------------------------------------------------
   const $ = id => document.getElementById(id);
@@ -46,24 +56,18 @@
     });
   }
 
-  // net layout: positions in a 4x3 grid of faces
-  const NET_POS = { U:[0,1], L:[1,0], F:[1,1], R:[1,2], B:[1,3], D:[2,1] };
   function faceBase(key){ return FACE_KEYS.indexOf(key)*9; }
 
-  function buildNet(){
-    const net = $("net");
-    net.innerHTML = "";
+  // Build the 3D cube: six faces, each a row-major 3x3 grid of stickers. The
+  // CSS face transforms place them so the layout matches the solver's facelet
+  // model exactly (so colouring corresponds 1:1 with a real cube).
+  function buildCube(){
+    const cube = $("cube");
+    cube.innerHTML = "";
     for(const key of FACE_KEYS){
-      const [r,c] = NET_POS[key];
       const face = document.createElement("div");
-      face.className = "face";
-      face.style.gridRow = (r+1); face.style.gridColumn = (c+1);
+      face.className = "cubeface face-"+key;
       face.dataset.face = key;
-      const label = document.createElement("div");
-      label.className = "facelabel"; label.textContent = FACE_NAMES[key];
-      face.appendChild(label);
-      const grid = document.createElement("div");
-      grid.className = "facegrid";
       const base = faceBase(key);
       for(let i=0;i<9;i++){
         const cell = document.createElement("div");
@@ -71,37 +75,59 @@
         cell.dataset.idx = base+i;
         if(i===4) cell.classList.add("center"); // centre fixed
         cell.onclick = ()=>onSticker(base+i);
-        grid.appendChild(cell);
+        face.appendChild(cell);
       }
-      face.appendChild(grid);
-      net.appendChild(face);
+      cube.appendChild(face);
     }
-    paintNet();
+    applyView();
+    paintCube();
   }
 
   function colorsForRender(){
     return mode==="edit" ? inputColors : frames[stepIndex];
   }
-  function paintNet(){
+  function paintCube(){
     const cols = colorsForRender();
     document.querySelectorAll(".sticker").forEach(cell=>{
       const idx = +cell.dataset.idx;
-      cell.style.background = COLORS[cols[idx]] || "#333";
+      cell.style.background = COLORS[cols[idx]] || "#2a2a2d";
     });
-    // highlight the face that the next move will turn
-    document.querySelectorAll(".face").forEach(f=>f.classList.remove("turning"));
+    // highlight the face that the current move turns
+    document.querySelectorAll(".cubeface").forEach(f=>f.classList.remove("turn"));
     if(mode==="solve" && stepIndex < solution.length){
       const f = solution[stepIndex][0];
-      const el = document.querySelector('.face[data-face="'+f+'"]');
-      if(el) el.classList.add("turning");
+      const el = document.querySelector('.cubeface[data-face="'+f+'"]');
+      if(el) el.classList.add("turn");
     }
+  }
+
+  // view rotation -----------------------------------------------------------
+  function applyView(){
+    const cube = $("cube");
+    cube.style.setProperty("--rx", viewRX+"deg");
+    cube.style.setProperty("--ry", viewRY+"deg");
+  }
+  function rotateView(dx,dy){ viewRX+=dx; viewRY+=dy; applyView(); }
+  // turn the cube so `face` looks straight at the viewer, taking the short way
+  function faceToFront(face){
+    const [tx,ty] = FACE_VIEW[face] || [0,0];
+    viewRX = nearestAngle(viewRX, tx);
+    viewRY = nearestAngle(viewRY, ty);
+    applyView();
+  }
+  // pick the multiple-of-360 representation of `target` closest to `current`
+  function nearestAngle(current, target){
+    let t = target;
+    while(t - current > 180) t -= 360;
+    while(t - current < -180) t += 360;
+    return t;
   }
 
   function onSticker(idx){
     if(mode!=="edit") return;
     if(idx%9===4) return;       // centre is fixed
     inputColors[idx]=selectedColor;
-    paintNet();
+    paintCube();
   }
 
   // actions ------------------------------------------------------------------
@@ -110,7 +136,7 @@
     inputColors = CS.stateToFacelets(CS.solvedState());
     setMode("edit");
     setStatus("");
-    paintNet();
+    paintCube();
   }
   function scramble(){
     stopPlay();
@@ -119,7 +145,7 @@
     inputColors = CS.stateToFacelets(st);
     setMode("edit");
     setStatus("Door elkaar gegooid – druk op Los op!");
-    paintNet();
+    paintCube();
   }
 
   // Run the (heavy) solve off the main thread when possible so the page never
@@ -168,7 +194,7 @@
       renderSolution();
       setStatus(sol.length===0 ? "Deze kubus is al opgelost! 🎉"
                                : "Opgelost in "+sol.length+" zetten 🎉");
-      paintNet();
+      afterStep();
     };
     const w = getWorker();
     if(w){
@@ -207,12 +233,18 @@
       const mv = solution[stepIndex];
       info.innerHTML = '<span class="bignote">'+mv+'</span>'+
                        '<span class="bigtext">'+(MOVE_TEXT[mv]||"")+'</span>'+
+                       '<span class="bigsub">(de kubus draait dat vlak naar je toe)</span>'+
                        '<span class="counter">Zet '+(stepIndex+1)+' / '+solution.length+'</span>';
     } else {
       info.innerHTML = '<span class="bignote">✓</span><span class="bigtext">Klaar! De kubus is opgelost.</span>';
     }
   }
-  function afterStep(){ updateChips(); updateMoveInfo(); paintNet(); }
+  function afterStep(){
+    updateChips(); updateMoveInfo();
+    // turn the cube so the face we're about to move looks straight at us
+    if(mode==="solve" && stepIndex<solution.length) faceToFront(solution[stepIndex][0]);
+    paintCube();
+  }
 
   function step(d){
     stopPlay();
@@ -229,7 +261,7 @@
     playTimer = setInterval(()=>{
       if(stepIndex>=frames.length-1){ stopPlay(); afterStep(); return; }
       stepIndex++; afterStep();
-    }, 750);
+    }, 900);
   }
   function stopPlay(){
     playing=false; if(playTimer){ clearInterval(playTimer); playTimer=null; }
@@ -251,12 +283,14 @@
   // init ---------------------------------------------------------------------
   function init(){
     buildPalette();
-    buildNet();
+    buildCube();
     setMode("edit");
     $("scrambleBtn").onclick = scramble;
     $("resetBtn").onclick = reset;
     $("solveBtn").onclick = solve;
-    $("editBtn").onclick = ()=>{ stopPlay(); setMode("edit"); setStatus(""); paintNet(); };
+    $("rotSide").onclick = ()=>rotateView(0,-90);
+    $("rotUp").onclick = ()=>rotateView(90,0);
+    $("editBtn").onclick = ()=>{ stopPlay(); setMode("edit"); setStatus(""); paintCube(); };
     $("firstBtn").onclick = gotoStart;
     $("prevBtn").onclick = ()=>step(-1);
     $("nextBtn").onclick = ()=>step(1);
