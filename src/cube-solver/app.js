@@ -1,6 +1,11 @@
 // ============================================================================
-//  Rubik's Cube Solver – UI logic (mobile first, 3D view)
+//  Rubik's Cube Solver – UI logic (mobile first, animated 3D view)
 //  Relies on global `CubeSolver` (see solver.js).
+//
+//  The cube is drawn as 26 small cubies at fixed positions. A move is shown by
+//  rotating the 9 cubies of that layer in the correct direction, then "baking"
+//  the result (cubies snap back, stickers recolour to the new state). This way
+//  the on-screen turn always matches the move you have to make.
 // ============================================================================
 (function(){
   const CS = window.CubeSolver;
@@ -12,8 +17,8 @@
   const FACE_NAMES = {U:"Boven",R:"Rechts",F:"Voor",D:"Onder",L:"Links",B:"Achter"};
 
   // Human-readable move descriptions — consistent "klok"-logica for every face.
-  // A turn is "met de klok mee" / "tegen de klok in" gezien als je RECHT naar
-  // dat vlak kijkt (de cube draait daar vanzelf naartoe tijdens het afspelen).
+  // "met de klok mee" / "tegen de klok in" gezien als je recht naar dat vlak
+  // kijkt. De animatie laat de echte draairichting zien, dus volg gewoon mee.
   const MOVE_TEXT = {
     "U":"Bovenkant met de klok mee","U'":"Bovenkant tegen de klok in","U2":"Bovenkant halve draai",
     "D":"Onderkant met de klok mee","D'":"Onderkant tegen de klok in","D2":"Onderkant halve draai",
@@ -23,12 +28,23 @@
     "B":"Achterkant met de klok mee","B'":"Achterkant tegen de klok in","B2":"Achterkant halve draai",
   };
 
-  // Cube-rotation (rx,ry in degrees) that brings a given face to the front,
-  // so the player looks straight at the turning face. Derived from the CSS
-  // face transforms; combined with the constant iso-tilt of the .tilt wrapper.
-  const FACE_VIEW = {
-    F:[0,0], B:[0,180], R:[0,-90], L:[0,90], U:[-90,0], D:[90,0],
+  // Cube-rotation (rx,ry deg) that brings a given face straight to the viewer.
+  const FACE_VIEW = { F:[0,0], B:[0,180], R:[0,-90], L:[0,90], U:[-90,0], D:[90,0] };
+
+  // Per-move animation: which layer rotates and around which CSS axis/angle.
+  // Coordinates are CSS (x right, y DOWN, z toward viewer). Derived so the
+  // animation reproduces the solver's MOVES permutation exactly.
+  //   sel(x,y,z) -> true if a cubie is in the turning layer
+  //   axis: "X"|"Y"|"Z" ; deg: base clockwise angle for the plain move
+  const MOVE_ANIM = {
+    U:{sel:(x,y,z)=>y===-1, axis:"Y", deg:-90},
+    D:{sel:(x,y,z)=>y=== 1, axis:"Y", deg:-90},
+    R:{sel:(x,y,z)=>x=== 1, axis:"X", deg: 90},
+    L:{sel:(x,y,z)=>x===-1, axis:"X", deg:-90},
+    F:{sel:(x,y,z)=>z=== 1, axis:"Z", deg: 90},
+    B:{sel:(x,y,z)=>z===-1, axis:"Z", deg:-90},
   };
+  const TURN_MS = 450;
 
   // state -------------------------------------------------------------------
   let inputColors = CS.stateToFacelets(CS.solvedState()); // 54 colour indices
@@ -38,7 +54,12 @@
   let solution = [];          // move tokens
   let stepIndex = 0;          // current playback frame
   let playing = false, playTimer = null;
-  let viewRX = 0, viewRY = 0; // current cube rotation (degrees)
+  let animating = false;      // a layer turn is in progress
+  let viewRX = 0, viewRY = 0; // current whole-cube rotation (degrees)
+
+  // cubie bookkeeping
+  const cubies = {};          // "x,y,z" -> cubie element
+  const padRef = new Array(54);  // facelet index -> coloured pad element
 
   // DOM ----------------------------------------------------------------------
   const $ = id => document.getElementById(id);
@@ -58,29 +79,66 @@
 
   function faceBase(key){ return FACE_KEYS.indexOf(key)*9; }
 
-  // Build the 3D cube: six faces, each a row-major 3x3 grid of stickers. The
-  // CSS face transforms place them so the layout matches the solver's facelet
-  // model exactly (so colouring corresponds 1:1 with a real cube).
+  // map a facelet (face,row,col) to a cubie position (CSS coords) — matches the
+  // solver's facelet layout so colouring corresponds 1:1 with a real cube.
+  function faceletCubie(key,r,c){
+    switch(key){
+      case "U": return [c-1, -1, r-1];
+      case "D": return [c-1,  1, 1-r];
+      case "F": return [c-1, r-1,  1];
+      case "B": return [1-c, r-1, -1];
+      case "R": return [ 1, r-1, 1-c];
+      case "L": return [-1, r-1, c-1];
+    }
+  }
+
+  // Build the 26 cubies and the facelet->pad lookup.
   function buildCube(){
     const cube = $("cube");
     cube.innerHTML = "";
+    for(const k in cubies) delete cubies[k];
+    const outward = { // for cubie (x,y,z): is the <dir> side outward?
+      U:(x,y,z)=>y===-1, D:(x,y,z)=>y===1, F:(x,y,z)=>z===1,
+      B:(x,y,z)=>z===-1, R:(x,y,z)=>x===1, L:(x,y,z)=>x===-1,
+    };
+    for(let x=-1;x<=1;x++) for(let y=-1;y<=1;y++) for(let z=-1;z<=1;z++){
+      if(x===0&&y===0&&z===0) continue;
+      const cubie = document.createElement("div");
+      cubie.className = "cubie";
+      cubie.style.transform = cubieTransform(x,y,z);
+      for(const dir of FACE_KEYS){
+        const cf = document.createElement("div");
+        cf.className = "cf cf-"+dir;
+        if(outward[dir](x,y,z)){
+          const pad = document.createElement("div");
+          pad.className = "pad";
+          cf.appendChild(pad);
+        }
+        cubie.appendChild(cf);
+      }
+      cubies[x+","+y+","+z] = cubie;
+      cube.appendChild(cubie);
+    }
+    // link each facelet to its coloured pad + wire up editing
     for(const key of FACE_KEYS){
-      const face = document.createElement("div");
-      face.className = "cubeface face-"+key;
-      face.dataset.face = key;
       const base = faceBase(key);
       for(let i=0;i<9;i++){
-        const cell = document.createElement("div");
-        cell.className = "sticker";
-        cell.dataset.idx = base+i;
-        if(i===4) cell.classList.add("center"); // centre fixed
-        cell.onclick = ()=>onSticker(base+i);
-        face.appendChild(cell);
+        const r=(i/3)|0, c=i%3;
+        const [x,y,z] = faceletCubie(key,r,c);
+        const pad = cubies[x+","+y+","+z].querySelector(".cf-"+key+" .pad");
+        const idx = base+i;
+        padRef[idx] = pad;
+        pad.dataset.idx = idx;
+        if(i===4) pad.classList.add("fixed");
+        else pad.onclick = ()=>onSticker(idx);
       }
-      cube.appendChild(face);
     }
     applyView();
     paintCube();
+  }
+
+  function cubieTransform(x,y,z){
+    return "translate3d(calc(var(--cu)*"+x+"),calc(var(--cu)*"+y+"),calc(var(--cu)*"+z+"))";
   }
 
   function colorsForRender(){
@@ -88,16 +146,13 @@
   }
   function paintCube(){
     const cols = colorsForRender();
-    document.querySelectorAll(".sticker").forEach(cell=>{
-      const idx = +cell.dataset.idx;
-      cell.style.background = COLORS[cols[idx]] || "#2a2a2d";
-    });
-    // highlight the face that the current move turns
-    document.querySelectorAll(".cubeface").forEach(f=>f.classList.remove("turn"));
+    for(let i=0;i<54;i++){ if(padRef[i]) padRef[i].style.background = COLORS[cols[i]] || "#2a2a2d"; }
+    // highlight the stickers of the face the current move turns
+    for(let i=0;i<54;i++){ if(padRef[i]) padRef[i].classList.remove("turn"); }
     if(mode==="solve" && stepIndex < solution.length){
-      const f = solution[stepIndex][0];
-      const el = document.querySelector('.cubeface[data-face="'+f+'"]');
-      if(el) el.classList.add("turn");
+      const key = solution[stepIndex][0];
+      const base = faceBase(key);
+      for(let i=0;i<9;i++){ if(padRef[base+i]) padRef[base+i].classList.add("turn"); }
     }
   }
 
@@ -108,14 +163,12 @@
     cube.style.setProperty("--ry", viewRY+"deg");
   }
   function rotateView(dx,dy){ viewRX+=dx; viewRY+=dy; applyView(); }
-  // turn the cube so `face` looks straight at the viewer, taking the short way
   function faceToFront(face){
     const [tx,ty] = FACE_VIEW[face] || [0,0];
     viewRX = nearestAngle(viewRX, tx);
     viewRY = nearestAngle(viewRY, ty);
     applyView();
   }
-  // pick the multiple-of-360 representation of `target` closest to `current`
   function nearestAngle(current, target){
     let t = target;
     while(t - current > 180) t -= 360;
@@ -128,6 +181,39 @@
     if(idx%9===4) return;       // centre is fixed
     inputColors[idx]=selectedColor;
     paintCube();
+  }
+
+  // ---- animated layer turn -------------------------------------------------
+  // Rotate the cubies of `mv`'s layer, then bake (snap back + recolour) by
+  // calling done(). Cubies stay at fixed positions; we only animate the visual
+  // turn and then repaint to the next state.
+  function animateTurn(mv, done){
+    const face = mv[0];
+    const a = MOVE_ANIM[face];
+    const amt = mv[1]==="'" ? -1 : mv[1]==="2" ? 2 : 1;
+    const deg = a.deg*amt;
+    const cube = $("cube");
+    const layer = document.createElement("div");
+    layer.className = "layer";
+    cube.appendChild(layer);
+    const moved = [];
+    for(const k in cubies){
+      const [x,y,z] = k.split(",").map(Number);
+      if(a.sel(x,y,z)){ layer.appendChild(cubies[k]); moved.push(cubies[k]); }
+    }
+    // force a reflow so the starting transform is registered before we animate
+    void layer.offsetWidth;
+    layer.style.transform = "rotate"+a.axis+"("+deg+"deg)";
+    let finished = false;
+    const finish = ()=>{
+      if(finished) return; finished = true;
+      // move cubies back to the cube (their per-cubie transforms are unchanged)
+      for(const c of moved) cube.appendChild(c);
+      layer.remove();
+      done();
+    };
+    layer.addEventListener("transitionend", finish, {once:true});
+    setTimeout(finish, TURN_MS+120);  // safety net if transitionend doesn't fire
   }
 
   // actions ------------------------------------------------------------------
@@ -194,6 +280,7 @@
       renderSolution();
       setStatus(sol.length===0 ? "Deze kubus is al opgelost! 🎉"
                                : "Opgelost in "+sol.length+" zetten 🎉");
+      if(solution.length) faceToFront(solution[0][0]);
       afterStep();
     };
     const w = getWorker();
@@ -214,7 +301,7 @@
       chip.className = "movechip";
       chip.textContent = mv;
       chip.dataset.i = i;
-      chip.onclick = ()=>{ stopPlay(); stepIndex=i; afterStep(); };
+      chip.onclick = ()=>{ if(animating) return; stopPlay(); snapTo(i); };
       list.appendChild(chip);
     });
     updateChips();
@@ -233,38 +320,61 @@
       const mv = solution[stepIndex];
       info.innerHTML = '<span class="bignote">'+mv+'</span>'+
                        '<span class="bigtext">'+(MOVE_TEXT[mv]||"")+'</span>'+
-                       '<span class="bigsub">(de kubus draait dat vlak naar je toe)</span>'+
+                       '<span class="bigsub">Druk op ▶ en draai precies mee met de kubus</span>'+
                        '<span class="counter">Zet '+(stepIndex+1)+' / '+solution.length+'</span>';
     } else {
       info.innerHTML = '<span class="bignote">✓</span><span class="bigtext">Klaar! De kubus is opgelost.</span>';
     }
   }
+  // settle on a step without animating the turn (used for prev / jumps)
   function afterStep(){
     updateChips(); updateMoveInfo();
-    // turn the cube so the face we're about to move looks straight at us
     if(mode==="solve" && stepIndex<solution.length) faceToFront(solution[stepIndex][0]);
     paintCube();
+  }
+  function snapTo(i){
+    stepIndex = Math.max(0, Math.min(frames.length-1, i));
+    afterStep();
+  }
+
+  // advance one move WITH animation
+  function advance(){
+    if(animating) return;
+    if(stepIndex>=solution.length){ return; }
+    const mv = solution[stepIndex];
+    faceToFront(mv[0]);                       // make sure the layer faces us
+    // give the cube a moment to rotate into view, then turn the layer
+    animating = true;
+    setTimeout(()=>{
+      animateTurn(mv, ()=>{
+        animating = false;
+        stepIndex++;
+        afterStep();
+        if(playing){
+          if(stepIndex>=solution.length){ stopPlay(); }
+          else { playTimer = setTimeout(advance, 350); }
+        }
+      });
+    }, 220);
   }
 
   function step(d){
     stopPlay();
-    stepIndex = Math.max(0, Math.min(frames.length-1, stepIndex+d));
-    afterStep();
+    if(animating) return;
+    if(d>0){ advance(); return; }            // forward = animated turn
+    snapTo(stepIndex+d);                      // backward = snap
   }
-  function gotoStart(){ stopPlay(); stepIndex=0; afterStep(); }
-  function gotoEnd(){ stopPlay(); stepIndex=frames.length-1; afterStep(); }
+  function gotoStart(){ stopPlay(); if(animating) return; snapTo(0); }
+  function gotoEnd(){ stopPlay(); if(animating) return; snapTo(frames.length-1); }
 
   function play(){
     if(playing){ stopPlay(); return; }
-    if(stepIndex>=frames.length-1) stepIndex=0;
+    if(stepIndex>=solution.length) snapTo(0);
     playing=true; $("playBtn").textContent="⏸ Pauze";
-    playTimer = setInterval(()=>{
-      if(stepIndex>=frames.length-1){ stopPlay(); afterStep(); return; }
-      stepIndex++; afterStep();
-    }, 900);
+    advance();
   }
   function stopPlay(){
-    playing=false; if(playTimer){ clearInterval(playTimer); playTimer=null; }
+    playing=false; if(playTimer){ clearTimeout(playTimer); playTimer=null; }
     const pb=$("playBtn"); if(pb) pb.textContent="▶ Speel af";
   }
 

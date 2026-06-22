@@ -11,6 +11,7 @@
       --bg:#121213; --panel:#1e1e20; --panel2:#2a2a2d; --line:#3a3a3c;
       --accent:#1faa47; --accentd:#178a3a; --text:#fff; --muted:#9a9a9d;
       --cs:min(74vw,300px);           /* cube size */
+      --cu:calc(var(--cs)/3);         /* cubie size */
     }
     html,body{height:100%;}
     body{
@@ -28,7 +29,7 @@
       border:1px solid var(--line); border-radius:14px; padding:12px;
     }
 
-    /* ── 3D cube ── */
+    /* ── 3D cube (27 cubies) ── */
     .scene{
       width:var(--cs); height:var(--cs);
       perspective:900px; margin:6px auto 2px;
@@ -44,28 +45,35 @@
       transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));
       transition:transform .45s cubic-bezier(.4,.05,.2,1);
     }
-    .cubeface{
-      position:absolute; width:var(--cs); height:var(--cs);
-      display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr);
-      gap:5px; padding:5px; background:#0a0a0b; border-radius:9px;
-      backface-visibility:hidden;       /* hide faces turned away → no click-through */
-      box-shadow:inset 0 0 0 1px #000;
+    .layer{                 /* temporary wrapper used to animate one layer turn */
+      position:absolute; inset:0; transform-style:preserve-3d;
+      transition:transform .45s ease-in-out;
     }
-    /* half of --cs for translateZ */
-    .face-U{transform:rotateX(90deg)  translateZ(calc(var(--cs)/2));}
-    .face-D{transform:rotateX(-90deg) translateZ(calc(var(--cs)/2));}
-    .face-F{transform:               translateZ(calc(var(--cs)/2));}
-    .face-B{transform:rotateY(180deg) translateZ(calc(var(--cs)/2));}
-    .face-R{transform:rotateY(90deg)  translateZ(calc(var(--cs)/2));}
-    .face-L{transform:rotateY(-90deg) translateZ(calc(var(--cs)/2));}
-
-    .sticker{
-      border-radius:6px; border:1px solid rgba(0,0,0,.45); cursor:pointer;
-      transition:transform .08s, filter .1s; box-shadow:inset 0 -3px 5px rgba(0,0,0,.18);
+    .cubie{
+      position:absolute; width:var(--cu); height:var(--cu);
+      left:50%; top:50%; margin-left:calc(var(--cu)/-2); margin-top:calc(var(--cu)/-2);
+      transform-style:preserve-3d;
     }
-    .sticker:active{transform:scale(.88);}
-    .sticker.center{cursor:default;box-shadow:inset 0 0 0 2px rgba(0,0,0,.35), inset 0 -3px 5px rgba(0,0,0,.18);}
-    .cubeface.turn{outline:3px solid var(--accent);outline-offset:2px;box-shadow:0 0 22px var(--accent);}
+    .cf{                    /* one side of a cubie */
+      position:absolute; width:var(--cu); height:var(--cu);
+      background:#0a0a0b; border-radius:9px;
+      backface-visibility:hidden;
+    }
+    .cf-U{transform:rotateX(90deg)  translateZ(calc(var(--cu)/2));}
+    .cf-D{transform:rotateX(-90deg) translateZ(calc(var(--cu)/2));}
+    .cf-F{transform:               translateZ(calc(var(--cu)/2));}
+    .cf-B{transform:rotateY(180deg) translateZ(calc(var(--cu)/2));}
+    .cf-R{transform:rotateY(90deg)  translateZ(calc(var(--cu)/2));}
+    .cf-L{transform:rotateY(-90deg) translateZ(calc(var(--cu)/2));}
+    .pad{                   /* the coloured sticker; inset creates the gaps */
+      position:absolute; inset:7%; border-radius:14%;
+      border:1px solid rgba(0,0,0,.45);
+      box-shadow:inset 0 -3px 6px rgba(0,0,0,.18);
+      cursor:pointer; transition:transform .08s;
+    }
+    .pad:active{transform:scale(.9);}
+    .pad.fixed{cursor:default;}
+    .pad.turn{outline:3px solid var(--accent);outline-offset:2px;box-shadow:0 0 12px var(--accent);}
 
     /* ── view rotation controls ── */
     .viewctrl{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
