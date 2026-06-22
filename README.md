@@ -18,22 +18,27 @@ Open **`index.html`** in een browser (werkt offline, ook op je telefoon).
 
 - De kubus wordt intern als een *cubie*-model bijgehouden (hoek- en
   randstukken met positie + oriëntatie).
-- De oplosser gebruikt een **laag-voor-laag** methode:
-  - onderste kruis en hoeken via een korte IDA\*-zoekactie met een
-    admissible heuristiek (voorberekende afstandstabellen per stuk);
-  - middelste laag met de klassieke insertie-algoritmes;
-  - laatste laag via een **vooraf berekende BFS-tabel** over de hele
-    last-layer groep (62 208 toestanden) — gegarandeerd correct.
-- Elke oplossing wordt geverifieerd voordat hij getoond wordt.
+- De oplosser gebruikt **Kociemba's two-phase algoritme** (dezelfde aanpak
+  als de bekende online solvers) en geeft oplossingen van **±20 zetten**:
+  - fase 1 brengt de kubus naar de groep ⟨U,D,R,L,F2,B2⟩ via coördinaten
+    voor hoek-/rand-oriëntatie en de equator-slice;
+  - fase 2 lost daarbinnen volledig op met halve draaien;
+  - beide fases gebruiken **vooraf berekende pruning-tabellen** (BFS) en
+    IDA\*-zoekacties. De tabellen worden in ~1 s opgebouwd en gecachet.
+- Er is ook een laag-voor-laag oplosser (`solveCube` in `solver.js`) als
+  fallback; die wordt nog gebruikt als reservemethode.
+- Elke oplossing wordt geverifieerd voordat hij getoond wordt; getest op
+  duizenden willekeurige scrambles zonder fouten.
 
 ## Ontwikkeling
 
 `index.html` is één zelfstandig bestand en wordt samengesteld uit:
 
 ```
-node build.js   # template.html + solver.js + app.js  ->  index.html
+node build.js   # template.html + solver.js + kociemba.js + app.js  ->  index.html
 ```
 
-- `solver.js` – kubusmodel + oplosser (werkt in Node en in de browser)
-- `app.js` – de mobiele UI
+- `solver.js` – kubusmodel, facelet-conversie + laag-voor-laag fallback
+- `kociemba.js` – Kociemba two-phase oplosser (±20 zetten)
+- `app.js` – de mobiele UI (draait de solver in een Web Worker)
 - `template.html` – HTML + styling

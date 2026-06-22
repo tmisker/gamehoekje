@@ -122,19 +122,35 @@
     paintNet();
   }
 
-  // Run the (occasionally heavy) solve off the main thread when possible so the
-  // page never freezes. Falls back to the main thread if Workers are blocked.
-  let worker;
+  // Run the (heavy) solve off the main thread when possible so the page never
+  // freezes. The worker uses the Kociemba two-phase solver (~20-move solutions)
+  // and falls back to the layer-by-layer solver if needed.
+  let worker, solveCallback=null;
   function getWorker(){
     if(worker!==undefined) return worker;
     try{
-      const src = document.getElementById("solver-src").textContent +
-        "\nonmessage=function(e){try{postMessage({ok:true,sol:solveCube(e.data)});}"+
-        "catch(err){postMessage({ok:false});}};";
+      const src = document.getElementById("solver-src").textContent + "\n" +
+                  document.getElementById("kociemba-src").textContent +
+        "\nonmessage=function(e){var d=e.data;" +
+        "if(d.type==='warmup'){try{Kociemba.buildTables();}catch(_){};postMessage({type:'warmup'});return;}" +
+        "var sol;try{Kociemba.buildTables();sol=Kociemba.solve(d.state,{maxTime:500});if(!sol)sol=solveCube(d.state);}" +
+        "catch(err){try{sol=solveCube(d.state);}catch(e2){sol=null;}}" +
+        "postMessage({type:'solve',sol:sol});};";
       const url = URL.createObjectURL(new Blob([src],{type:"application/javascript"}));
       worker = new Worker(url);
+      worker.onmessage = (e)=>{
+        if(e.data.type==="solve" && solveCallback){ const cb=solveCallback; solveCallback=null; cb(e.data.sol); }
+      };
     }catch(e){ worker = null; }
     return worker;
+  }
+
+  // main-thread solve (fallback when Workers are unavailable)
+  function solveLocal(state){
+    let sol=null;
+    try{ if(window.Kociemba){ window.Kociemba.buildTables(); sol=window.Kociemba.solve(state,{maxTime:500}); } }catch(e){}
+    if(!sol){ try{ sol=CS.solveCube(state); }catch(e){ sol=null; } }
+    return sol;
   }
 
   function solve(){
@@ -142,7 +158,7 @@
     if(res.error){ setStatus("⚠ "+res.error, true); return; }
     setStatus("Bezig met oplossen…");
     const onSolved = (sol)=>{
-      if(sol===null){ setStatus("⚠ Deze kubus kan niet opgelost worden.", true); return; }
+      if(sol===null||sol===undefined){ setStatus("⚠ Deze kubus kan niet opgelost worden.", true); return; }
       solution = sol;
       frames = [inputColors.slice()];
       let st = CS.clone(res.state);
@@ -156,15 +172,10 @@
     };
     const w = getWorker();
     if(w){
-      w.onmessage = (e)=>{ e.data.ok ? onSolved(e.data.sol)
-                                     : setStatus("⚠ Er ging iets mis bij het oplossen.", true); };
-      w.postMessage(res.state);
+      solveCallback = onSolved;
+      w.postMessage({type:"solve", state:res.state});
     } else {
-      setTimeout(()=>{
-        let sol; try { sol = CS.solveCube(res.state); }
-        catch(e){ setStatus("⚠ Er ging iets mis bij het oplossen.", true); return; }
-        onSolved(sol);
-      }, 30);
+      setTimeout(()=>onSolved(solveLocal(res.state)), 30);
     }
   }
 
@@ -251,11 +262,11 @@
     $("nextBtn").onclick = ()=>step(1);
     $("lastBtn").onclick = gotoEnd;
     $("playBtn").onclick = play;
-    // warm up the heavy tables in the background so the first solve is instant
+    // warm up the heavy solver tables in the background so the first solve is fast
     setTimeout(()=>{
       const w = getWorker();
-      if(w){ w.onmessage = ()=>{}; w.postMessage(CS.solvedState()); } // build tables in worker
-      else { try{ CS.buildLLTable(); }catch(e){} }
+      if(w){ w.postMessage({type:"warmup"}); }
+      else { try{ if(window.Kociemba) window.Kociemba.buildTables(); }catch(e){} }
     }, 200);
   }
   if(document.readyState!=="loading") init();
