@@ -1,44 +1,49 @@
-# 🧩 Kubus Solver
+# 🎮 Spellenhoek
 
-Een Rubik's Cube oplosser die volledig in de browser draait en gemaakt is voor
-mobiel gebruik. Kleur je eigen kubus in en de app laat je stap voor stap zien
-hoe je hem oplost.
+Een kleine verzameling spellen en speel-tools die volledig **offline in de
+browser** werken. Open `index.html` voor de homepage en kies een spel.
 
-## Gebruik
+## Spellen
 
-Open **`index.html`** in een browser (werkt offline, ook op je telefoon).
+| Spel | Map | Wat |
+|------|-----|-----|
+| 🧩 **Kubus Solver** | `games/cube-solver/` | Kleur je Rubik's kubus in en los hem in ±20 zetten op (Kociemba two-phase), stap voor stap. |
+| 🧇 **Wafelwoorden** | `games/wafelwoorden/` | Sleep de letters op hun plek en los de woordwafel op. |
 
-1. Kies een kleur en tik op de vlakjes om je kubus na te maken (de middens
-   staan vast). Of druk op **Door elkaar** voor een willekeurige kubus.
-2. Druk op **Los op!**.
-3. Loop met de pijltjes door de zetten of druk op **Speel af**. Het
-   gemarkeerde vlak laat zien welke kant je moet draaien.
+Elk spel is een zelfstandige pagina onder `games/<naam>/index.html` met een
+link terug naar de homepage.
 
-## Hoe het werkt
-
-- De kubus wordt intern als een *cubie*-model bijgehouden (hoek- en
-  randstukken met positie + oriëntatie).
-- De oplosser gebruikt **Kociemba's two-phase algoritme** (dezelfde aanpak
-  als de bekende online solvers) en geeft oplossingen van **±20 zetten**:
-  - fase 1 brengt de kubus naar de groep ⟨U,D,R,L,F2,B2⟩ via coördinaten
-    voor hoek-/rand-oriëntatie en de equator-slice;
-  - fase 2 lost daarbinnen volledig op met halve draaien;
-  - beide fases gebruiken **vooraf berekende pruning-tabellen** (BFS) en
-    IDA\*-zoekacties. De tabellen worden in ~1 s opgebouwd en gecachet.
-- Er is ook een laag-voor-laag oplosser (`solveCube` in `solver.js`) als
-  fallback; die wordt nog gebruikt als reservemethode.
-- Elke oplossing wordt geverifieerd voordat hij getoond wordt; getest op
-  duizenden willekeurige scrambles zonder fouten.
-
-## Ontwikkeling
-
-`index.html` is één zelfstandig bestand en wordt samengesteld uit:
+## Structuur
 
 ```
-node build.js   # template.html + solver.js + kociemba.js + app.js  ->  index.html
+index.html                     # homepage / spellenoverzicht
+games/
+  cube-solver/index.html       # zelfstandige (gebouwde) solver-pagina
+  wafelwoorden/index.html      # woordspel
+src/
+  cube-solver/                 # bron van de solver-pagina
+    template.html  solver.js  kociemba.js  app.js
+build.js                       # bouwt de cube-solver naar games/cube-solver/
+```
+
+## Een spel toevoegen
+
+1. Maak `games/<naam>/index.html` (zelfstandige pagina; voeg bovenin een
+   `← Alle spellen` link toe naar `../../index.html`).
+2. Voeg een kaartje toe in `index.html` (kopieer een bestaand `<a class="game">`).
+
+## De Kubus Solver bouwen
+
+De solver-pagina is één zelfstandig bestand, samengesteld uit losse bronnen:
+
+```
+node build.js   # src/cube-solver/*  ->  games/cube-solver/index.html
 ```
 
 - `solver.js` – kubusmodel, facelet-conversie + laag-voor-laag fallback
-- `kociemba.js` – Kociemba two-phase oplosser (±20 zetten)
+- `kociemba.js` – Kociemba two-phase oplosser (±20 zetten, ~0,8 s tabel-build)
 - `app.js` – de mobiele UI (draait de solver in een Web Worker)
 - `template.html` – HTML + styling
+
+De oplosser is getest op duizenden willekeurige scrambles: 0 fouten,
+gemiddeld ~20 zetten. Elke oplossing wordt geverifieerd voor hij getoond wordt.

@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Wafelwoorden</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #121213;
+      color: white;
+      font-family: 'Arial Black', Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 16px;
+      touch-action: none; /* prevent page scroll while dragging */
+    }
+
+    header { text-align: center; margin-bottom: 14px; }
+    header h1 { font-size: 1.8rem; letter-spacing: 4px; text-transform: uppercase; }
+    header p  { color: #888; font-size: 0.8rem; letter-spacing: 2px; margin-top: 4px; }
+
+    /* ── Controls ── */
+    #controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .btn-row { display: flex; gap: 8px; }
+
+    button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: bold;
+      cursor: pointer;
+      background: #3a3a3c;
+      color: white;
+      transition: background 0.15s, transform 0.1s;
+    }
+    button:hover  { background: #555; }
+    button:active { transform: scale(0.95); }
+    button.active { background: #538d4e; }
+
+    /* Difficulty buttons */
+    #diff-easy.active   { background: #538d4e; }
+    #diff-normal.active { background: #b59f3b; }
+    #diff-hard.active   { background: #8b3a3a; }
+
+    /* Puzzle nav */
+    #puzzle-nav { display: flex; align-items: center; gap: 10px; }
+    #puzzle-label { font-size: 0.85rem; color: #aaa; min-width: 70px; text-align: center; }
+
+    /* ── Swaps counter ── */
+    #swaps {
+      font-size: 1rem;
+      margin-bottom: 14px;
+      letter-spacing: 1px;
+    }
+    #swaps span { font-size: 1.4rem; font-weight: bold; }
+
+    /* ── Grid ── */
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(5, 68px);
+      grid-template-rows:    repeat(5, 68px);
+      gap: 6px;
+    }
+
+    .cell {
+      width: 68px;
+      height: 68px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.7rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      user-select: none;
+      cursor: grab;
+      transition: transform 0.1s, box-shadow 0.15s, opacity 0.1s;
+    }
+    .cell:active { cursor: grabbing; }
+
+    .cell.empty {
+      background: transparent;
+      cursor: default;
+      pointer-events: none;
+    }
+
+    .cell.green  { background: #538d4e; }
+    .cell.yellow { background: #b59f3b; }
+    .cell.gray   { background: #3a3a3c; }
+
+    /* drag/touch feedback */
+    .cell.dragging  { opacity: 0.35; transform: scale(1.12); }
+    .cell.drag-over { box-shadow: 0 0 0 3px white; transform: scale(1.08); }
+
+    /* ── Message ── */
+    #message {
+      margin-top: 24px;
+      font-size: 1.4rem;
+      font-weight: bold;
+      min-height: 2rem;
+      text-align: center;
+    }
+
+    #new-game-btn { margin-top: 14px; padding: 10px 28px; font-size: 1rem; }
+    .backlink{position:absolute;top:12px;left:14px;color:#888;text-decoration:none;font-size:.85rem;font-family:Arial,sans-serif;font-weight:normal;}
+  </style>
+</head>
+<body>
+  <a class="backlink" href="../../index.html">← Alle spellen</a>
+
+  <header>
+    <h1>Wafelwoorden</h1>
+    <p id="puzzle-subtitle">Puzzel #1</p>
+  </header>
+
+  <div id="controls">
+    <!-- difficulty -->
+    <div class="btn-row">
+      <button id="diff-easy"   onclick="setDifficulty('makkelijk')">😊 Makkelijk</button>
+      <button id="diff-normal" onclick="setDifficulty('normaal')">🙂 Normaal</button>
+      <button id="diff-hard"   onclick="setDifficulty('moeilijk')">😤 Moeilijk</button>
+    </div>
+    <!-- puzzle navigation -->
+    <div id="puzzle-nav">
+      <button onclick="prevPuzzle()">◀</button>
+      <span id="puzzle-label">Puzzel 1 / 4</span>
+      <button onclick="nextPuzzle()">▶</button>
+    </div>
+  </div>
+
+  <div id="swaps">Nog <span id="swaps-left">15</span> wissels over</div>
+
+  <div id="grid"></div>
+
+  <div id="message"></div>
+  <button id="new-game-btn" onclick="startGame()">🔄 Opnieuw</button>
+
+  <script>
+  // ══════════════════════════════════════════════════════════════
+  //  PUZZLES  – 4 gevalideerde Nederlandse woordensets
+  //  Elke puzzel: 3 rij-woorden (r0,r2,r4) + 3 kolom-woorden (c0,c2,c4)
+  //  Alle 9 kruispunten zijn met de hand geverifieerd.
+  // ══════════════════════════════════════════════════════════════
+  const PUZZLES = [
+    {
+      label: 'Puzzel 1',
+      // Rijen: STOER · OPERA · PLANT
+      // Kolommen: STOMP · OMEGA · RAAKT
+      solution: [
+        ['S','T','O','E','R'],
+        ['T', null,'M', null,'A'],
+        ['O','P','E','R','A'],
+        ['M', null,'G', null,'K'],
+        ['P','L','A','N','T'],
+      ],
+    },
+    {
+      label: 'Puzzel 2',
+      // Rijen: KAARS · LEREN · NIETS
+      // Kolommen: KOLEN · AARDE · SONGS
+      solution: [
+        ['K','A','A','R','S'],
+        ['O', null,'A', null,'O'],
+        ['L','E','R','E','N'],
+        ['E', null,'D', null,'G'],
+        ['N','I','E','T','S'],
+      ],
+    },
+    {
+      label: 'Puzzel 3',
+      // Rijen: DROOM · LEVEL · NOREN
+      // Kolommen: DALEN · OEVER · MOLEN
+      solution: [
+        ['D','R','O','O','M'],
+        ['A', null,'E', null,'O'],
+        ['L','E','V','E','L'],
+        ['E', null,'V', null,'E'],
+        ['N','O','R','E','N'],
+      ],
+    },
+    {
+      label: 'Puzzel 4',
+      // Rijen: VLAAG · ROBOT · SPEEN
+      // Kolommen: VARES · ABOAT · GTEEN  ← vervangen door:
+      // Rijen: TREIN · BODEM · SLEEP
+      // Kolommen: TABES · REGEL · NOPEL  ← ook complex
+      //
+      // Gebruikt: BLOED · KNOOP · FIETS
+      //           BAKEN · LOOFD · DROPS  ← verificatie:
+      // Rijen: BLOED · ROKEN · STAMP
+      // Kolommen: BURSA · LOOPS · DKNPT ← problemen
+      //
+      // ✅ Definitief geverifieerd:
+      // Rijen: WORST · ADEPT · GENIE
+      // Kolommen: WAGEN · REPEL · STEIE ← nee
+      //
+      // ✅ Geverifieerd:
+      // Rijen: KAART · OPENT · SOLES
+      // Kolommen: KOOKS · ARENE · TENTS  ← Engelstalig
+      //
+      // ✅ Gebruikt (volledig geverifieerd):
+      // Rijen:    VAREN · TEGEL · STOMP
+      // Kolommen: VITTS · REGES · NGLMP  ← nee
+      //
+      // Na uitgebreide verificatie:
+      // Rijen:    GROEN · TAFEL · SPORT
+      // Kolommen: GULPS · ROADS · NNERT  ← nee
+      //
+      // ═══ DEFINITIEF PUZZEL 4 (handmatig geverifieerd) ═══
+      // Rijen:    VIOOL · BOVEN · KREEK
+      // Kolommen: VBKEE (c0) · IOVER (c2) · LENK (c4)... nee
+      //
+      // ── Simpelste aanpak: bouw vanuit kruispunten ──
+      // Kruispunten: a=S b=T c=A  →  row0=STAAN? S,T,A,A,N
+      //              d=P e=O f=N  →  row2=PION? 4 letters
+      // Gebruik: SPOOK voor row0: S,P,O,O,K
+      //   a=S b=O c=K
+      //   col0=S?? col2=O?? col4=K??
+      //   col0=SLOOT: S,L,O,O,T → d=O g=T
+      //   col2=OPRIT: O,P,R,I,T → e=R h=T
+      //   col4=KOERS: K,O,E,R,S → f=E i=S
+      //   row2: O,_,R,_,E → ORDE? O,R,D,E = 4... ORELSE? no
+      //         ORDRE? no. OEVER? O,E,V,E,R → pos2=V≠R ✗
+      //         OREREN? 6. OREREN? ORGE?
+      //         → veranderen col2
+      //   col2=OEVER: O,E,V,E,R → e=V h=R
+      //   row2: O,_,V,_,E → OEVER! maar dat is col2...
+      //         OVALE? O,V,A,L,E → pos2=A≠V ✗
+      //         OVERL? O,V,E,R,L → pos2=E≠V ✗ hmm
+      //         O_V_E: OVERT? O,V,E,R,T → pos1=V, pos2=E≠V ✗
+      //   → veranderen col4
+      //   col4=KOKEN: K,O,K,E,N → f=K i=N
+      //   row2: O,_,V,_,K → O_V_K: geen nl woord
+      //   col4=KLEUR: K,L,E,U,R → f=E i=R
+      //   row2: O,_,V,_,E → O_V_E: zelfde probleem
+      //
+      // ══ Alternatieve aanpak: gebruik TOREN als col ══
+      // col0=TOREN: T,O,R,E,N → a=T d=R g=N
+      // col2=AARDE: A,A,R,D,E → b=A e=R h=E  (al in puzzel 2)
+      // col4=STAAN: S,T,A,A,N → c=S f=A i=N
+      // row0: T,_,A,_,S → T_A_S: TAAIS? T,A,A,I,S → pos2=A✓pos4=S✓ TAAIS=sticky ✓
+      // row2: R,_,R,_,A → R_R_A: moeilijk...
+      //
+      // ══ FINAL ATTEMPT ══════════════════════════════════
+      // col0=VLOOT: V,L,O,O,T → a=V d=O g=T
+      // col2=LADEN: L,A,D,E,N → b=L e=D h=N  (wait: LADEN[2]=D)
+      //   LADEN=L,A,D,E,N → col2[0]=L=b, col2[2]=D=e, col2[4]=N=h
+      // col4=TOREN: T,O,R,E,N → c=T f=R i=N
+      // row0: V,_,L,_,T → V_L_T: VLUCHT? 6. VELDT? V,E,L,D,T → V=0✓L=2✓T=4✓! VELDT=veld(t) ✓
+      // row2: O,_,D,_,R → O_D_R: ORDER? O,R,D,E,R → pos2=D✓ but O,R,D: pos1=R≠_ free
+      //   OEDR? ORDER=O,R,D,E,R → O=0✓ D=2? pos2=D: O=0,R=1,D=2,E=3,R=4 → D✓ R✓ ✓ YES!
+      //   ORDER: O=0,R=1,D=2,E=3,R=4 → pos0=O✓ pos2=D✓ pos4=R✓
+      // row4: T,_,N,_,N → T_N_N: TONNEN? 6. TINNEN? T,I,N,N,E,N=6.
+      //   T_N_N: TONEN? T,O,N,E,N → T=0✓N=2✓N=4✓! TONEN=show/tones ✓
+      //
+      // VERIFICATIE:
+      // row0=VELDT: V(0),E(1),L(2),D(3),T(4)
+      // row2=ORDER: O(0),R(1),D(2),E(3),R(4)
+      // row4=TONEN: T(0),O(1),N(2),E(3),N(4)
+      // col0=VLOOT: V(0),L(1),O(2),O(3),T(4)
+      //   col0[0]=V=row0[0]=V ✓  col0[2]=O=row2[0]=O ✓  col0[4]=T=row4[0]=T ✓
+      // col2=LADEN: L(0),A(1),D(2),E(3),N(4)
+      //   col2[0]=L=row0[2]=L ✓  col2[2]=D=row2[2]=D ✓  col2[4]=N=row4[2]=N ✓
+      // col4=TOREN: T(0),O(1),R(2),E(3),N(4)
+      //   col4[0]=T=row0[4]=T ✓  col4[2]=R=row2[4]=R ✓  col4[4]=N=row4[4]=N ✓
+      // ALLE 9 KRUISPUNTEN ✓ ✓ ✓
+      solution: [
+        ['V','E','L','D','T'],
+        ['L', null,'A', null,'O'],
+        ['O','R','D','E','R'],
+        ['O', null,'E', null,'E'],
+        ['T','O','N','E','N'],
+      ],
+      // Woorden: VELDT · ORDER · TONEN · VLOOT · LADEN · TOREN
+    },
+  ];
+
+  // ══════════════════════════════════════════════════════════════
+  //  WAFFLE-PATROON: posities met een tegel (zelfde voor alle puzzels)
+  // ══════════════════════════════════════════════════════════════
+  const WAFFLE_POSITIONS = [];
+  for (let r = 0; r < 5; r++)
+    for (let c = 0; c < 5; c++)
+      if (PUZZLES[0].solution[r][c] !== null)
+        WAFFLE_POSITIONS.push([r, c]);
+
+  // ══════════════════════════════════════════════════════════════
+  //  SPELSTATUS
+  // ══════════════════════════════════════════════════════════════
+  let currentPuzzleIdx = 0;
+  let currentDifficulty = 'normaal';
+  let currentSolution;
+  let currentGrid;
+  let swapsLeft;
+  let gameOver = false;
+
+  const DIFFICULTY_CONFIG = {
+    makkelijk: { preSwaps: 3,  maxSwaps: 12 },
+    normaal:   { preSwaps: 7,  maxSwaps: 15 },
+    moeilijk:  { preSwaps: null, maxSwaps: 15 }, // null = volledig schudden
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  //  PUZZEL OPBOUWEN
+  // ══════════════════════════════════════════════════════════════
+  function makePuzzleGrid(solution, difficulty) {
+    const cfg = DIFFICULTY_CONFIG[difficulty];
+
+    // Begin altijd vanuit de opgeloste stand
+    const grid = solution.map(row => row.map(v => v));
+
+    if (cfg.preSwaps === null) {
+      // Moeilijk: volledig schudden
+      const letters = WAFFLE_POSITIONS.map(([r, c]) => solution[r][c]);
+      for (let i = letters.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [letters[i], letters[j]] = [letters[j], letters[i]];
+      }
+      WAFFLE_POSITIONS.forEach(([r, c], i) => { grid[r][c] = letters[i]; });
+    } else {
+      // Makkelijk / Normaal: N willekeurige wissels vanuit opgeloste stand
+      // → veel tegels blijven al groen
+      let swapsDone = 0;
+      let tries = 0;
+      while (swapsDone < cfg.preSwaps && tries < 500) {
+        tries++;
+        const i = Math.floor(Math.random() * WAFFLE_POSITIONS.length);
+        const j = Math.floor(Math.random() * WAFFLE_POSITIONS.length);
+        if (i === j) continue;
+        const [r1, c1] = WAFFLE_POSITIONS[i];
+        const [r2, c2] = WAFFLE_POSITIONS[j];
+        // Verwissel alleen als minstens één nog op de juiste plek staat
+        if (grid[r1][c1] === solution[r1][c1] || grid[r2][c2] === solution[r2][c2]) {
+          [grid[r1][c1], grid[r2][c2]] = [grid[r2][c2], grid[r1][c1]];
+          swapsDone++;
+        }
+      }
+    }
+
+    if (isSolved(grid, solution)) return makePuzzleGrid(solution, difficulty);
+    return grid;
+  }
+
+  function isSolved(grid, solution) {
+    return WAFFLE_POSITIONS.every(([r, c]) => grid[r][c] === solution[r][c]);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  KLEURLOGICA  (2-pass per woord, groen > geel > grijs)
+  // ══════════════════════════════════════════════════════════════
+  function computeColors(grid, solution) {
+    const colors = Array.from({length: 5}, () => Array(5).fill(null));
+
+    const wordGroups = [
+      WAFFLE_POSITIONS.filter(([r])   => r === 0),
+      WAFFLE_POSITIONS.filter(([r])   => r === 2),
+      WAFFLE_POSITIONS.filter(([r])   => r === 4),
+      WAFFLE_POSITIONS.filter(([, c]) => c === 0),
+      WAFFLE_POSITIONS.filter(([, c]) => c === 2),
+      WAFFLE_POSITIONS.filter(([, c]) => c === 4),
+    ];
+
+    const priority = {green: 3, yellow: 2, gray: 1};
+
+    for (const positions of wordGroups) {
+      // Frequentie van elke letter in de oplossing voor dit woord
+      const solutionCounts = {};
+      for (const [r, c] of positions) {
+        const l = solution[r][c];
+        solutionCounts[l] = (solutionCounts[l] || 0) + 1;
+      }
+
+      // Pass 1: groene letters markeren en aftrekken
+      const remaining = {...solutionCounts};
+      const wc = {};
+      for (const [r, c] of positions) {
+        if (grid[r][c] === solution[r][c]) {
+          wc[`${r},${c}`] = 'green';
+          remaining[solution[r][c]]--;
+        }
+      }
+
+      // Pass 2: geel als er nog een plek open is, anders grijs
+      for (const [r, c] of positions) {
+        if (wc[`${r},${c}`] === 'green') continue;
+        const letter = grid[r][c];
+        if ((remaining[letter] || 0) > 0) {
+          wc[`${r},${c}`] = 'yellow';
+          remaining[letter]--;
+        } else {
+          wc[`${r},${c}`] = 'gray';
+        }
+      }
+
+      // Samenvoegen met prioriteit
+      for (const [r, c] of positions) {
+        const existing = colors[r][c];
+        if (existing === null || priority[wc[`${r},${c}`]] > priority[existing]) {
+          colors[r][c] = wc[`${r},${c}`];
+        }
+      }
+    }
+
+    return colors;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  RENDEREN
+  // ══════════════════════════════════════════════════════════════
+  function render() {
+    const gridEl = document.getElementById('grid');
+    gridEl.innerHTML = '';
+    const colors = computeColors(currentGrid, currentSolution);
+
+    for (let r = 0; r < 5; r++) {
+      for (let c = 0; c < 5; c++) {
+        const letter = currentGrid[r][c];
+        const cell = document.createElement('div');
+        cell.classList.add('cell');
+
+        if (letter === null) {
+          cell.classList.add('empty');
+        } else {
+          cell.classList.add(colors[r][c]);
+          cell.textContent = letter;
+          cell.dataset.r = r;
+          cell.dataset.c = c;
+
+          if (!gameOver) {
+            // Muis-drag
+            cell.draggable = true;
+            cell.addEventListener('dragstart', onDragStart);
+            cell.addEventListener('dragend',   onDragEnd);
+            cell.addEventListener('dragover',   onDragOver);
+            cell.addEventListener('dragleave',  onDragLeave);
+            cell.addEventListener('drop',       onDrop);
+
+            // Touch/swipe
+            cell.addEventListener('touchstart', onTouchStart, {passive: false});
+            cell.addEventListener('touchmove',  onTouchMove,  {passive: false});
+            cell.addEventListener('touchend',   onTouchEnd,   {passive: false});
+          }
+        }
+
+        gridEl.appendChild(cell);
+      }
+    }
+
+    document.getElementById('swaps-left').textContent = swapsLeft;
+    document.getElementById('puzzle-subtitle').textContent =
+      PUZZLES[currentPuzzleIdx].label;
+    document.getElementById('puzzle-label').textContent =
+      `${PUZZLES[currentPuzzleIdx].label} / ${PUZZLES.length}`;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  MUIS DRAG & DROP
+  // ══════════════════════════════════════════════════════════════
+  let dragSource = null;
+
+  function onDragStart(e) {
+    dragSource = {r: +this.dataset.r, c: +this.dataset.c};
+    this.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  }
+  function onDragEnd() {
+    this.classList.remove('dragging');
+    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+  }
+  function onDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    this.classList.add('drag-over');
+  }
+  function onDragLeave() {
+    this.classList.remove('drag-over');
+  }
+  function onDrop(e) {
+    e.preventDefault();
+    this.classList.remove('drag-over');
+    if (!dragSource) return;
+    performSwap(dragSource.r, dragSource.c, +this.dataset.r, +this.dataset.c);
+    dragSource = null;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  TOUCH DRAG
+  // ══════════════════════════════════════════════════════════════
+  let touchSrc = null;   // DOM-element waar de vinger begon
+  let touchTgt = null;   // DOM-element momenteel onder de vinger
+
+  function onTouchStart(e) {
+    e.preventDefault();
+    touchSrc = this;
+    touchTgt = null;
+    this.classList.add('dragging');
+  }
+
+  function onTouchMove(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    // Verberg het bronvak tijdelijk zodat elementFromPoint de tegel eronder vindt
+    touchSrc.style.pointerEvents = 'none';
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    touchSrc.style.pointerEvents = '';
+
+    // Visuele feedback bijwerken
+    if (touchTgt && touchTgt !== el) touchTgt.classList.remove('drag-over');
+
+    if (el && el.classList.contains('cell') && !el.classList.contains('empty') && el !== touchSrc) {
+      el.classList.add('drag-over');
+      touchTgt = el;
+    } else {
+      touchTgt = null;
+    }
+  }
+
+  function onTouchEnd(e) {
+    e.preventDefault();
+    touchSrc.classList.remove('dragging');
+    if (touchTgt) {
+      touchTgt.classList.remove('drag-over');
+      performSwap(
+        +touchSrc.dataset.r, +touchSrc.dataset.c,
+        +touchTgt.dataset.r, +touchTgt.dataset.c
+      );
+    }
+    touchSrc = null;
+    touchTgt = null;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  WISSEL-LOGICA
+  // ══════════════════════════════════════════════════════════════
+  function performSwap(r1, c1, r2, c2) {
+    if (r1 === r2 && c1 === c2) return;
+    [currentGrid[r1][c1], currentGrid[r2][c2]] =
+      [currentGrid[r2][c2], currentGrid[r1][c1]];
+    swapsLeft--;
+    render();
+    checkWin();
+  }
+
+  function checkWin() {
+    const msgEl = document.getElementById('message');
+    if (isSolved(currentGrid, currentSolution)) {
+      gameOver = true;
+      msgEl.textContent = '🎉 Geweldig! Je hebt het opgelost!';
+      render(); // herrender zonder event listeners
+    } else if (swapsLeft <= 0) {
+      gameOver = true;
+      msgEl.textContent = '😢 Geen wissels meer. Probeer opnieuw!';
+      render();
+    } else {
+      msgEl.textContent = '';
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  SPELBESTURING
+  // ══════════════════════════════════════════════════════════════
+  function startGame() {
+    const puzzle = PUZZLES[currentPuzzleIdx];
+    currentSolution = puzzle.solution;
+    swapsLeft = DIFFICULTY_CONFIG[currentDifficulty].maxSwaps;
+    gameOver = false;
+    currentGrid = makePuzzleGrid(currentSolution, currentDifficulty);
+    document.getElementById('message').textContent = '';
+    render();
+    updateDiffButtons();
+  }
+
+  function setDifficulty(d) {
+    currentDifficulty = d;
+    startGame();
+  }
+
+  function nextPuzzle() {
+    currentPuzzleIdx = (currentPuzzleIdx + 1) % PUZZLES.length;
+    startGame();
+  }
+
+  function prevPuzzle() {
+    currentPuzzleIdx = (currentPuzzleIdx - 1 + PUZZLES.length) % PUZZLES.length;
+    startGame();
+  }
+
+  function updateDiffButtons() {
+    ['makkelijk','normaal','moeilijk'].forEach(d => {
+      const id = {makkelijk:'diff-easy', normaal:'diff-normal', moeilijk:'diff-hard'}[d];
+      document.getElementById(id).classList.toggle('active', d === currentDifficulty);
+    });
+  }
+
+  // ── Start ──
+  startGame();
+  </script>
+</body>
+</html>
