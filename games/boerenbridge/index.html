@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f0f12">
+  <title>Boerenbridge – Score bijhouden</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    :root{
+      --bg:#0f0f12;--card:#1b1b20;--card2:#232329;--line:#2e2e36;
+      --text:#f4f4f6;--muted:#9a9aa3;--accent:#4caf50;--accent-dim:rgba(76,175,80,.15);
+      --red:#e53935;--red-dim:rgba(229,57,53,.12);--gold:#ffd600;
+    }
+    html{height:100%}
+    body{
+      min-height:100%;background:var(--bg);color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+      display:flex;flex-direction:column;align-items:center;padding:16px 10px 60px;
+    }
+    a.backlink{
+      align-self:flex-start;color:var(--muted);text-decoration:none;font-size:.9rem;
+      margin-bottom:12px;
+    }
+    a.backlink:hover{color:var(--accent)}
+    h1{font-size:1.5rem;margin-bottom:4px;text-align:center}
+    .sub{color:var(--muted);font-size:.85rem;margin-bottom:16px;text-align:center}
+
+    /* Setup */
+    #setup{
+      background:var(--card);border:1px solid var(--line);border-radius:14px;
+      padding:20px;max-width:400px;width:100%;
+    }
+    #setup label{display:block;margin-bottom:6px;font-weight:600;font-size:.95rem}
+    #setup input,#setup select{
+      width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;
+      background:var(--card2);color:var(--text);font-size:1rem;margin-bottom:14px;
+    }
+    .player-inputs{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+    .player-inputs input{margin-bottom:0}
+    button{
+      padding:10px 20px;border:none;border-radius:10px;font-size:1rem;font-weight:700;
+      cursor:pointer;transition:background .15s,transform .1s;color:#fff;
+    }
+    button:active{transform:scale(.96)}
+    .btn-primary{background:var(--accent);width:100%}
+    .btn-primary:hover{background:#43a047}
+    .btn-small{padding:7px 14px;font-size:.85rem;border-radius:8px;background:#3a3a3c}
+    .btn-small:hover{background:#555}
+    .btn-danger{background:var(--red)}
+    .btn-danger:hover{background:#c62828}
+
+    /* Game */
+    #game{width:100%;max-width:600px;display:none;flex-direction:column;gap:14px}
+    .round-header{
+      text-align:center;background:var(--card);border:1px solid var(--line);
+      border-radius:12px;padding:14px;
+    }
+    .round-header .suit{font-size:2rem}
+    .round-header .info{font-size:1.1rem;font-weight:700;margin-top:4px}
+    .round-header .step{color:var(--muted);font-size:.85rem;margin-top:2px}
+
+    /* Input grid */
+    .input-section{
+      background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;
+    }
+    .input-section h3{font-size:.95rem;margin-bottom:10px;color:var(--muted)}
+    .input-row{
+      display:flex;align-items:center;gap:10px;margin-bottom:8px;
+    }
+    .input-row .pname{flex:1;font-weight:600;font-size:.95rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .input-row input{
+      width:60px;padding:8px;border:1px solid var(--line);border-radius:8px;
+      background:var(--card2);color:var(--text);font-size:1rem;text-align:center;
+    }
+    .input-row .predicted{
+      color:var(--muted);font-size:.85rem;min-width:40px;text-align:center;
+    }
+    .warn{color:var(--gold);font-size:.82rem;text-align:center;margin-top:4px}
+    .error{color:var(--red);font-size:.82rem;text-align:center;margin-top:4px}
+
+    .btn-row{display:flex;gap:8px;justify-content:center;margin-top:6px}
+
+    /* Scoreboard */
+    .scoreboard{
+      background:var(--card);border:1px solid var(--line);border-radius:12px;
+      padding:14px;overflow-x:auto;
+    }
+    table{width:100%;border-collapse:collapse;font-size:.85rem;white-space:nowrap}
+    th,td{padding:6px 8px;text-align:center;border-bottom:1px solid var(--line)}
+    th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--card)}
+    th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card);z-index:1}
+    td.pos{color:var(--accent);font-weight:700}
+    td.neg{color:var(--red)}
+    tr.current-round{background:var(--accent-dim)}
+    tfoot td{font-weight:700;font-size:.95rem;border-top:2px solid var(--line)}
+
+    /* Finished */
+    .winner-banner{
+      text-align:center;padding:20px;background:var(--card);border:2px solid var(--gold);
+      border-radius:14px;
+    }
+    .winner-banner .trophy{font-size:3rem}
+    .winner-banner .name{font-size:1.4rem;font-weight:800;color:var(--gold);margin-top:6px}
+    .winner-banner .score{color:var(--muted);margin-top:4px}
+
+    @media(max-width:400px){
+      .input-row input{width:50px;padding:6px}
+      table{font-size:.78rem}
+      th,td{padding:4px 5px}
+    }
+  </style>
+</head>
+<body>
+  <a class="backlink" href="../../index.html">← Alle spellen</a>
+  <h1>🃏 Boerenbridge</h1>
+  <p class="sub">Score bijhouden</p>
+
+  <!-- SETUP -->
+  <div id="setup">
+    <label>Aantal spelers</label>
+    <select id="playerCount">
+      <option value="3">3 spelers</option>
+      <option value="4" selected>4 spelers</option>
+      <option value="5">5 spelers</option>
+      <option value="6">6 spelers</option>
+    </select>
+    <label>Namen</label>
+    <div class="player-inputs" id="nameInputs"></div>
+    <button class="btn-primary" id="startBtn">Starten</button>
+  </div>
+
+  <!-- GAME -->
+  <div id="game">
+    <div class="round-header" id="roundHeader">
+      <div class="suit" id="roundSuit"></div>
+      <div class="info" id="roundInfo"></div>
+      <div class="step" id="roundStep"></div>
+    </div>
+
+    <div class="input-section" id="inputSection"></div>
+
+    <div class="scoreboard">
+      <table id="scoreTable">
+        <thead id="scoreHead"></thead>
+        <tbody id="scoreBody"></tbody>
+        <tfoot id="scoreFoot"></tfoot>
+      </table>
+    </div>
+
+    <div id="winnerArea"></div>
+
+    <div class="btn-row">
+      <button class="btn-small btn-danger" id="resetBtn">Nieuw spel</button>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const SUITS = ['♣','♥','♦','♠','Sans'];
+  const SUIT_NAMES = ['Klaver','Harten','Ruiten','Schoppen','Sans'];
+  const SUIT_COLORS = ['#4caf50','#e53935','#ff9800','#42a5f5','#b0bec5'];
+
+  function buildRounds(){
+    const cards = [];
+    for(let c=8;c>=1;c--) cards.push(c);
+    for(let c=2;c<=8;c++) cards.push(c);
+    const rounds = [];
+    let si = 0;
+    for(const c of cards){
+      rounds.push({cards:c, suitIdx:si%5});
+      si++;
+    }
+    return rounds;
+  }
+  const ROUNDS = buildRounds();
+
+  let players=[], scores=[], predictions=[], actuals=[];
+  let currentRound=0, phase='predict'; // predict | actual | done
+
+  const $=s=>document.querySelector(s);
+  const $$=s=>document.querySelectorAll(s);
+
+  // Setup
+  const countSel=$('#playerCount'), nameDiv=$('#nameInputs');
+  function updateNameInputs(){
+    const n=+countSel.value;
+    nameDiv.innerHTML='';
+    for(let i=0;i<n;i++){
+      const inp=document.createElement('input');
+      inp.placeholder='Speler '+(i+1);
+      inp.dataset.idx=i;
+      nameDiv.appendChild(inp);
+    }
+  }
+  countSel.addEventListener('change',updateNameInputs);
+  updateNameInputs();
+
+  $('#startBtn').addEventListener('click',()=>{
+    const inputs=nameDiv.querySelectorAll('input');
+    players=[];
+    inputs.forEach((inp,i)=>{
+      players.push(inp.value.trim()||('Speler '+(i+1)));
+    });
+    scores=players.map(()=>[]);
+    predictions=[];
+    actuals=[];
+    currentRound=0;
+    phase='predict';
+    $('#setup').style.display='none';
+    $('#game').style.display='flex';
+    renderScoreTable();
+    showRound();
+  });
+
+  $('#resetBtn').addEventListener('click',()=>{
+    if(!confirm('Nieuw spel beginnen?')) return;
+    $('#setup').style.display='';
+    $('#game').style.display='none';
+    $('#winnerArea').innerHTML='';
+  });
+
+  function showRound(){
+    const r=ROUNDS[currentRound];
+    const si=r.suitIdx;
+    $('#roundSuit').textContent=SUITS[si];
+    $('#roundSuit').style.color=SUIT_COLORS[si];
+    $('#roundInfo').textContent=SUIT_NAMES[si]+' '+r.cards;
+    $('#roundStep').textContent='Ronde '+(currentRound+1)+' van '+ROUNDS.length;
+
+    if(phase==='predict') showPredictForm();
+    else if(phase==='actual') showActualForm();
+  }
+
+  function showPredictForm(){
+    const r=ROUNDS[currentRound];
+    const sec=$('#inputSection');
+    let html='<h3>Hoeveel slagen raad je? (max '+r.cards+')</h3>';
+    players.forEach((p,i)=>{
+      html+='<div class="input-row"><span class="pname">'+esc(p)+'</span>'
+        +'<input type="number" min="0" max="'+r.cards+'" id="pred'+i+'" inputmode="numeric"></div>';
+    });
+    html+='<div id="predWarn"></div>';
+    html+='<div class="btn-row"><button class="btn-primary" id="predOk">Slagen invoeren →</button></div>';
+    sec.innerHTML=html;
+
+    // Focus first input
+    const first=sec.querySelector('input');
+    if(first) first.focus();
+
+    // Tab through inputs with Enter
+    sec.querySelectorAll('input').forEach((inp,i,all)=>{
+      inp.addEventListener('keydown',e=>{
+        if(e.key==='Enter'){
+          e.preventDefault();
+          if(i<all.length-1) all[i+1].focus();
+          else document.getElementById('predOk').click();
+        }
+      });
+    });
+
+    document.getElementById('predOk').addEventListener('click',()=>{
+      const preds=[];
+      let valid=true;
+      players.forEach((_,i)=>{
+        const v=document.getElementById('pred'+i).value;
+        if(v===''||isNaN(+v)||+v<0||+v>r.cards){valid=false;}
+        preds.push(+v);
+      });
+      if(!valid){
+        document.getElementById('predWarn').innerHTML='<span class="error">Vul geldige aantallen in (0–'+r.cards+')</span>';
+        return;
+      }
+      const total=preds.reduce((a,b)=>a+b,0);
+      if(total===r.cards){
+        document.getElementById('predWarn').innerHTML='<span class="warn">⚠ Totaal voorspeld ('+total+') is gelijk aan het aantal kaarten ('+r.cards+')</span>';
+      }
+      predictions[currentRound]=preds;
+      phase='actual';
+      showRound();
+    });
+  }
+
+  function showActualForm(){
+    const r=ROUNDS[currentRound];
+    const preds=predictions[currentRound];
+    const sec=$('#inputSection');
+    let html='<h3>Werkelijke slagen</h3>';
+    players.forEach((p,i)=>{
+      html+='<div class="input-row"><span class="pname">'+esc(p)+'</span>'
+        +'<span class="predicted">voorspeld: '+preds[i]+'</span>'
+        +'<input type="number" min="0" max="'+r.cards+'" id="act'+i+'" inputmode="numeric"></div>';
+    });
+    html+='<div id="actWarn"></div>';
+    html+='<div class="btn-row">'
+      +'<button class="btn-small" id="actBack">← Terug</button>'
+      +'<button class="btn-primary" style="flex:1" id="actOk">Bevestigen ✓</button></div>';
+    sec.innerHTML=html;
+
+    const first=sec.querySelector('input');
+    if(first) first.focus();
+
+    sec.querySelectorAll('input').forEach((inp,i,all)=>{
+      inp.addEventListener('keydown',e=>{
+        if(e.key==='Enter'){
+          e.preventDefault();
+          if(i<all.length-1) all[i+1].focus();
+          else document.getElementById('actOk').click();
+        }
+      });
+    });
+
+    document.getElementById('actBack').addEventListener('click',()=>{
+      phase='predict';
+      showRound();
+    });
+
+    document.getElementById('actOk').addEventListener('click',()=>{
+      const acts=[];
+      let valid=true;
+      players.forEach((_,i)=>{
+        const v=document.getElementById('act'+i).value;
+        if(v===''||isNaN(+v)||+v<0||+v>r.cards){valid=false;}
+        acts.push(+v);
+      });
+      if(!valid){
+        document.getElementById('actWarn').innerHTML='<span class="error">Vul geldige aantallen in (0–'+r.cards+')</span>';
+        return;
+      }
+      const total=acts.reduce((a,b)=>a+b,0);
+      if(total!==r.cards){
+        document.getElementById('actWarn').innerHTML='<span class="error">Totaal slagen ('+total+') is niet gelijk aan kaarten ('+r.cards+')</span>';
+        return;
+      }
+
+      actuals[currentRound]=acts;
+      const preds=predictions[currentRound];
+      players.forEach((_,i)=>{
+        const pred=preds[i], act=acts[i];
+        let pts;
+        if(act===pred) pts=act+5;
+        else if(act<pred) pts=-(pred-act);
+        else pts=act; // too many
+        scores[i].push(pts);
+      });
+
+      currentRound++;
+      renderScoreTable();
+
+      if(currentRound>=ROUNDS.length){
+        phase='done';
+        $('#inputSection').innerHTML='';
+        $('#roundStep').textContent='Spel afgelopen!';
+        showWinner();
+      } else {
+        phase='predict';
+        showRound();
+      }
+    });
+  }
+
+  function renderScoreTable(){
+    let headHtml='<tr><th>Ronde</th>';
+    players.forEach(p=>{headHtml+='<th>'+esc(p)+'</th>';});
+    headHtml+='</tr>';
+    $('#scoreHead').innerHTML=headHtml;
+
+    let bodyHtml='';
+    const totals=players.map(()=>0);
+    for(let r=0;r<Math.max(currentRound, predictions.length?currentRound+(phase!=='done'?1:0):0);r++){
+      if(r>=currentRound && phase!=='done') continue; // don't show future
+      const rd=ROUNDS[r];
+      const cls=r===currentRound-1?' class="current-round"':'';
+      bodyHtml+='<tr'+cls+'><td>'+SUITS[rd.suitIdx]+' '+rd.cards+'</td>';
+      players.forEach((_,i)=>{
+        if(scores[i][r]!==undefined){
+          const s=scores[i][r];
+          totals[i]+=s;
+          const c=s>0?'pos':s<0?'neg':'';
+          const prefix=s>0?'+':'';
+          bodyHtml+='<td class="'+c+'">'+prefix+s+'</td>';
+        } else {
+          bodyHtml+='<td>–</td>';
+        }
+      });
+      bodyHtml+='</tr>';
+    }
+    $('#scoreBody').innerHTML=bodyHtml;
+
+    let footHtml='<tr><td>Totaal</td>';
+    players.forEach((_,i)=>{
+      footHtml+='<td>'+totals[i]+'</td>';
+    });
+    footHtml+='</tr>';
+    $('#scoreFoot').innerHTML=footHtml;
+  }
+
+  function showWinner(){
+    const totals=players.map((_,i)=>scores[i].reduce((a,b)=>a+b,0));
+    const max=Math.max(...totals);
+    const winnerIdx=totals.indexOf(max);
+    $('#winnerArea').innerHTML='<div class="winner-banner">'
+      +'<div class="trophy">🏆</div>'
+      +'<div class="name">'+esc(players[winnerIdx])+' wint!</div>'
+      +'<div class="score">'+max+' punten</div></div>';
+  }
+
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+})();
+</script>
+</body>
+</html>
