@@ -57,10 +57,6 @@
     #diff-normal.active { background: #b59f3b; }
     #diff-hard.active   { background: #8b3a3a; }
 
-    /* Puzzle nav */
-    #puzzle-nav { display: flex; align-items: center; gap: 10px; }
-    #puzzle-label { font-size: 0.85rem; color: #aaa; min-width: 70px; text-align: center; }
-
     /* ── Swaps counter ── */
     #swaps {
       font-size: 1rem;
@@ -116,7 +112,8 @@
       text-align: center;
     }
 
-    #new-game-btn { margin-top: 14px; padding: 10px 28px; font-size: 1rem; }
+    #bottom-buttons { display: flex; gap: 10px; margin-top: 14px; }
+    #bottom-buttons button { padding: 10px 22px; font-size: 1rem; }
     .backlink{position:absolute;top:12px;left:14px;color:#888;text-decoration:none;font-size:.85rem;font-family:Arial,sans-serif;font-weight:normal;}
   </style>
 </head>
@@ -125,7 +122,7 @@
 
   <header>
     <h1>Wafelwoorden</h1>
-    <p id="puzzle-subtitle">Puzzel #1</p>
+    <p id="puzzle-subtitle"></p>
   </header>
 
   <div id="controls">
@@ -135,12 +132,6 @@
       <button id="diff-normal" onclick="setDifficulty('normaal')">🙂 Normaal</button>
       <button id="diff-hard"   onclick="setDifficulty('moeilijk')">😤 Moeilijk</button>
     </div>
-    <!-- puzzle navigation -->
-    <div id="puzzle-nav">
-      <button onclick="prevPuzzle()">◀</button>
-      <span id="puzzle-label">Puzzel 1 / 4</span>
-      <button onclick="nextPuzzle()">▶</button>
-    </div>
   </div>
 
   <div id="swaps">Nog <span id="swaps-left">15</span> wissels over</div>
@@ -148,161 +139,220 @@
   <div id="grid"></div>
 
   <div id="message"></div>
-  <button id="new-game-btn" onclick="startGame()">🔄 Opnieuw</button>
+  <div id="bottom-buttons">
+    <button onclick="restartGame()">🔄 Opnieuw</button>
+    <button onclick="newGame()">✨ Nieuw spel</button>
+  </div>
 
   <script>
   // ══════════════════════════════════════════════════════════════
-  //  PUZZLES  – 4 gevalideerde Nederlandse woordensets
-  //  Elke puzzel: 3 rij-woorden (r0,r2,r4) + 3 kolom-woorden (c0,c2,c4)
-  //  Alle 9 kruispunten zijn met de hand geverifieerd.
+  //  WOORDENLIJST — veelgebruikte Nederlandse 5-letterwoorden
+  //  Veilig, geschikt voor kinderen vanaf ~10 jaar
   // ══════════════════════════════════════════════════════════════
-  const PUZZLES = [
-    {
-      label: 'Puzzel 1',
-      // Rijen: STOER · OPERA · PLANT
-      // Kolommen: STOMP · OMEGA · RAAKT
-      solution: [
-        ['S','T','O','E','R'],
-        ['T', null,'M', null,'A'],
-        ['O','P','E','R','A'],
-        ['M', null,'G', null,'K'],
-        ['P','L','A','N','T'],
-      ],
-    },
-    {
-      label: 'Puzzel 2',
-      // Rijen: KAARS · LEREN · NIETS
-      // Kolommen: KOLEN · AARDE · SONGS
-      solution: [
-        ['K','A','A','R','S'],
-        ['O', null,'A', null,'O'],
-        ['L','E','R','E','N'],
-        ['E', null,'D', null,'G'],
-        ['N','I','E','T','S'],
-      ],
-    },
-    {
-      label: 'Puzzel 3',
-      // Rijen: DROOM · LEVEL · NOREN
-      // Kolommen: DALEN · OEVER · MOLEN
-      solution: [
-        ['D','R','O','O','M'],
-        ['A', null,'E', null,'O'],
-        ['L','E','V','E','L'],
-        ['E', null,'V', null,'E'],
-        ['N','O','R','E','N'],
-      ],
-    },
-    {
-      label: 'Puzzel 4',
-      // Rijen: VLAAG · ROBOT · SPEEN
-      // Kolommen: VARES · ABOAT · GTEEN  ← vervangen door:
-      // Rijen: TREIN · BODEM · SLEEP
-      // Kolommen: TABES · REGEL · NOPEL  ← ook complex
-      //
-      // Gebruikt: BLOED · KNOOP · FIETS
-      //           BAKEN · LOOFD · DROPS  ← verificatie:
-      // Rijen: BLOED · ROKEN · STAMP
-      // Kolommen: BURSA · LOOPS · DKNPT ← problemen
-      //
-      // ✅ Definitief geverifieerd:
-      // Rijen: WORST · ADEPT · GENIE
-      // Kolommen: WAGEN · REPEL · STEIE ← nee
-      //
-      // ✅ Geverifieerd:
-      // Rijen: KAART · OPENT · SOLES
-      // Kolommen: KOOKS · ARENE · TENTS  ← Engelstalig
-      //
-      // ✅ Gebruikt (volledig geverifieerd):
-      // Rijen:    VAREN · TEGEL · STOMP
-      // Kolommen: VITTS · REGES · NGLMP  ← nee
-      //
-      // Na uitgebreide verificatie:
-      // Rijen:    GROEN · TAFEL · SPORT
-      // Kolommen: GULPS · ROADS · NNERT  ← nee
-      //
-      // ═══ DEFINITIEF PUZZEL 4 (handmatig geverifieerd) ═══
-      // Rijen:    VIOOL · BOVEN · KREEK
-      // Kolommen: VBKEE (c0) · IOVER (c2) · LENK (c4)... nee
-      //
-      // ── Simpelste aanpak: bouw vanuit kruispunten ──
-      // Kruispunten: a=S b=T c=A  →  row0=STAAN? S,T,A,A,N
-      //              d=P e=O f=N  →  row2=PION? 4 letters
-      // Gebruik: SPOOK voor row0: S,P,O,O,K
-      //   a=S b=O c=K
-      //   col0=S?? col2=O?? col4=K??
-      //   col0=SLOOT: S,L,O,O,T → d=O g=T
-      //   col2=OPRIT: O,P,R,I,T → e=R h=T
-      //   col4=KOERS: K,O,E,R,S → f=E i=S
-      //   row2: O,_,R,_,E → ORDE? O,R,D,E = 4... ORELSE? no
-      //         ORDRE? no. OEVER? O,E,V,E,R → pos2=V≠R ✗
-      //         OREREN? 6. OREREN? ORGE?
-      //         → veranderen col2
-      //   col2=OEVER: O,E,V,E,R → e=V h=R
-      //   row2: O,_,V,_,E → OEVER! maar dat is col2...
-      //         OVALE? O,V,A,L,E → pos2=A≠V ✗
-      //         OVERL? O,V,E,R,L → pos2=E≠V ✗ hmm
-      //         O_V_E: OVERT? O,V,E,R,T → pos1=V, pos2=E≠V ✗
-      //   → veranderen col4
-      //   col4=KOKEN: K,O,K,E,N → f=K i=N
-      //   row2: O,_,V,_,K → O_V_K: geen nl woord
-      //   col4=KLEUR: K,L,E,U,R → f=E i=R
-      //   row2: O,_,V,_,E → O_V_E: zelfde probleem
-      //
-      // ══ Alternatieve aanpak: gebruik TOREN als col ══
-      // col0=TOREN: T,O,R,E,N → a=T d=R g=N
-      // col2=AARDE: A,A,R,D,E → b=A e=R h=E  (al in puzzel 2)
-      // col4=STAAN: S,T,A,A,N → c=S f=A i=N
-      // row0: T,_,A,_,S → T_A_S: TAAIS? T,A,A,I,S → pos2=A✓pos4=S✓ TAAIS=sticky ✓
-      // row2: R,_,R,_,A → R_R_A: moeilijk...
-      //
-      // ══ FINAL ATTEMPT ══════════════════════════════════
-      // col0=VLOOT: V,L,O,O,T → a=V d=O g=T
-      // col2=LADEN: L,A,D,E,N → b=L e=D h=N  (wait: LADEN[2]=D)
-      //   LADEN=L,A,D,E,N → col2[0]=L=b, col2[2]=D=e, col2[4]=N=h
-      // col4=TOREN: T,O,R,E,N → c=T f=R i=N
-      // row0: V,_,L,_,T → V_L_T: VLUCHT? 6. VELDT? V,E,L,D,T → V=0✓L=2✓T=4✓! VELDT=veld(t) ✓
-      // row2: O,_,D,_,R → O_D_R: ORDER? O,R,D,E,R → pos2=D✓ but O,R,D: pos1=R≠_ free
-      //   OEDR? ORDER=O,R,D,E,R → O=0✓ D=2? pos2=D: O=0,R=1,D=2,E=3,R=4 → D✓ R✓ ✓ YES!
-      //   ORDER: O=0,R=1,D=2,E=3,R=4 → pos0=O✓ pos2=D✓ pos4=R✓
-      // row4: T,_,N,_,N → T_N_N: TONNEN? 6. TINNEN? T,I,N,N,E,N=6.
-      //   T_N_N: TONEN? T,O,N,E,N → T=0✓N=2✓N=4✓! TONEN=show/tones ✓
-      //
-      // VERIFICATIE:
-      // row0=VELDT: V(0),E(1),L(2),D(3),T(4)
-      // row2=ORDER: O(0),R(1),D(2),E(3),R(4)
-      // row4=TONEN: T(0),O(1),N(2),E(3),N(4)
-      // col0=VLOOT: V(0),L(1),O(2),O(3),T(4)
-      //   col0[0]=V=row0[0]=V ✓  col0[2]=O=row2[0]=O ✓  col0[4]=T=row4[0]=T ✓
-      // col2=LADEN: L(0),A(1),D(2),E(3),N(4)
-      //   col2[0]=L=row0[2]=L ✓  col2[2]=D=row2[2]=D ✓  col2[4]=N=row4[2]=N ✓
-      // col4=TOREN: T(0),O(1),R(2),E(3),N(4)
-      //   col4[0]=T=row0[4]=T ✓  col4[2]=R=row2[4]=R ✓  col4[4]=N=row4[4]=N ✓
-      // ALLE 9 KRUISPUNTEN ✓ ✓ ✓
-      solution: [
-        ['V','E','L','D','T'],
-        ['L', null,'A', null,'O'],
-        ['O','R','D','E','R'],
-        ['O', null,'E', null,'E'],
-        ['T','O','N','E','N'],
-      ],
-      // Woorden: VELDT · ORDER · TONEN · VLOOT · LADEN · TOREN
-    },
+  const WORDS = [
+    // A
+    'AAPJE','AARDE','ABDIJ','AFDAK','AFVAL','ALARM','AMBER','ANDER','ANGEL',
+    'ANGST','ANKER','APART','APPEL','AREND','ATLAS','AVOND',
+    // B
+    'BAARD','BAKEN','BALEN','BEEST','BEGIN','BEKER','BENDE','BEREN','BETER',
+    'BEURT','BEZEM','BEZIG','BINGO','BLANK','BLAAR','BLIND','BLITS','BLOED',
+    'BLOEM','BLOND','BOCHT','BODEM','BOMEN','BONEN','BONUS','BOORD','BOREN',
+    'BOSJE','BOTER','BOVEN','BRAAF','BRAND','BREED','BRIEF','BROEK','BROOD',
+    'BRUIN','BUIEN','BUREN','BEURS','BUURT',
+    // C
+    'CHAOS','CLOWN','COACH','COBRA',
+    // D
+    'DALEN','DAMES','DARTS','DATUM','DEKEN','DEELT','DELER','DENKT','DEPOT',
+    'DERDE','DICHT','DIEPE','DIEET','DIENT','DIKTE','DINER','DONOR','DOORN',
+    'DOPEN','DOSIS','DRAAD','DRAAI','DRAAK','DRANK','DROOG','DROOM','DRUIF',
+    'DUREN','DWARS','DWERG',
+    // E
+    'ECHTE','EFFEN','EIGEN','EIKEL','EINDE','ELAND','ELITE','EMMER','ENGEL',
+    'ENKEL','ENORM',
+    // F
+    'FALEN','FAUNA','FEEST','FIETS','FLAUW','FLINK','FLUIT','FOLIE','FORUM',
+    'FRAAI','FRIET','FRUIT',
+    // G
+    'GALOP','GARDE','GATEN','GAVEN','GAZON','GEBED','GEEFT','GEEST','GELUK',
+    'GENIE','GERST','GEVEN','GEVEL','GEWAS','GEZIN','GIRAF','GLANS','GOEDE',
+    'GRAAN','GRAAF','GRAAT','GRENS','GRIJS','GROEN','GROEI','GROEP','GROET',
+    'GROOT','GROND',
+    // H
+    'HAAST','HAGEL','HAARD','HAKEN','HALVE','HAMER','HAVEN','HAVIK','HEEFT',
+    'HEIDE','HEKEL','HELFT','HEMEL','HETEN','HINTS','HITTE','HOEDE','HOEST',
+    'HOGER','HOPEN','HOORN','HOORT','HORDE','HOTEL','HULDE','HUMOR','HUREN',
+    // I
+    'IDOOL','IJZER','IMKER','INHAM','INVAL','INZET','IVOOR',
+    // J
+    'JAGER','JEUGD','JOKER','JUBEL','JUIST','JUWEL',
+    // K
+    'KAARS','KAART','KABEL','KADER','KAMER','KAPOT','KASSA','KATER','KEERT',
+    'KEREN','KETEL','KEUZE','KIEST','KLAAR','KLANK','KLEED','KLEUR','KLOMP',
+    'KLOOF','KLOPT','KNOOP','KOERS','KOETS','KOKEN','KOLEN','KOMST','KOOPT',
+    'KOORD','KOPJE','KORST','KORTE','KRAAL','KRAAN','KRANT','KREEK','KROON',
+    'KRUID','KRUIS','KUDDE','KUNST','KUREN','KWAAD','KWAST',
+    // L
+    'LAARS','LACHT','LADEN','LAKEN','LANGE','LANGS','LASER','LATER','LATEN',
+    'LEDER','LEEUW','LEERT','LEEST','LEGEN','LEGER','LENEN','LEPEL','LEREN',
+    'LEVEL','LEVER','LICHT','LIJST','LINDE','LINKS','LOPEN','LOPER','LOOPT',
+    'LOTUS','LUCHT','LUIER','LUNCH',
+    // M
+    'MAAND','MAAKT','MAGER','MAKER','MANEN','MANGO','MARKT','MASSA','MEDIA',
+    'MEEST','MENEN','MEREL','METER','METEN','MOLEN','MOOIE','MOTOR','MUREN',
+    // N
+    'NAALD','NAAST','NACHT','NADER','NAGEL','NAMEN','NAVEL','NEGEN','NEMEN',
+    'NEVEL','NIEUW','NIETS','NOBEL','NODIG','NOEMT','NOREN','NOTEN',
+    // O
+    'OEVER','OFFER','OMEGA','OOGST','OPERA','OPRIT','OPZIJ','ORDER','ORGEL',
+    'OTTER','OUDER','OVAAL',
+    // P
+    'PAARD','PALET','PANDA','PANEL','PAREL','PASEN','PASTA','PAUZE','PEPER',
+    'PIANO','PIZZA','PLAKT','PLANK','PLANT','PLEIN','POETS','POEMA','POORT',
+    'PRAAT','PRIJS','PRINS','PROEF',
+    // R
+    'RAAKT','RADEN','RAKEN','RAKET','RAMEN','REBEL','RECHT','REEKS','REGEN',
+    'REGEL','REIST','RENTE','RIOOL','RITME','ROBOT','ROEPT','ROEST','ROKEN',
+    'ROMAN','RONDE','ROVER','ROZEN','RUZIE',
+    // S
+    'SABEL','SALDO','SCHAT','SCHEP','SCHIP','SLAAP','SLAAT','SLANG','SLOOT',
+    'SLUIT','SMAAK','SMART','SMELT','SNOEP','SOORT','SPEEL','SPEER','SPIER',
+    'SPOOK','SPORT','STAAL','STAAN','STAAT','STEEN','STIER','STOEL','STOEP',
+    'STOER','STOMP','STOOM','STORM','STOUT','STRAF','STRIK','STRIP','STUUR',
+    'SUPER',
+    // T
+    'TAART','TAFEL','TAKEN','TANTE','TEKST','TEGEL','TEKEN','TEMPO','TITEL',
+    'TOCHT','TONEN','TOREN','TOVER','TREIN','TREKT','TROEF','TROEP','TROTS',
+    'TROUW',
+    // U
+    'UILEN',
+    // V
+    'VAART','VADER','VAREN','VECHT','VEGEN','VELDT','VEREN','VERSE','VEZEL',
+    'VINDT','VIOOL','VLEES','VLOER','VLOOT','VOCHT','VOELT','VOGEL','VRAAG',
+    'VREDE','VROUW','VUREN','VUIST',
+    // W
+    'WAARD','WACHT','WAGEN','WAPEN','WATER','WERKT','WETEN','WEVER','WEZEN',
+    'WIJST','WINST','WOEDE','WONEN','WORST',
+    // Z
+    'ZACHT','ZAKEN','ZEGEN','ZEKER','ZEVEN','ZINGT','ZOEKT','ZOMER','ZWAAN',
+    'ZWAAR','ZWART','ZWEET','ZWERM',
   ];
 
   // ══════════════════════════════════════════════════════════════
-  //  WAFFLE-PATROON: posities met een tegel (zelfde voor alle puzzels)
+  //  PUZZELGENERATOR — vindt 6 woorden die een geldig wafelrooster
+  //  vormen (3 rijen + 3 kolommen met 9 kloppende kruispunten)
+  // ══════════════════════════════════════════════════════════════
+
+  function shuffleArray(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function buildIndex(words) {
+    const idx = Array.from({length: 5}, () => ({}));
+    for (const w of words) {
+      for (let i = 0; i < 5; i++) {
+        const ch = w[i];
+        (idx[i][ch] || (idx[i][ch] = [])).push(w);
+      }
+    }
+    return idx;
+  }
+
+  function findMatching(idx, constraints) {
+    let result = null;
+    for (const [pos, ch] of constraints) {
+      const words = idx[pos][ch] || [];
+      if (!result) {
+        result = new Set(words);
+      } else {
+        const next = new Set();
+        for (const w of words) if (result.has(w)) next.add(w);
+        result = next;
+      }
+      if (result.size === 0) return [];
+    }
+    return result ? [...result] : [];
+  }
+
+  function generatePuzzle() {
+    const idx = buildIndex(WORDS);
+    const allWords = shuffleArray(WORDS);
+    const t0 = Date.now();
+
+    for (const row0 of allWords) {
+      if (Date.now() - t0 > 3000) break;
+
+      const c0list = shuffleArray(idx[0][row0[0]] || []);
+      for (const col0 of c0list) {
+        if (col0 === row0) continue;
+
+        const c2list = shuffleArray(idx[0][row0[2]] || []);
+        for (const col2 of c2list) {
+          if (col2 === row0 || col2 === col0) continue;
+
+          // Vroege check: bestaat er een woord met col0[2]@pos0 en col2[2]@pos2?
+          const partial = findMatching(idx, [[0, col0[2]], [2, col2[2]]]);
+          if (partial.length === 0) continue;
+
+          const c4list = shuffleArray(idx[0][row0[4]] || []);
+          for (const col4 of c4list) {
+            if (col4 === row0 || col4 === col0 || col4 === col2) continue;
+
+            const row2s = findMatching(idx, [[0, col0[2]], [2, col2[2]], [4, col4[2]]]);
+            if (row2s.length === 0) continue;
+
+            for (const row2 of shuffleArray(row2s)) {
+              if (row2 === row0 || row2 === col0 || row2 === col2 || row2 === col4) continue;
+
+              const row4s = findMatching(idx, [[0, col0[4]], [2, col2[4]], [4, col4[4]]]);
+              for (const row4 of shuffleArray(row4s)) {
+                if (row4 === row0 || row4 === col0 || row4 === col2 || row4 === col4 || row4 === row2) continue;
+
+                return [
+                  [row0[0], row0[1], row0[2], row0[3], row0[4]],
+                  [col0[1], null,    col2[1], null,    col4[1]],
+                  [row2[0], row2[1], row2[2], row2[3], row2[4]],
+                  [col0[3], null,    col2[3], null,    col4[3]],
+                  [row4[0], row4[1], row4[2], row4[3], row4[4]],
+                ];
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Noodoplossing: een van de ingebouwde puzzels
+    return FALLBACK_PUZZLES[Math.floor(Math.random() * FALLBACK_PUZZLES.length)];
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  NOODPUZZELS — als de generator onverhoopt niets vindt
+  // ══════════════════════════════════════════════════════════════
+  const FALLBACK_PUZZLES = [
+    [['S','T','O','E','R'],['T',null,'M',null,'A'],['O','P','E','R','A'],['M',null,'G',null,'K'],['P','L','A','N','T']],
+    [['K','A','A','R','S'],['O',null,'A',null,'O'],['L','E','R','E','N'],['E',null,'D',null,'G'],['N','I','E','T','S']],
+    [['D','R','O','O','M'],['A',null,'E',null,'O'],['L','E','V','E','L'],['E',null,'V',null,'E'],['N','O','R','E','N']],
+    [['V','E','L','D','T'],['L',null,'A',null,'O'],['O','R','D','E','R'],['O',null,'E',null,'E'],['T','O','N','E','N']],
+  ];
+
+  // ══════════════════════════════════════════════════════════════
+  //  WAFFLE-PATROON: posities met een tegel
   // ══════════════════════════════════════════════════════════════
   const WAFFLE_POSITIONS = [];
   for (let r = 0; r < 5; r++)
     for (let c = 0; c < 5; c++)
-      if (PUZZLES[0].solution[r][c] !== null)
+      if (!(r % 2 === 1 && c % 2 === 1))
         WAFFLE_POSITIONS.push([r, c]);
 
   // ══════════════════════════════════════════════════════════════
   //  SPELSTATUS
   // ══════════════════════════════════════════════════════════════
-  let currentPuzzleIdx = 0;
+  let gameNumber = 0;
   let currentDifficulty = 'normaal';
   let currentSolution;
   let currentGrid;
@@ -321,11 +371,9 @@
   function makePuzzleGrid(solution, difficulty) {
     const cfg = DIFFICULTY_CONFIG[difficulty];
 
-    // Begin altijd vanuit de opgeloste stand
     const grid = solution.map(row => row.map(v => v));
 
     if (cfg.preSwaps === null) {
-      // Moeilijk: volledig schudden
       const letters = WAFFLE_POSITIONS.map(([r, c]) => solution[r][c]);
       for (let i = letters.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -333,8 +381,6 @@
       }
       WAFFLE_POSITIONS.forEach(([r, c], i) => { grid[r][c] = letters[i]; });
     } else {
-      // Makkelijk / Normaal: N willekeurige wissels vanuit opgeloste stand
-      // → veel tegels blijven al groen
       let swapsDone = 0;
       let tries = 0;
       while (swapsDone < cfg.preSwaps && tries < 500) {
@@ -344,7 +390,6 @@
         if (i === j) continue;
         const [r1, c1] = WAFFLE_POSITIONS[i];
         const [r2, c2] = WAFFLE_POSITIONS[j];
-        // Verwissel alleen als minstens één nog op de juiste plek staat
         if (grid[r1][c1] === solution[r1][c1] || grid[r2][c2] === solution[r2][c2]) {
           [grid[r1][c1], grid[r2][c2]] = [grid[r2][c2], grid[r1][c1]];
           swapsDone++;
@@ -378,14 +423,12 @@
     const priority = {green: 3, yellow: 2, gray: 1};
 
     for (const positions of wordGroups) {
-      // Frequentie van elke letter in de oplossing voor dit woord
       const solutionCounts = {};
       for (const [r, c] of positions) {
         const l = solution[r][c];
         solutionCounts[l] = (solutionCounts[l] || 0) + 1;
       }
 
-      // Pass 1: groene letters markeren en aftrekken
       const remaining = {...solutionCounts};
       const wc = {};
       for (const [r, c] of positions) {
@@ -395,7 +438,6 @@
         }
       }
 
-      // Pass 2: geel als er nog een plek open is, anders grijs
       for (const [r, c] of positions) {
         if (wc[`${r},${c}`] === 'green') continue;
         const letter = grid[r][c];
@@ -407,7 +449,6 @@
         }
       }
 
-      // Samenvoegen met prioriteit
       for (const [r, c] of positions) {
         const existing = colors[r][c];
         if (existing === null || priority[wc[`${r},${c}`]] > priority[existing]) {
@@ -442,7 +483,6 @@
           cell.dataset.c = c;
 
           if (!gameOver) {
-            // Muis-drag
             cell.draggable = true;
             cell.addEventListener('dragstart', onDragStart);
             cell.addEventListener('dragend',   onDragEnd);
@@ -450,7 +490,6 @@
             cell.addEventListener('dragleave',  onDragLeave);
             cell.addEventListener('drop',       onDrop);
 
-            // Touch/swipe
             cell.addEventListener('touchstart', onTouchStart, {passive: false});
             cell.addEventListener('touchmove',  onTouchMove,  {passive: false});
             cell.addEventListener('touchend',   onTouchEnd,   {passive: false});
@@ -462,10 +501,7 @@
     }
 
     document.getElementById('swaps-left').textContent = swapsLeft;
-    document.getElementById('puzzle-subtitle').textContent =
-      PUZZLES[currentPuzzleIdx].label;
-    document.getElementById('puzzle-label').textContent =
-      `${PUZZLES[currentPuzzleIdx].label} / ${PUZZLES.length}`;
+    document.getElementById('puzzle-subtitle').textContent = 'Spel #' + gameNumber;
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -501,8 +537,8 @@
   // ══════════════════════════════════════════════════════════════
   //  TOUCH DRAG
   // ══════════════════════════════════════════════════════════════
-  let touchSrc = null;   // DOM-element waar de vinger begon
-  let touchTgt = null;   // DOM-element momenteel onder de vinger
+  let touchSrc = null;
+  let touchTgt = null;
 
   function onTouchStart(e) {
     e.preventDefault();
@@ -514,12 +550,10 @@
   function onTouchMove(e) {
     e.preventDefault();
     const touch = e.touches[0];
-    // Verberg het bronvak tijdelijk zodat elementFromPoint de tegel eronder vindt
     touchSrc.style.pointerEvents = 'none';
     const el = document.elementFromPoint(touch.clientX, touch.clientY);
     touchSrc.style.pointerEvents = '';
 
-    // Visuele feedback bijwerken
     if (touchTgt && touchTgt !== el) touchTgt.classList.remove('drag-over');
 
     if (el && el.classList.contains('cell') && !el.classList.contains('empty') && el !== touchSrc) {
@@ -561,7 +595,7 @@
     if (isSolved(currentGrid, currentSolution)) {
       gameOver = true;
       msgEl.textContent = '🎉 Geweldig! Je hebt het opgelost!';
-      render(); // herrender zonder event listeners
+      render();
     } else if (swapsLeft <= 0) {
       gameOver = true;
       msgEl.textContent = '😢 Geen wissels meer. Probeer opnieuw!';
@@ -574,9 +608,7 @@
   // ══════════════════════════════════════════════════════════════
   //  SPELBESTURING
   // ══════════════════════════════════════════════════════════════
-  function startGame() {
-    const puzzle = PUZZLES[currentPuzzleIdx];
-    currentSolution = puzzle.solution;
+  function restartGame() {
     swapsLeft = DIFFICULTY_CONFIG[currentDifficulty].maxSwaps;
     gameOver = false;
     currentGrid = makePuzzleGrid(currentSolution, currentDifficulty);
@@ -585,19 +617,15 @@
     updateDiffButtons();
   }
 
+  function newGame() {
+    gameNumber++;
+    currentSolution = generatePuzzle();
+    restartGame();
+  }
+
   function setDifficulty(d) {
     currentDifficulty = d;
-    startGame();
-  }
-
-  function nextPuzzle() {
-    currentPuzzleIdx = (currentPuzzleIdx + 1) % PUZZLES.length;
-    startGame();
-  }
-
-  function prevPuzzle() {
-    currentPuzzleIdx = (currentPuzzleIdx - 1 + PUZZLES.length) % PUZZLES.length;
-    startGame();
+    restartGame();
   }
 
   function updateDiffButtons() {
@@ -608,7 +636,7 @@
   }
 
   // ── Start ──
-  startGame();
+  newGame();
   </script>
 </body>
 </html>
