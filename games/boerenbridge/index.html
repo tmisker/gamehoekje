@@ -59,6 +59,7 @@
     .round-header .suit{font-size:2rem}
     .round-header .info{font-size:1.1rem;font-weight:700;margin-top:4px}
     .round-header .step{color:var(--muted);font-size:.85rem;margin-top:2px}
+    .round-header .dealer{color:var(--gold);font-size:.9rem;margin-top:6px;font-weight:600}
 
     /* Input grid */
     .input-section{
@@ -69,6 +70,7 @@
       display:flex;align-items:center;gap:10px;margin-bottom:8px;
     }
     .input-row .pname{flex:1;font-weight:600;font-size:.95rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .input-row .dealer-badge{font-size:.75rem;color:var(--gold);margin-left:4px;font-weight:400}
     .input-row input{
       width:60px;padding:8px;border:1px solid var(--line);border-radius:8px;
       background:var(--card2);color:var(--text);font-size:1rem;text-align:center;
@@ -178,6 +180,17 @@
   let players=[], scores=[], predictions=[], actuals=[];
   let currentRound=0, phase='predict'; // predict | actual | done
 
+  function getDealerIdx(round){
+    return (players.length - 1 + round) % players.length;
+  }
+  function getPlayerOrder(round){
+    const n=players.length;
+    const first=(round) % n;
+    const order=[];
+    for(let i=0;i<n;i++) order.push((first+i)%n);
+    return order;
+  }
+
   const $=s=>document.querySelector(s);
   const $$=s=>document.querySelectorAll(s);
 
@@ -228,27 +241,36 @@
     $('#roundInfo').textContent=SUIT_NAMES[si]+' '+r.cards;
     $('#roundStep').textContent='Ronde '+(currentRound+1)+' van '+ROUNDS.length;
 
+    let dealerHtml=$('#roundHeader').querySelector('.dealer');
+    if(!dealerHtml){
+      dealerHtml=document.createElement('div');
+      dealerHtml.className='dealer';
+      $('#roundHeader').appendChild(dealerHtml);
+    }
+    dealerHtml.textContent='Deler: '+players[getDealerIdx(currentRound)];
+
     if(phase==='predict') showPredictForm();
     else if(phase==='actual') showActualForm();
   }
 
   function showPredictForm(){
     const r=ROUNDS[currentRound];
+    const order=getPlayerOrder(currentRound);
+    const dealerIdx=getDealerIdx(currentRound);
     const sec=$('#inputSection');
     let html='<h3>Hoeveel slagen raad je? (max '+r.cards+')</h3>';
-    players.forEach((p,i)=>{
-      html+='<div class="input-row"><span class="pname">'+esc(p)+'</span>'
-        +'<input type="number" min="0" max="'+r.cards+'" id="pred'+i+'" inputmode="numeric"></div>';
+    order.forEach(pi=>{
+      const badge=pi===dealerIdx?' <span class="dealer-badge">(deler)</span>':'';
+      html+='<div class="input-row"><span class="pname">'+esc(players[pi])+badge+'</span>'
+        +'<input type="number" min="0" max="'+r.cards+'" data-pi="'+pi+'" inputmode="numeric"></div>';
     });
     html+='<div id="predWarn"></div>';
     html+='<div class="btn-row"><button class="btn-primary" id="predOk">Slagen invoeren →</button></div>';
     sec.innerHTML=html;
 
-    // Focus first input
     const first=sec.querySelector('input');
     if(first) first.focus();
 
-    // Tab through inputs with Enter
     sec.querySelectorAll('input').forEach((inp,i,all)=>{
       inp.addEventListener('keydown',e=>{
         if(e.key==='Enter'){
@@ -260,12 +282,12 @@
     });
 
     document.getElementById('predOk').addEventListener('click',()=>{
-      const preds=[];
+      const preds=new Array(players.length);
       let valid=true;
-      players.forEach((_,i)=>{
-        const v=document.getElementById('pred'+i).value;
+      sec.querySelectorAll('input[data-pi]').forEach(inp=>{
+        const pi=+inp.dataset.pi, v=inp.value;
         if(v===''||isNaN(+v)||+v<0||+v>r.cards){valid=false;}
-        preds.push(+v);
+        preds[pi]=+v;
       });
       if(!valid){
         document.getElementById('predWarn').innerHTML='<span class="error">Vul geldige aantallen in (0–'+r.cards+')</span>';
@@ -284,12 +306,15 @@
   function showActualForm(){
     const r=ROUNDS[currentRound];
     const preds=predictions[currentRound];
+    const order=getPlayerOrder(currentRound);
+    const dealerIdx=getDealerIdx(currentRound);
     const sec=$('#inputSection');
     let html='<h3>Werkelijke slagen</h3>';
-    players.forEach((p,i)=>{
-      html+='<div class="input-row"><span class="pname">'+esc(p)+'</span>'
-        +'<span class="predicted">voorspeld: '+preds[i]+'</span>'
-        +'<input type="number" min="0" max="'+r.cards+'" id="act'+i+'" inputmode="numeric"></div>';
+    order.forEach(pi=>{
+      const badge=pi===dealerIdx?' <span class="dealer-badge">(deler)</span>':'';
+      html+='<div class="input-row"><span class="pname">'+esc(players[pi])+badge+'</span>'
+        +'<span class="predicted">voorspeld: '+preds[pi]+'</span>'
+        +'<input type="number" min="0" max="'+r.cards+'" data-pi="'+pi+'" inputmode="numeric"></div>';
     });
     html+='<div id="actWarn"></div>';
     html+='<div class="btn-row">'
@@ -316,12 +341,12 @@
     });
 
     document.getElementById('actOk').addEventListener('click',()=>{
-      const acts=[];
+      const acts=new Array(players.length);
       let valid=true;
-      players.forEach((_,i)=>{
-        const v=document.getElementById('act'+i).value;
+      sec.querySelectorAll('input[data-pi]').forEach(inp=>{
+        const pi=+inp.dataset.pi, v=inp.value;
         if(v===''||isNaN(+v)||+v<0||+v>r.cards){valid=false;}
-        acts.push(+v);
+        acts[pi]=+v;
       });
       if(!valid){
         document.getElementById('actWarn').innerHTML='<span class="error">Vul geldige aantallen in (0–'+r.cards+')</span>';
@@ -334,13 +359,12 @@
       }
 
       actuals[currentRound]=acts;
-      const preds=predictions[currentRound];
       players.forEach((_,i)=>{
         const pred=preds[i], act=acts[i];
         let pts;
         if(act===pred) pts=act+5;
         else if(act<pred) pts=-(pred-act);
-        else pts=act; // too many
+        else pts=act;
         scores[i].push(pts);
       });
 
