@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f0f12">
+  <title>Boerenbridge – Scorebord</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    :root{
+      --bg:#0f0f12;--card:#1b1b20;--card2:#232329;--line:#2e2e36;
+      --text:#f4f4f6;--muted:#9a9aa3;--accent:#4caf50;--accent-dim:rgba(76,175,80,.15);
+      --red:#e53935;--gold:#ffd600;
+    }
+    html,body{height:100%}
+    body{
+      background:var(--bg);color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+      display:flex;flex-direction:column;padding:20px;gap:16px;
+    }
+
+    /* verbindingsstip */
+    #connDot{
+      position:fixed;top:12px;right:12px;width:10px;height:10px;border-radius:50%;
+      background:var(--red);z-index:10;transition:background .3s;
+    }
+    #connDot.ok{background:var(--accent)}
+
+    /* bovenbalk */
+    .topbar{
+      display:flex;align-items:center;justify-content:space-between;gap:20px;
+      background:var(--card);border:1px solid var(--line);border-radius:16px;
+      padding:14px 24px;
+    }
+    .topbar .trump{display:flex;align-items:center;gap:14px}
+    .topbar .trump .suit{font-size:3.2rem;line-height:1}
+    .topbar .trump .txt .big{font-size:1.5rem;font-weight:800}
+    .topbar .trump .txt .small{color:var(--muted);font-size:1rem}
+    .topbar .round{font-size:1.3rem;font-weight:700;text-align:center}
+    .topbar .dealer{color:var(--gold);font-size:1.2rem;font-weight:700;text-align:right}
+
+    /* spelerskaarten */
+    .players{display:grid;gap:12px}
+    .pcard{
+      background:var(--card);border:1px solid var(--line);border-radius:16px;
+      padding:14px 10px;text-align:center;display:flex;flex-direction:column;gap:4px;
+      position:relative;
+    }
+    .pcard.leader{border-color:var(--gold)}
+    .pcard .crown{position:absolute;top:-14px;left:50%;transform:translateX(-50%);font-size:1.3rem}
+    .pcard .nm{font-size:1.15rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .pcard .tot{font-size:2.6rem;font-weight:800;line-height:1.1}
+    .pcard .stat{color:var(--muted);font-size:.95rem;min-height:1.3em}
+    .pcard .stat .pos{color:var(--accent);font-weight:700}
+    .pcard .stat .neg{color:var(--red);font-weight:700}
+    .pcard .dealerdot{color:var(--gold);font-size:.85rem}
+
+    /* scoretabel */
+    .scoreboard{
+      flex:1;min-height:0;background:var(--card);border:1px solid var(--line);
+      border-radius:16px;padding:14px;overflow:auto;
+    }
+    table{width:100%;border-collapse:collapse;font-size:1rem;white-space:nowrap}
+    th,td{padding:8px 10px;text-align:center;border-bottom:1px solid var(--line)}
+    th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--card);z-index:1}
+    th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card)}
+    td.pos{color:var(--accent);font-weight:700}
+    td.neg{color:var(--red)}
+    tr.current-round{background:var(--accent-dim)}
+    tfoot td{font-weight:800;font-size:1.1rem;border-top:2px solid var(--line)}
+
+    /* winnaar / idle */
+    .center{
+      flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:20px;text-align:center;
+    }
+    .winner-banner{
+      padding:40px 60px;background:var(--card);border:3px solid var(--gold);border-radius:24px;
+    }
+    .winner-banner .trophy{font-size:5rem}
+    .winner-banner .name{font-size:2.6rem;font-weight:800;color:var(--gold);margin-top:10px}
+    .winner-banner .score{color:var(--muted);font-size:1.4rem;margin-top:6px}
+    .standings{font-size:1.2rem;color:var(--muted)}
+    .standings b{color:var(--text)}
+    .idle-title{font-size:1.6rem;font-weight:700}
+    .idle-sub{color:var(--muted);font-size:1.05rem}
+    .lb-panel{
+      background:var(--card);border:1px solid var(--line);border-radius:16px;
+      padding:20px;max-width:640px;width:100%;overflow-x:auto;
+    }
+    .lb-panel h2{font-size:1.2rem;margin-bottom:12px;text-align:center}
+
+    @media(max-width:700px){
+      .topbar{flex-direction:column;gap:6px}
+      .topbar .dealer,.topbar .round{text-align:center}
+      .pcard .tot{font-size:1.9rem}
+    }
+  </style>
+</head>
+<body>
+  <div id="connDot" title="Verbinding met de server"></div>
+  <div id="app"></div>
+
+<script>
+(function(){
+  const API = '../../../api/boerenbridge';
+  const app = document.getElementById('app');
+  const dot = document.getElementById('connDot');
+  let lastEventAt = 0;
+  let source = null;
+
+  function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+  const SUITS=['♣','♥','♦','♠','Sans'];
+
+  // ---- renderen ----
+  function render(snapshot){
+    const g = snapshot.game;
+    app.style.display='contents';
+    if(!g){ renderIdle(snapshot.leaderboard); return; }
+    if(g.status==='finished'){ renderWinner(g); return; }
+    renderActive(g);
+  }
+
+  function renderActive(g){
+    const n=g.players.length;
+    const ri=g.roundInfo;
+    const preds=g.predictions[g.currentRound];
+    const leaderMax=Math.max(...g.totals);
+    const hasScores=g.roundScores.length>0;
+
+    let html='<div class="topbar">'
+      +'<div class="trump"><span class="suit" style="color:'+ri.suitColor+'">'+ri.suit+'</span>'
+      +'<span class="txt"><span class="big">'+esc(ri.suitName)+' · '+ri.cards+' kaarten</span><br>'
+      +'<span class="small">'+(g.phase==='predict'?'Voorspellen':'Spelen')+'</span></span></div>'
+      +'<div class="round">Ronde '+(g.currentRound+1)+' / '+g.rounds.length+'</div>'
+      +'<div class="dealer">Deler: '+esc(g.players[g.dealerIdx])+'</div>'
+      +'</div>';
+
+    html+='<div class="players" style="grid-template-columns:repeat('+n+',1fr)">';
+    g.players.forEach((p,i)=>{
+      const isLeader=hasScores&&g.totals[i]===leaderMax;
+      let stat;
+      if(preds!==undefined&&preds[i]!==undefined){
+        stat='Voorspeld: <b>'+preds[i]+'</b>';
+      }else if(g.currentRound>0){
+        const last=g.roundScores[g.currentRound-1][i];
+        stat='Vorige ronde: <span class="'+(last>0?'pos':last<0?'neg':'')+'">'+(last>0?'+':'')+last+'</span>';
+      }else{
+        stat='wacht op voorspellingen…';
+      }
+      html+='<div class="pcard'+(isLeader?' leader':'')+'">'
+        +(isLeader?'<span class="crown">👑</span>':'')
+        +'<span class="nm">'+esc(p)+(i===g.dealerIdx?' <span class="dealerdot">●</span>':'')+'</span>'
+        +'<span class="tot">'+g.totals[i]+'</span>'
+        +'<span class="stat">'+stat+'</span>'
+        +'</div>';
+    });
+    html+='</div>';
+
+    html+='<div class="scoreboard"><table>'+scoreTableHtml(g)+'</table></div>';
+    app.innerHTML=html;
+    // nieuwste ronde in beeld houden
+    const sb=app.querySelector('.scoreboard');
+    if(sb) sb.scrollTop=sb.scrollHeight;
+  }
+
+  function scoreTableHtml(g){
+    let html='<thead><tr><th>Ronde</th>';
+    g.players.forEach(p=>{html+='<th>'+esc(p)+'</th>';});
+    html+='</tr></thead><tbody>';
+    for(let r=0;r<g.roundScores.length;r++){
+      const rd=g.rounds[r];
+      const cls=r===g.roundScores.length-1?' class="current-round"':'';
+      html+='<tr'+cls+'><td>'+SUITS[rd.suitIdx]+' '+rd.cards+'</td>';
+      g.roundScores[r].forEach(s=>{
+        html+='<td class="'+(s>0?'pos':s<0?'neg':'')+'">'+(s>0?'+':'')+s+'</td>';
+      });
+      html+='</tr>';
+    }
+    html+='</tbody><tfoot><tr><td>Totaal</td>';
+    g.totals.forEach(t=>{html+='<td>'+t+'</td>';});
+    return html+'</tr></tfoot>';
+  }
+
+  function renderWinner(g){
+    const names=g.winnerIdxs.map(i=>esc(g.players[i])).join(' & ');
+    const max=Math.max(...g.totals);
+    const order=g.players.map((p,i)=>({p,t:g.totals[i]})).sort((a,b)=>b.t-a.t);
+    const standings=order.map((e,i)=>(i+1)+'. <b>'+esc(e.p)+'</b> ('+e.t+')').join(' &nbsp;·&nbsp; ');
+    app.innerHTML='<div class="center">'
+      +'<div class="winner-banner"><div class="trophy">🏆</div>'
+      +'<div class="name">'+names+(g.winnerIdxs.length>1?' winnen!':' wint!')+'</div>'
+      +'<div class="score">'+max+' punten</div></div>'
+      +'<div class="standings">'+standings+'</div>'
+      +'</div>';
+  }
+
+  function renderIdle(leaderboard){
+    let lb='';
+    if(leaderboard&&leaderboard.length){
+      lb='<div class="lb-panel"><h2>🏆 Klassement</h2><table>'
+        +'<thead><tr><th>Speler</th><th>Potjes</th><th>Gewonnen</th><th>Gem. punten</th><th>Beste score</th></tr></thead><tbody>';
+      leaderboard.forEach(e=>{
+        lb+='<tr><td>'+esc(e.name)+'</td><td>'+e.gamesPlayed+'</td><td>'+e.wins+'</td><td>'+e.avgPoints+'</td><td>'+e.bestScore+'</td></tr>';
+      });
+      lb+='</tbody></table></div>';
+    }
+    app.innerHTML='<div class="center">'
+      +'<div><div class="idle-title">🃏 Boerenbridge</div>'
+      +'<div class="idle-sub">Geen actief spel — start een spel op je telefoon</div></div>'
+      +lb+'</div>';
+  }
+
+  // ---- SSE + herstel ----
+  function connect(){
+    if(source) source.close();
+    source = new EventSource(API+'/events');
+    source.addEventListener('state',e=>{
+      lastEventAt=Date.now();
+      dot.classList.add('ok');
+      try{ render(JSON.parse(e.data)); }catch(err){ console.error(err); }
+    });
+    source.addEventListener('ping',()=>{ lastEventAt=Date.now(); dot.classList.add('ok'); });
+    source.onopen=()=>{ lastEventAt=Date.now(); dot.classList.add('ok'); };
+    source.onerror=()=>{ dot.classList.remove('ok'); };
+  }
+
+  async function refetch(){
+    try{
+      const res=await fetch(API+'/current');
+      if(res.ok){
+        render(await res.json());
+        lastEventAt=Date.now();
+        dot.classList.add('ok');
+      }
+    }catch(e){ dot.classList.remove('ok'); }
+  }
+
+  // Watchdog: EventSource herstelt zichzelf meestal, maar iPad-Safari laat
+  // verbindingen soms stil doodgaan — na 90 s zonder events opnieuw opbouwen.
+  setInterval(()=>{
+    if(Date.now()-lastEventAt>90000){ connect(); refetch(); }
+  },15000);
+
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible'){ connect(); refetch(); }
+  });
+
+  connect();
+})();
+</script>
+</body>
+</html>

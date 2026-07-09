@@ -4,9 +4,14 @@ Korte, praktische uitleg over hoe deze repo werkt. Lees dit eerst.
 
 ## Wat is dit?
 
-**Spellenhoek** — een verzameling kleine spellen / speel-tools die **volledig
-offline in de browser** draaien. Geen build-server, geen framework, geen
-runtime-dependencies, geen netwerk. Elke pagina is zelfstandige HTML/CSS/JS.
+**Spellenhoek** — een verzameling kleine spellen / speel-tools voor in de
+browser. Geen framework, geen npm-dependencies. Elke spelpagina is
+zelfstandige HTML/CSS/JS. Er is één minimale **Node-server**
+(`server/server.js`, alleen ingebouwde modules) die de site serveert én het
+boerenbridge-API + SSE levert; de overige spellen doen geen enkele request en
+werken ook als los bestand. Deploy = Docker op de thuisserver (zie README;
+de compose-service staat in de aparte `manor`-repo). GitHub Pages wordt
+**niet** meer gebruikt.
 
 UI-teksten zijn in het **Nederlands**. Houd dat zo.
 
@@ -14,7 +19,12 @@ UI-teksten zijn in het **Nederlands**. Houd dat zo.
 
 ```
 index.html                     # homepage: overzicht met een kaartje per spel
+server/
+  server.js                    # statische site + /api/boerenbridge/* + SSE
+  logic.js                     # autoritatieve boerenbridge-logica (pure functies)
 games/
+  boerenbridge/index.html      # invoerpagina (telefoon) — praat met het API
+  boerenbridge/display/        # live scorebord (iPad/tweede scherm) — SSE
   cube-solver/index.html       # GEBOUWD bestand — NIET met de hand bewerken
   wafelwoorden/index.html      # los, zelfstandig spel (met de hand bewerkbaar)
 src/
@@ -24,8 +34,34 @@ src/
     kociemba.js                #   Kociemba two-phase oplosser (±20 zetten)
     app.js                     #   mobiele UI-logica (Web Worker)
 build.js                       # bouwt src/cube-solver/* -> games/cube-solver/index.html
+test/api.test.js               # end-to-end test van server + API (node test/api.test.js)
+data/                          # spelgegevens (gitignored; Docker-volume)
 README.md                      # gebruikersgerichte uitleg
+Dockerfile                     # node:22-alpine, geen npm install
 ```
+
+## De server / boerenbridge-sync
+
+- **Zero dependencies is een harde regel**, ook voor de server: alleen
+  `node:http`, `node:fs`, `node:path`, `node:crypto`. Start: `node server/server.js`
+  (env: `PORT`, `DATA_DIR`).
+- **De server is autoritatief.** Alle spelregels (rondeschema 8→1→8,
+  scoreformule, deler/beurtvolgorde, validatie) staan in `server/logic.js`.
+  De pagina's zijn pure renderers van het "verrijkte" game-object dat elke
+  mutatie-POST teruggeeft en dat ook via SSE wordt gebroadcast. Dupliceer
+  spelregels nooit in de clients.
+- **Concurrency-guard:** mutaties sturen `round` mee; klopt die niet met
+  `currentRound`/`phase` op de server → 409, en de client refetcht. Geen
+  client-side reconciliatie.
+- **SSE** (`/api/boerenbridge/events`): bij connect en na elke mutatie gaat
+  de **volledige snapshot** over de lijn (nooit deltas), plus een
+  `ping`-event elke 25 s. `server.requestTimeout = 0` staat bewust aan —
+  Node ≥18 kapt anders long-lived responses na 5 min af.
+- **Persistentie:** `data/boerenbridge.json`, synchrone save via tmp-bestand
+  + atomische rename. Corrupt bestand bij startup wordt gequarantained
+  (hernoemd), nooit crash-loopen.
+- Nieuw server-backed spel? Namespace het API onder `/api/<spel>/` en houd
+  de logica in een eigen pure module naast `logic.js`.
 
 ## Build
 
@@ -70,6 +106,11 @@ Blob). Bij geen Worker valt hij terug op de main thread. Worker → Kociemba,
 en als die `null` geeft → `solveCube`.
 
 ## Testen (doe dit, er is geen CI)
+
+**Server/boerenbridge:** `node test/api.test.js` — spawnt de echte server met
+een tijdelijke datamap en test spelverloop, scoreformule (tegen een
+onafhankelijke herimplementatie), 409-guards, undo, klassement, SSE,
+path-traversal en persistentie. Draai dit na elke server- of logica-wijziging.
 
 `solver.js` en `kociemba.js` draaien ook in **Node** (ze exporteren via
 `module.exports`). Test solver-logica direct:
@@ -116,7 +157,9 @@ test de solver-integratie maar niet de worker zelf.
 ## Conventies
 
 - Nederlands in de UI; commit-berichten mogen Nederlands of Engels.
-- Self-contained pagina's, offline, geen externe requests of CDN's.
+- Self-contained pagina's, geen externe requests of CDN's. Requests naar de
+  eigen server (relatieve `/api/...`-paden) zijn de enige uitzondering.
 - Mobiel-eerst, donker thema. Homepage-accent `#5b8cff`; spel-accent groen.
+- Geen auth: bedoeld voor een vertrouwd thuisnetwerk (staat ook in README).
 - Commit & push alleen wanneer de gebruiker erom vraagt; ontwikkel op de
   feature-branch (geen `main`). Maak geen PR tenzij gevraagd.
