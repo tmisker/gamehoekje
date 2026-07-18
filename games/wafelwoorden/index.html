@@ -63,7 +63,10 @@
       margin-bottom: 14px;
       letter-spacing: 1px;
     }
-    #swaps span { font-size: 1.4rem; font-weight: bold; }
+    #swaps-left { font-size: 1.4rem; font-weight: bold; }
+    #swaps.low  { color: #d9a03d; }
+
+    #message .loss-words { font-size: 0.85rem; color: #aaa; font-weight: normal; }
 
     /* ── Grid ── */
     #grid {
@@ -95,7 +98,7 @@
       pointer-events: none;
     }
 
-    .cell.green  { background: #538d4e; }
+    .cell.green  { background: #538d4e; cursor: default; }
     .cell.yellow { background: #b59f3b; }
     .cell.gray   { background: #3a3a3c; }
 
@@ -134,7 +137,7 @@
     </div>
   </div>
 
-  <div id="swaps">Nog <span id="swaps-left">15</span> wissels over</div>
+  <div id="swaps">Nog <span id="swaps-left">15</span> <span id="swaps-word">wissels</span> over</div>
 
   <div id="grid"></div>
 
@@ -355,6 +358,7 @@
   let gameNumber = 0;
   let currentDifficulty = 'normaal';
   let currentSolution;
+  let initialGrid;
   let currentGrid;
   let swapsLeft;
   let gameOver = false;
@@ -482,7 +486,8 @@
           cell.dataset.r = r;
           cell.dataset.c = c;
 
-          if (!gameOver) {
+          // Groene letters staan al goed: die kun je niet meer wisselen
+          if (!gameOver && colors[r][c] !== 'green') {
             cell.draggable = true;
             cell.addEventListener('dragstart', onDragStart);
             cell.addEventListener('dragend',   onDragEnd);
@@ -501,6 +506,8 @@
     }
 
     document.getElementById('swaps-left').textContent = swapsLeft;
+    document.getElementById('swaps-word').textContent = swapsLeft === 1 ? 'wissel' : 'wissels';
+    document.getElementById('swaps').classList.toggle('low', swapsLeft <= 3);
     document.getElementById('puzzle-subtitle').textContent = 'Spel #' + gameNumber;
   }
 
@@ -556,7 +563,8 @@
 
     if (touchTgt && touchTgt !== el) touchTgt.classList.remove('drag-over');
 
-    if (el && el.classList.contains('cell') && !el.classList.contains('empty') && el !== touchSrc) {
+    if (el && el.classList.contains('cell') && !el.classList.contains('empty') &&
+        !el.classList.contains('green') && el !== touchSrc) {
       el.classList.add('drag-over');
       touchTgt = el;
     } else {
@@ -583,6 +591,11 @@
   // ══════════════════════════════════════════════════════════════
   function performSwap(r1, c1, r2, c2) {
     if (r1 === r2 && c1 === c2) return;
+    // Groene letters (al op hun plek) mogen niet mee wisselen
+    if (currentGrid[r1][c1] === currentSolution[r1][c1] ||
+        currentGrid[r2][c2] === currentSolution[r2][c2]) return;
+    // Twee gelijke letters wisselen verandert niets — kost geen wissel
+    if (currentGrid[r1][c1] === currentGrid[r2][c2]) return;
     [currentGrid[r1][c1], currentGrid[r2][c2]] =
       [currentGrid[r2][c2], currentGrid[r1][c1]];
     swapsLeft--;
@@ -598,7 +611,10 @@
       render();
     } else if (swapsLeft <= 0) {
       gameOver = true;
-      msgEl.textContent = '😢 Geen wissels meer. Probeer opnieuw!';
+      const words = [0, 2, 4].map(r => currentSolution[r].join(''))
+        .concat([0, 2, 4].map(c => currentSolution.map(row => row[c]).join('')));
+      msgEl.innerHTML = '😢 Geen wissels meer. Probeer opnieuw!<br>' +
+        '<span class="loss-words">De woorden waren: ' + words.join(', ') + '</span>';
       render();
     } else {
       msgEl.textContent = '';
@@ -608,24 +624,31 @@
   // ══════════════════════════════════════════════════════════════
   //  SPELBESTURING
   // ══════════════════════════════════════════════════════════════
+  // "Opnieuw" herstelt exact dezelfde startpositie; alleen een nieuw spel of
+  // een andere moeilijkheid geeft een nieuwe schudding.
   function restartGame() {
     swapsLeft = DIFFICULTY_CONFIG[currentDifficulty].maxSwaps;
     gameOver = false;
-    currentGrid = makePuzzleGrid(currentSolution, currentDifficulty);
+    currentGrid = initialGrid.map(row => [...row]);
     document.getElementById('message').textContent = '';
     render();
     updateDiffButtons();
   }
 
+  function newRound() {
+    initialGrid = makePuzzleGrid(currentSolution, currentDifficulty);
+    restartGame();
+  }
+
   function newGame() {
     gameNumber++;
     currentSolution = generatePuzzle();
-    restartGame();
+    newRound();
   }
 
   function setDifficulty(d) {
     currentDifficulty = d;
-    restartGame();
+    newRound();
   }
 
   function updateDiffButtons() {
