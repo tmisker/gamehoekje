@@ -187,7 +187,7 @@
     // I
     'IDOOL','IJZER','IMKER','INHAM','INVAL','INZET','IVOOR',
     // J
-    'JAGER','JEUGD','JOKER','JUBEL','JUIST','JUWEL',
+    'JAGER','JEUGD','JOKER','JUBEL','JUIST',
     // K
     'KAARS','KAART','KABEL','KADER','KAMER','KAPOT','KASSA','KATER','KEERT',
     'KEREN','KETEL','KEUZE','KIEST','KLAAR','KLANK','KLEED','KLEUR','KLOMP',
@@ -229,7 +229,7 @@
     // U
     'UILEN',
     // V
-    'VAART','VADER','VAREN','VECHT','VEGEN','VELDT','VEREN','VERSE','VEZEL',
+    'VAART','VADER','VAREN','VECHT','VEGEN','VEREN','VERSE','VEZEL',
     'VINDT','VIOOL','VLEES','VLOER','VLOOT','VOCHT','VOELT','VOGEL','VRAAG',
     'VREDE','VROUW','VUREN','VUIST',
     // W
@@ -337,10 +337,10 @@
   //  NOODPUZZELS — als de generator onverhoopt niets vindt
   // ══════════════════════════════════════════════════════════════
   const FALLBACK_PUZZLES = [
-    [['S','T','O','E','R'],['T',null,'M',null,'A'],['O','P','E','R','A'],['M',null,'G',null,'K'],['P','L','A','N','T']],
-    [['K','A','A','R','S'],['O',null,'A',null,'O'],['L','E','R','E','N'],['E',null,'D',null,'G'],['N','I','E','T','S']],
-    [['D','R','O','O','M'],['A',null,'E',null,'O'],['L','E','V','E','L'],['E',null,'V',null,'E'],['N','O','R','E','N']],
-    [['V','E','L','D','T'],['L',null,'A',null,'O'],['O','R','D','E','R'],['O',null,'E',null,'E'],['T','O','N','E','N']],
+    [['T','R','O','T','S'],['A',null,'P',null,'P'],['A','A','R','D','E'],['R',null,'I',null,'E'],['T','I','T','E','L']],
+    [['K','L','O','O','F'],['E',null,'O',null,'A'],['R','E','G','E','L'],['E',null,'S',null,'E'],['N','O','T','E','N']],
+    [['P','E','P','E','R'],['A',null,'L',null,'A'],['A','L','A','R','M'],['R',null,'N',null,'E'],['D','E','K','E','N']],
+    [['B','L','O','E','D'],['R',null,'M',null,'R'],['O','P','E','R','A'],['O',null,'G',null,'A'],['D','R','A','N','K']],
   ];
 
   // ══════════════════════════════════════════════════════════════
@@ -375,34 +375,37 @@
   function makePuzzleGrid(solution, difficulty) {
     const cfg = DIFFICULTY_CONFIG[difficulty];
 
-    const grid = solution.map(row => row.map(v => v));
+    while (true) {
+      const grid = solution.map(row => row.map(v => v));
 
-    if (cfg.preSwaps === null) {
-      const letters = WAFFLE_POSITIONS.map(([r, c]) => solution[r][c]);
-      for (let i = letters.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [letters[i], letters[j]] = [letters[j], letters[i]];
-      }
-      WAFFLE_POSITIONS.forEach(([r, c], i) => { grid[r][c] = letters[i]; });
-    } else {
-      let swapsDone = 0;
-      let tries = 0;
-      while (swapsDone < cfg.preSwaps && tries < 500) {
-        tries++;
-        const i = Math.floor(Math.random() * WAFFLE_POSITIONS.length);
-        const j = Math.floor(Math.random() * WAFFLE_POSITIONS.length);
-        if (i === j) continue;
-        const [r1, c1] = WAFFLE_POSITIONS[i];
-        const [r2, c2] = WAFFLE_POSITIONS[j];
-        if (grid[r1][c1] === solution[r1][c1] || grid[r2][c2] === solution[r2][c2]) {
-          [grid[r1][c1], grid[r2][c2]] = [grid[r2][c2], grid[r1][c1]];
-          swapsDone++;
+      if (cfg.preSwaps === null) {
+        const letters = WAFFLE_POSITIONS.map(([r, c]) => solution[r][c]);
+        for (let i = letters.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [letters[i], letters[j]] = [letters[j], letters[i]];
+        }
+        WAFFLE_POSITIONS.forEach(([r, c], i) => { grid[r][c] = letters[i]; });
+      } else {
+        let swapsDone = 0;
+        let tries = 0;
+        while (swapsDone < cfg.preSwaps && tries < 500) {
+          tries++;
+          const i = Math.floor(Math.random() * WAFFLE_POSITIONS.length);
+          const j = Math.floor(Math.random() * WAFFLE_POSITIONS.length);
+          if (i === j) continue;
+          const [r1, c1] = WAFFLE_POSITIONS[i];
+          const [r2, c2] = WAFFLE_POSITIONS[j];
+          // gelijke letters wisselen verandert niets — telt niet als schudding
+          if (grid[r1][c1] === grid[r2][c2]) continue;
+          if (grid[r1][c1] === solution[r1][c1] || grid[r2][c2] === solution[r2][c2]) {
+            [grid[r1][c1], grid[r2][c2]] = [grid[r2][c2], grid[r1][c1]];
+            swapsDone++;
+          }
         }
       }
-    }
 
-    if (isSolved(grid, solution)) return makePuzzleGrid(solution, difficulty);
-    return grid;
+      if (!isSolved(grid, solution)) return grid;
+    }
   }
 
   function isSolved(grid, solution) {
@@ -498,6 +501,7 @@
             cell.addEventListener('touchstart', onTouchStart, {passive: false});
             cell.addEventListener('touchmove',  onTouchMove,  {passive: false});
             cell.addEventListener('touchend',   onTouchEnd,   {passive: false});
+            cell.addEventListener('touchcancel', onTouchCancel);
           }
         }
 
@@ -582,6 +586,14 @@
         +touchTgt.dataset.r, +touchTgt.dataset.c
       );
     }
+    touchSrc = null;
+    touchTgt = null;
+  }
+
+  // Afgebroken sleep (bijv. systeemgebaar): sleepstatus netjes opruimen.
+  function onTouchCancel() {
+    if (touchSrc) touchSrc.classList.remove('dragging');
+    if (touchTgt) touchTgt.classList.remove('drag-over');
     touchSrc = null;
     touchTgt = null;
   }

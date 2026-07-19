@@ -72,12 +72,16 @@ Achter een reverse proxy: zet response-buffering uit voor
 
 ```
 node test/api.test.js
+node test/solver.test.js
 ```
 
-Start de server op een testpoort met een tijdelijke datamap en test het
-volledige spelverloop, de scoreformule (tegen een onafhankelijke
+`api.test.js` start de server op een vrije poort met een tijdelijke datamap
+en test het volledige spelverloop, de scoreformule (tegen een onafhankelijke
 herimplementatie), validatie en 409-guards, undo, het klassement, SSE,
 path-traversal-bescherming en persistentie over een herstart.
+`solver.test.js` lost honderden willekeurige scrambles op met beide
+oplossers en verifieert elke oplossing (aantallen instelbaar via
+`N_KOCIEMBA` / `N_LBL`).
 
 ## Structuur
 
