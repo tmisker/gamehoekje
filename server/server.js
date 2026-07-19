@@ -68,11 +68,24 @@ function sseSend(res, payload) {
 }
 
 function broadcast() {
-  if (!sseClients.size) return;
   const payload = currentSnapshot();
+  scheduleWinnerExpiry(payload);
+  if (!sseClients.size) return;
   for (const res of sseClients) {
     try { sseSend(res, payload); } catch { sseClients.delete(res); }
   }
+}
+
+// Het winnaarscherm valt na 10 min uit de snapshot, maar zonder mutatie komt
+// er geen broadcast — plan er dus zelf één zodra de vervaltijd verstrijkt.
+let expiryTimer = null;
+function scheduleWinnerExpiry(snapshot) {
+  if (expiryTimer) { clearTimeout(expiryTimer); expiryTimer = null; }
+  const g = snapshot.game;
+  if (!g || g.status !== 'finished') return;
+  const left = 10 * 60 * 1000 - (Date.now() - Date.parse(g.finishedAt));
+  expiryTimer = setTimeout(broadcast, Math.max(left, 0) + 1000);
+  expiryTimer.unref();
 }
 
 // Benoemd event (geen comment): clients kunnen zo zien dat de lijn nog leeft.
@@ -95,12 +108,17 @@ function sendJson(res, status, obj) {
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    let data = '';
+    // Buffers verzamelen en één keer decoderen: per-chunk toString() zou een
+    // multi-byte UTF-8-teken op een chunkgrens kunnen breken.
+    const chunks = [];
+    let size = 0;
     req.on('data', chunk => {
-      data += chunk;
-      if (data.length > 65536) { reject(logic.httpError(413, 'Body te groot')); req.destroy(); }
+      size += chunk.length;
+      if (size > 65536) { reject(logic.httpError(413, 'Body te groot')); req.destroy(); return; }
+      chunks.push(chunk);
     });
     req.on('end', () => {
+      const data = Buffer.concat(chunks).toString('utf8');
       try { resolve(data ? JSON.parse(data) : {}); }
       catch { reject(logic.httpError(400, 'Ongeldige JSON')); }
     });
@@ -122,7 +140,9 @@ async function handleApi(req, res, pathname, query) {
       'X-Accel-Buffering': 'no', // reverse proxy mag SSE niet bufferen
     });
     sseClients.add(res);
-    sseSend(res, currentSnapshot());
+    const snapshot = currentSnapshot();
+    sseSend(res, snapshot);
+    scheduleWinnerExpiry(snapshot);
     req.on('close', () => sseClients.delete(res));
     return;
   }
@@ -194,7 +214,9 @@ function serveStatic(req, res, pathname) {
     return sendJson(res, 405, { error: 'Methode niet toegestaan' });
   }
   if (pathname.includes('\0')) return sendJson(res, 400, { error: 'Ongeldig pad' });
-  const withSlash = pathname.endsWith('/') ? pathname : pathname + '/';
+  // toLowerCase: op een case-insensitief bestandssysteem zou /SERVER/ anders
+  // langs de blokkade komen.
+  const withSlash = (pathname.endsWith('/') ? pathname : pathname + '/').toLowerCase();
   if (BLOCKED_PREFIXES.some(p => withSlash.startsWith(p))) {
     return sendJson(res, 404, { error: 'Niet gevonden' });
   }

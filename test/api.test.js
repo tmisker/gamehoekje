@@ -8,11 +8,23 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
+const net = require('node:net');
 
 const SERVER = path.join(__dirname, '..', 'server', 'server.js');
-const PORT = 3999;
-const BASE = 'http://localhost:' + PORT;
+let PORT = 0;   // vrije poort, bepaald bij het starten
+let BASE = '';
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'bb-test-'));
+
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.listen(0, () => {
+      const port = srv.address().port;
+      srv.close(() => resolve(port));
+    });
+    srv.on('error', reject);
+  });
+}
 
 // Onafhankelijke herimplementatie van de scoreformule (bewust NIET geïmporteerd
 // uit logic.js — dit vangt porteerfouten af).
@@ -22,7 +34,11 @@ function expectedScore(pred, act) {
 
 let serverProc = null;
 
-function startServer() {
+async function startServer() {
+  if (!PORT) {
+    PORT = await freePort();
+    BASE = 'http://localhost:' + PORT;
+  }
   return new Promise((resolve, reject) => {
     serverProc = spawn(process.execPath, [SERVER], {
       env: { ...process.env, PORT: String(PORT), DATA_DIR },
@@ -129,6 +145,8 @@ async function main() {
     // ongeldig aantal spelers
     assert.equal((await api('POST', '/api/boerenbridge/games', { players: ['a', 'b'] })).status, 400);
     assert.equal((await api('POST', '/api/boerenbridge/games', { players: ['a', '', 'c'] })).status, 400);
+    // dubbele namen (ook met andere schrijfwijze) → 400
+    assert.equal((await api('POST', '/api/boerenbridge/games', { players: ['Anna', 'anna', 'Cas'] })).status, 400);
     // voorspelling buiten bereik
     let r = await api('POST', '/api/boerenbridge/games/' + id + '/predictions', { round: 0, predictions: [0, 9, 0] });
     assert.equal(r.status, 400);
@@ -243,6 +261,7 @@ async function main() {
     assert.equal((await fetch(BASE + '/games/boerenbridge/')).status, 200);
     assert.equal((await fetch(BASE + '/data/boerenbridge.json')).status, 404, 'data geblokkeerd');
     assert.equal((await fetch(BASE + '/server/server.js')).status, 404, 'server-code geblokkeerd');
+    assert.equal((await fetch(BASE + '/SERVER/server.js')).status, 404, 'blokkade is case-insensitief');
     assert.equal((await fetch(BASE + '/%2e%2e/%2e%2e/etc/passwd')).status, 404, 'traversal geblokkeerd');
     assert.equal((await fetch(BASE + '/..%2f..%2fetc%2fpasswd')).status, 404, 'traversal geblokkeerd');
     const bad = await fetch(BASE + '/api/boerenbridge/games', {

@@ -266,10 +266,14 @@
   }
 
   function solve(){
+    const btn = $("solveBtn");
+    if(btn.disabled) return;              // een solve loopt al
     const res = CS.faceletsToState(inputColors);
     if(res.error){ setStatus("⚠ "+res.error, true); return; }
+    btn.disabled = true;
     setStatus("Bezig met oplossen…");
     const onSolved = (sol)=>{
+      btn.disabled = false;
       if(sol===null||sol===undefined){ setStatus("⚠ Deze kubus kan niet opgelost worden.", true); return; }
       solution = sol;
       frames = [inputColors.slice()];

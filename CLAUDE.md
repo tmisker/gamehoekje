@@ -35,6 +35,7 @@ src/
     app.js                     #   mobiele UI-logica (Web Worker)
 build.js                       # bouwt src/cube-solver/* -> games/cube-solver/index.html
 test/api.test.js               # end-to-end test van server + API (node test/api.test.js)
+test/solver.test.js            # cube-solver op honderden scrambles (node test/solver.test.js)
 data/                          # spelgegevens (gitignored; Docker-volume)
 README.md                      # gebruikersgerichte uitleg
 Dockerfile                     # node:22-alpine, geen npm install
@@ -126,6 +127,7 @@ console.log(S.isSolved(S.applySeq(S.clone(s), sol)), sol.length);
 
 Verifieer altijd door duizenden willekeurige scrambles op te lossen en
 `isSolved` te checken — niet door een paar voorbeelden te bekijken.
+`node test/solver.test.js` doet precies dat (aantallen via `N_KOCIEMBA`/`N_LBL`).
 
 UI end-to-end: `jsdom` is beschikbaar (`npm install jsdom --no-save`). Laad het
 **gebouwde** `games/cube-solver/index.html` met `runScripts:"dangerously"`. In

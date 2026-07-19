@@ -42,6 +42,11 @@ function createGame(names) {
   const players = names.map(n => String(n == null ? '' : n).trim()).filter(n => n);
   if (players.length !== names.length) throw httpError(400, 'Vul alle namen in');
   if (players.length < 3 || players.length > 6) throw httpError(400, 'Kies 3 tot 6 spelers');
+  // Het klassement koppelt op naam (case-insensitief); dubbele namen in één
+  // potje zouden daar dubbel tellen.
+  if (new Set(players.map(n => n.toLowerCase())).size !== players.length) {
+    throw httpError(400, 'Elke speler heeft een eigen naam nodig');
+  }
   const now = new Date().toISOString();
   return {
     id: require('node:crypto').randomUUID(),
