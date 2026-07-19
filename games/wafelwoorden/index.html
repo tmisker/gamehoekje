@@ -117,6 +117,28 @@
 
     #bottom-buttons { display: flex; gap: 10px; margin-top: 14px; }
     #bottom-buttons button { padding: 10px 22px; font-size: 1rem; }
+
+    /* ── Winst-animatie: rondvliegende emoji's ── */
+    #celebration {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 100;
+    }
+    .fly-emoji {
+      position: absolute;
+      top: 0;
+      left: 0;
+      line-height: 1;
+      animation: emoji-fly linear forwards;
+      will-change: transform, opacity;
+    }
+    @keyframes emoji-fly {
+      from { transform: translate(var(--x0), var(--y0)) rotate(0deg);        opacity: 1; }
+      80%  { opacity: 1; }
+      to   { transform: translate(var(--x1), var(--y1)) rotate(var(--rot)); opacity: 0; }
+    }
     .backlink{position:absolute;top:12px;left:14px;color:#888;text-decoration:none;font-size:.85rem;font-family:Arial,sans-serif;font-weight:normal;}
   </style>
 </head>
@@ -142,6 +164,7 @@
   <div id="grid"></div>
 
   <div id="message"></div>
+  <div id="celebration"></div>
   <div id="bottom-buttons">
     <button onclick="restartGame()">🔄 Opnieuw</button>
     <button onclick="newGame()">✨ Nieuw spel</button>
@@ -621,6 +644,7 @@
       gameOver = true;
       msgEl.textContent = '🎉 Geweldig! Je hebt het opgelost!';
       render();
+      startCelebration();
     } else if (swapsLeft <= 0) {
       gameOver = true;
       const words = [0, 2, 4].map(r => currentSolution[r].join(''))
@@ -634,6 +658,67 @@
   }
 
   // ══════════════════════════════════════════════════════════════
+  //  WINST-ANIMATIE — willekeurige emoji's vliegen over het scherm
+  // ══════════════════════════════════════════════════════════════
+  const CELEBRATION_EMOJI = [
+    '🎉','🎊','⭐','🌟','✨','🥳','🏆','🧇','💛','💚',
+    '🎈','🍀','🚀','🌈','😄','🙌','👏','💪','🔥','🦄',
+  ];
+
+  let celebrationTimer = null;
+
+  function spawnFlyingEmoji(layer) {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const m = 90; // start/eindig ruim buiten beeld
+    let x0, y0, x1, y1;
+    const drift = () => (Math.random() - 0.5) * 0.7;
+    switch (Math.floor(Math.random() * 4)) {
+      case 0:  x0 = -m;    x1 = W + m; y0 = Math.random() * H; y1 = y0 + drift() * H; break;
+      case 1:  x0 = W + m; x1 = -m;    y0 = Math.random() * H; y1 = y0 + drift() * H; break;
+      case 2:  y0 = -m;    y1 = H + m; x0 = Math.random() * W; x1 = x0 + drift() * W; break;
+      default: y0 = H + m; y1 = -m;    x0 = Math.random() * W; x1 = x0 + drift() * W; break;
+    }
+
+    const el = document.createElement('span');
+    el.className = 'fly-emoji';
+    el.textContent = CELEBRATION_EMOJI[Math.floor(Math.random() * CELEBRATION_EMOJI.length)];
+    el.style.setProperty('--x0', x0 + 'px');
+    el.style.setProperty('--y0', y0 + 'px');
+    el.style.setProperty('--x1', x1 + 'px');
+    el.style.setProperty('--y1', y1 + 'px');
+    el.style.setProperty('--rot', Math.round(Math.random() * 1440 - 720) + 'deg');
+    el.style.fontSize = Math.round(22 + Math.random() * 26) + 'px';
+    el.style.animationDuration = (1.6 + Math.random() * 1.8).toFixed(2) + 's';
+    el.addEventListener('animationend', () => el.remove());
+    // Vangnet voor omgevingen zonder CSS-animaties (dan vuurt animationend nooit)
+    setTimeout(() => el.remove(), 5000);
+    layer.appendChild(el);
+  }
+
+  function startCelebration() {
+    stopCelebration();
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const layer = document.getElementById('celebration');
+    for (let i = 0; i < 12; i++) spawnFlyingEmoji(layer);
+    let waves = 0;
+    celebrationTimer = setInterval(() => {
+      for (let i = 0; i < 6; i++) spawnFlyingEmoji(layer);
+      if (++waves >= 7) stopCelebration(false);
+    }, 350);
+  }
+
+  // clear=true haalt ook de al vliegende emoji's direct weg (bij nieuw spel);
+  // zonder clear mogen ze hun baan afmaken.
+  function stopCelebration(clear) {
+    if (celebrationTimer !== null) {
+      clearInterval(celebrationTimer);
+      celebrationTimer = null;
+    }
+    if (clear) document.getElementById('celebration').innerHTML = '';
+  }
+
+  // ══════════════════════════════════════════════════════════════
   //  SPELBESTURING
   // ══════════════════════════════════════════════════════════════
   // "Opnieuw" herstelt exact dezelfde startpositie; alleen een nieuw spel of
@@ -642,6 +727,7 @@
     swapsLeft = DIFFICULTY_CONFIG[currentDifficulty].maxSwaps;
     gameOver = false;
     currentGrid = initialGrid.map(row => [...row]);
+    stopCelebration(true);
     document.getElementById('message').textContent = '';
     render();
     updateDiffButtons();
