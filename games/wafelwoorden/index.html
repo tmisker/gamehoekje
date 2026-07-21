@@ -34,7 +34,7 @@
       max-width: 400px;
     }
 
-    .btn-row { display: flex; gap: 8px; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 
     button {
       padding: 8px 16px;
@@ -51,6 +51,9 @@
     button:hover  { background: #555; }
     button:active { transform: scale(0.95); }
     button.active { background: #538d4e; }
+
+    /* Mode buttons */
+    #mode-row button.active { background: #5b8cff; }
 
     /* Difficulty buttons */
     #diff-easy.active   { background: #538d4e; }
@@ -71,19 +74,19 @@
     /* ── Grid ── */
     #grid {
       display: grid;
-      grid-template-columns: repeat(5, 68px);
-      grid-template-rows:    repeat(5, 68px);
-      gap: 6px;
+      grid-template-columns: repeat(var(--n, 5), var(--cell, 68px));
+      grid-template-rows:    repeat(var(--n, 5), var(--cell, 68px));
+      gap: var(--gap, 6px);
     }
 
     .cell {
-      width: 68px;
-      height: 68px;
-      border-radius: 10px;
+      width: var(--cell, 68px);
+      height: var(--cell, 68px);
+      border-radius: var(--br, 10px);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.7rem;
+      font-size: var(--fs, 27px);
       font-weight: 900;
       text-transform: uppercase;
       user-select: none;
@@ -151,7 +154,12 @@
   </header>
 
   <div id="controls">
-    <!-- difficulty -->
+    <!-- spelmodus -->
+    <div class="btn-row" id="mode-row">
+      <button id="mode-klassiek" onclick="setMode('klassiek')">🧇 Klassiek</button>
+      <button id="mode-groot"    onclick="setMode('groot')">🍿 Groot</button>
+    </div>
+    <!-- moeilijkheid -->
     <div class="btn-row">
       <button id="diff-easy"   onclick="setDifficulty('makkelijk')">😊 Makkelijk</button>
       <button id="diff-normal" onclick="setDifficulty('normaal')">🙂 Normaal</button>
@@ -172,10 +180,10 @@
 
   <script>
   // ══════════════════════════════════════════════════════════════
-  //  WOORDENLIJST — veelgebruikte Nederlandse 5-letterwoorden
+  //  WOORDENLIJSTEN — veelgebruikte Nederlandse woorden
   //  Veilig, geschikt voor kinderen vanaf ~10 jaar
   // ══════════════════════════════════════════════════════════════
-  const WORDS = [
+  const WORDS5 = [
     // A
     'AAPJE','AARDE','ABDIJ','AFDAK','AFVAL','ALARM','AMBER','ANDER','ANGEL',
     'ANGST','ANKER','APART','APPEL','AREND','ATLAS','AVOND',
@@ -263,30 +271,45 @@
     'ZWAAR','ZWART','ZWEET','ZWERM',
   ];
 
-  // ══════════════════════════════════════════════════════════════
-  //  PUZZELGENERATOR — vindt 6 woorden die een geldig wafelrooster
-  //  vormen (3 rijen + 3 kolommen met 9 kloppende kruispunten)
-  // ══════════════════════════════════════════════════════════════
+  // Veelgebruikte Nederlandse 7-letterwoorden (voor de "Groot"-modus)
+  const WORDS7 = [
+    'AMANDEL','ARTIKEL','BANANEN','BEDRIJF','BEHOREN','BELOFTE','BERICHT','BESTAAN',
+    'BLIKSEM','BLOEMEN','BROEDER','CIRKELS','CONCERT','DAGBOEK','DIAMANT','DINSDAG',
+    'DOKTERS','DOLFIJN','DRAAIEN','DRUIVEN','FABRIEK','FAMILIE','FANTOOM','FEESTJE',
+    'FONTEIN','GARNAAL','GEDICHT','GESPREK','GEVAREN','GITAREN','GORDIJN','GROENTE',
+    'HAMSTER','HANDVAT','IJSBEER','JASMIJN','KALKOEN','KANARIE','KASTEEL','KETTING',
+    'KIKKERS','KLEUREN','KNUFFEL','KOEKJES','KOFFERS','KOMEDIE','KRIEBEL','LAARZEN',
+    'LADDERS','LAMPION','LEEUWEN','MACHINE','MAGNEET','MEISJES','MELODIE','NACHTEN',
+    'NOTITIE','OCEANEN','OLIFANT','ONTBIJT','ORKANEN','PANTERS','PARAPLU','PARKIET',
+    'PENSEEL','PINGUIN','PLANEET','PLANKEN','POTLOOD','PRINSES','PUDDING','PUZZELS',
+    'RIDDERS','SCHAPEN','SCHEPEN','SEIZOEN','SLAKKEN','SLEUTEL','SNOEPJE','SPIEGEL',
+    'SPINNEN','SPORTEN','STATION','STENGEL','STOELEN','STORMEN','TEKENEN','THEATER',
+    'TIJGERS','TOMATEN','TREINEN','TROMPET','VERHAAL','VINGERS','VISSERS','VLAGGEN',
+    'VLINDER','VOETBAL','VULKAAN','WEKKERS','WINKELS','WINTERS','WORTELS','ZANDBAK',
+    'ZEEHOND','ZWEMBAD','AARDBEI','BROODJE','CADEAUS','DIERTJE','FIETSEN','HOOFDEN',
+    'JONGENS','KAPSTOK','KLOKKEN','KOETSEN','KRENTEN','LAMPJES','LICHTJE','MANDJES',
+    'MEUBELS','POESJES','STOKJES','STRIKJE','TENTJES','VLIEGEN','WOLKJES','BAKKERS',
+    'BALLONS','BEERTJE','BOEKJES','EENDJES','FLESSEN','HAGEDIS','KAARTEN','KAMELEN',
+    'KAPPERS','KASTJES','LEEUWIN','MONSTER','PLASSEN','POORTEN','RUPSJES','SNAVELS',
+    'STERREN','STOKKEN','TROLLEN','VLEKKEN','ZAKDOEK','ZEESTER',
+  ];
 
-  function shuffleArray(arr) {
-    const a = [...arr];
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-  }
-
-  function buildIndex(words) {
-    const idx = Array.from({length: 5}, () => ({}));
+  // ══════════════════════════════════════════════════════════════
+  //  WOORD-INDEX per lengte (positie → letter → woorden)
+  // ══════════════════════════════════════════════════════════════
+  function buildIndex(words, len) {
+    const idx = Array.from({length: len}, () => ({}));
     for (const w of words) {
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < len; i++) {
         const ch = w[i];
         (idx[i][ch] || (idx[i][ch] = [])).push(w);
       }
     }
     return idx;
   }
+
+  const ALLWORDS = {5: WORDS5, 7: WORDS7};
+  const INDEX    = {5: buildIndex(WORDS5, 5), 7: buildIndex(WORDS7, 7)};
 
   function findMatching(idx, constraints) {
     let result = null;
@@ -304,81 +327,158 @@
     return result ? [...result] : [];
   }
 
-  function generatePuzzle() {
-    const idx = buildIndex(WORDS);
-    const allWords = shuffleArray(WORDS);
-    const t0 = Date.now();
-
-    for (const row0 of allWords) {
-      if (Date.now() - t0 > 3000) break;
-
-      const c0list = shuffleArray(idx[0][row0[0]] || []);
-      for (const col0 of c0list) {
-        if (col0 === row0) continue;
-
-        const c2list = shuffleArray(idx[0][row0[2]] || []);
-        for (const col2 of c2list) {
-          if (col2 === row0 || col2 === col0) continue;
-
-          // Vroege check: bestaat er een woord met col0[2]@pos0 en col2[2]@pos2?
-          const partial = findMatching(idx, [[0, col0[2]], [2, col2[2]]]);
-          if (partial.length === 0) continue;
-
-          const c4list = shuffleArray(idx[0][row0[4]] || []);
-          for (const col4 of c4list) {
-            if (col4 === row0 || col4 === col0 || col4 === col2) continue;
-
-            const row2s = findMatching(idx, [[0, col0[2]], [2, col2[2]], [4, col4[2]]]);
-            if (row2s.length === 0) continue;
-
-            for (const row2 of shuffleArray(row2s)) {
-              if (row2 === row0 || row2 === col0 || row2 === col2 || row2 === col4) continue;
-
-              const row4s = findMatching(idx, [[0, col0[4]], [2, col2[4]], [4, col4[4]]]);
-              for (const row4 of shuffleArray(row4s)) {
-                if (row4 === row0 || row4 === col0 || row4 === col2 || row4 === col4 || row4 === row2) continue;
-
-                return [
-                  [row0[0], row0[1], row0[2], row0[3], row0[4]],
-                  [col0[1], null,    col2[1], null,    col4[1]],
-                  [row2[0], row2[1], row2[2], row2[3], row2[4]],
-                  [col0[3], null,    col2[3], null,    col4[3]],
-                  [row4[0], row4[1], row4[2], row4[3], row4[4]],
-                ];
-              }
-            }
-          }
-        }
-      }
+  function shuffleArray(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
     }
-
-    // Noodoplossing: een van de ingebouwde puzzels
-    return FALLBACK_PUZZLES[Math.floor(Math.random() * FALLBACK_PUZZLES.length)];
+    return a;
   }
 
   // ══════════════════════════════════════════════════════════════
-  //  NOODPUZZELS — als de generator onverhoopt niets vindt
+  //  SPELMODI — elk een rooster met "woordvakken" (slots).
+  //  Een slot is de geordende lijst cellen [r,c] van één woord; de
+  //  woordlengte volgt uit het aantal cellen. Cellen die in twee slots
+  //  voorkomen zijn kruispunten (moeten dezelfde letter krijgen).
+  //  De slots staan in de volgorde waarin de generator ze invult:
+  //  eerst de losse woorden, dan de zwaar-beperkte kruiswoorden.
   // ══════════════════════════════════════════════════════════════
-  const FALLBACK_PUZZLES = [
+  function rowCells(r, cStart, len) { const a = []; for (let i = 0; i < len; i++) a.push([r, cStart + i]); return a; }
+  function colCells(c, rStart, len) { const a = []; for (let i = 0; i < len; i++) a.push([rStart + i, c]); return a; }
+
+  // Noodpuzzels — als de generator onverhoopt niets vindt binnen de tijd.
+  const FALLBACK_KLASSIEK = [
     [['T','R','O','T','S'],['A',null,'P',null,'P'],['A','A','R','D','E'],['R',null,'I',null,'E'],['T','I','T','E','L']],
     [['K','L','O','O','F'],['E',null,'O',null,'A'],['R','E','G','E','L'],['E',null,'S',null,'E'],['N','O','T','E','N']],
     [['P','E','P','E','R'],['A',null,'L',null,'A'],['A','L','A','R','M'],['R',null,'N',null,'E'],['D','E','K','E','N']],
     [['B','L','O','E','D'],['R',null,'M',null,'R'],['O','P','E','R','A'],['O',null,'G',null,'A'],['D','R','A','N','K']],
   ];
 
+  const FALLBACK_GROOT = [
+    [[null,null,null,'S',null,null,null],[null,'P','E','P','E','R',null],[null,'L',null,'O',null,'O',null],['L','A','A','R','Z','E','N'],[null,'N',null,'T',null,'P',null],[null,'K','I','E','S','T',null],[null,null,null,'N',null,null,null]],
+    [[null,null,null,'K',null,null,null],[null,'F','L','A','U','W',null],[null,'I',null,'A',null,'I',null],['B','E','D','R','I','J','F'],[null,'T',null,'T',null,'S',null],[null,'S','M','E','L','T',null],[null,null,null,'N',null,null,null]],
+    [[null,null,null,'K',null,null,null],[null,'M','A','R','K','T',null],[null,'E',null,'I',null,'R',null],['B','R','O','E','D','E','R'],[null,'E',null,'B',null,'K',null],[null,'L','E','E','R','T',null],[null,null,null,'L',null,null,null]],
+    [[null,null,null,'S',null,null,null],[null,'B','O','C','H','T',null],[null,'E',null,'H',null,'R',null],['B','R','O','E','D','E','R'],[null,'E',null,'P',null,'K',null],[null,'N','O','E','M','T',null],[null,null,null,'N',null,null,null]],
+  ];
+
+  const MODES = {
+    klassiek: {
+      key: 'klassiek', label: 'Klassiek', size: 5,
+      slots: [
+        rowCells(0, 0, 5), // bovenste rij
+        colCells(0, 0, 5), // linker kolom  (kruist rij 0)
+        colCells(2, 0, 5), // midden kolom
+        colCells(4, 0, 5), // rechter kolom
+        rowCells(2, 0, 5), // midden rij    (kruist alle 3 kolommen)
+        rowCells(4, 0, 5), // onderste rij
+      ],
+      fallbacks: FALLBACK_KLASSIEK,
+      difficulty: {
+        makkelijk: { preSwaps: 3,    maxSwaps: 12 },
+        normaal:   { preSwaps: 7,    maxSwaps: 15 },
+        moeilijk:  { preSwaps: null, maxSwaps: 15 },
+      },
+    },
+    groot: {
+      key: 'groot', label: 'Groot', size: 7,
+      slots: [
+        rowCells(3, 0, 7), // centrale rij    (7 letters)
+        colCells(3, 0, 7), // centrale kolom  (7 letters, kruist centrale rij)
+        colCells(1, 1, 5), // linker kolom    (5 letters, kruist centrale rij)
+        colCells(5, 1, 5), // rechter kolom   (5 letters, kruist centrale rij)
+        rowCells(1, 1, 5), // bovenste rij    (5 letters, 3 kruispunten)
+        rowCells(5, 1, 5), // onderste rij    (5 letters, 3 kruispunten)
+      ],
+      fallbacks: FALLBACK_GROOT,
+      difficulty: {
+        makkelijk: { preSwaps: 5,    maxSwaps: 18 },
+        normaal:   { preSwaps: 10,   maxSwaps: 22 },
+        moeilijk:  { preSwaps: null, maxSwaps: 22 },
+      },
+    },
+  };
+
+  // Alle cellen (gededupliceerd) die een tegel dragen in deze modus.
+  function modePositions(mode) {
+    const seen = new Set(); const out = [];
+    for (const slot of mode.slots)
+      for (const [r, c] of slot) {
+        const k = r + ',' + c;
+        if (!seen.has(k)) { seen.add(k); out.push([r, c]); }
+      }
+    return out;
+  }
+
   // ══════════════════════════════════════════════════════════════
-  //  WAFFLE-PATROON: posities met een tegel
+  //  PUZZELGENERATOR — vult de slots met woorden zodat alle
+  //  kruispunten kloppen (backtracking met woord-index per lengte)
   // ══════════════════════════════════════════════════════════════
-  const WAFFLE_POSITIONS = [];
-  for (let r = 0; r < 5; r++)
-    for (let c = 0; c < 5; c++)
-      if (!(r % 2 === 1 && c % 2 === 1))
-        WAFFLE_POSITIONS.push([r, c]);
+  function generatePuzzle(mode) {
+    const t0 = Date.now();
+    const cell2 = {};            // "r,c" -> reeds vastgelegde letter
+    const used = new Set();      // reeds gebruikte woorden (blijven uniek)
+    const chosen = new Array(mode.slots.length).fill(null);
+
+    function backtrack(i) {
+      if (Date.now() - t0 > 3000) return false;
+      if (i === mode.slots.length) return true;
+
+      const slot = mode.slots[i];
+      const len = slot.length;
+      const idx = INDEX[len];
+
+      const cons = [];
+      for (let k = 0; k < len; k++) {
+        const key = slot[k][0] + ',' + slot[k][1];
+        const v = cell2[key];
+        if (v !== undefined) cons.push([k, v]);
+      }
+
+      let cands = cons.length ? findMatching(idx, cons) : ALLWORDS[len];
+      cands = shuffleArray(cands);
+
+      for (const w of cands) {
+        if (Date.now() - t0 > 3000) break;
+        if (used.has(w)) continue;
+
+        used.add(w); chosen[i] = w;
+        const setKeys = [];
+        for (let k = 0; k < len; k++) {
+          const key = slot[k][0] + ',' + slot[k][1];
+          if (cell2[key] === undefined) { cell2[key] = w[k]; setKeys.push(key); }
+        }
+
+        if (backtrack(i + 1)) return true;
+
+        for (const key of setKeys) delete cell2[key];
+        used.delete(w); chosen[i] = null;
+      }
+      return false;
+    }
+
+    if (backtrack(0)) {
+      const n = mode.size;
+      const grid = Array.from({length: n}, () => Array(n).fill(null));
+      mode.slots.forEach((slot, i) => {
+        const w = chosen[i];
+        slot.forEach(([r, c], k) => { grid[r][c] = w[k]; });
+      });
+      return grid;
+    }
+
+    // Noodoplossing
+    const fb = mode.fallbacks[Math.floor(Math.random() * mode.fallbacks.length)];
+    return fb.map(row => row.slice());
+  }
 
   // ══════════════════════════════════════════════════════════════
   //  SPELSTATUS
   // ══════════════════════════════════════════════════════════════
   let gameNumber = 0;
+  let currentModeKey = 'klassiek';
+  let currentMode = MODES[currentModeKey];
+  let currentPositions = modePositions(currentMode);
   let currentDifficulty = 'normaal';
   let currentSolution;
   let initialGrid;
@@ -386,38 +486,33 @@
   let swapsLeft;
   let gameOver = false;
 
-  const DIFFICULTY_CONFIG = {
-    makkelijk: { preSwaps: 3,  maxSwaps: 12 },
-    normaal:   { preSwaps: 7,  maxSwaps: 15 },
-    moeilijk:  { preSwaps: null, maxSwaps: 15 }, // null = volledig schudden
-  };
-
   // ══════════════════════════════════════════════════════════════
-  //  PUZZEL OPBOUWEN
+  //  PUZZEL OPBOUWEN (schudden binnen het huidige rooster)
   // ══════════════════════════════════════════════════════════════
   function makePuzzleGrid(solution, difficulty) {
-    const cfg = DIFFICULTY_CONFIG[difficulty];
+    const cfg = currentMode.difficulty[difficulty];
+    const positions = currentPositions;
 
     while (true) {
       const grid = solution.map(row => row.map(v => v));
 
       if (cfg.preSwaps === null) {
-        const letters = WAFFLE_POSITIONS.map(([r, c]) => solution[r][c]);
+        const letters = positions.map(([r, c]) => solution[r][c]);
         for (let i = letters.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [letters[i], letters[j]] = [letters[j], letters[i]];
         }
-        WAFFLE_POSITIONS.forEach(([r, c], i) => { grid[r][c] = letters[i]; });
+        positions.forEach(([r, c], i) => { grid[r][c] = letters[i]; });
       } else {
         let swapsDone = 0;
         let tries = 0;
         while (swapsDone < cfg.preSwaps && tries < 500) {
           tries++;
-          const i = Math.floor(Math.random() * WAFFLE_POSITIONS.length);
-          const j = Math.floor(Math.random() * WAFFLE_POSITIONS.length);
+          const i = Math.floor(Math.random() * positions.length);
+          const j = Math.floor(Math.random() * positions.length);
           if (i === j) continue;
-          const [r1, c1] = WAFFLE_POSITIONS[i];
-          const [r2, c2] = WAFFLE_POSITIONS[j];
+          const [r1, c1] = positions[i];
+          const [r2, c2] = positions[j];
           // gelijke letters wisselen verandert niets — telt niet als schudding
           if (grid[r1][c1] === grid[r2][c2]) continue;
           if (grid[r1][c1] === solution[r1][c1] || grid[r2][c2] === solution[r2][c2]) {
@@ -432,27 +527,18 @@
   }
 
   function isSolved(grid, solution) {
-    return WAFFLE_POSITIONS.every(([r, c]) => grid[r][c] === solution[r][c]);
+    return currentPositions.every(([r, c]) => grid[r][c] === solution[r][c]);
   }
 
   // ══════════════════════════════════════════════════════════════
   //  KLEURLOGICA  (2-pass per woord, groen > geel > grijs)
   // ══════════════════════════════════════════════════════════════
   function computeColors(grid, solution) {
-    const colors = Array.from({length: 5}, () => Array(5).fill(null));
-
-    const wordGroups = [
-      WAFFLE_POSITIONS.filter(([r])   => r === 0),
-      WAFFLE_POSITIONS.filter(([r])   => r === 2),
-      WAFFLE_POSITIONS.filter(([r])   => r === 4),
-      WAFFLE_POSITIONS.filter(([, c]) => c === 0),
-      WAFFLE_POSITIONS.filter(([, c]) => c === 2),
-      WAFFLE_POSITIONS.filter(([, c]) => c === 4),
-    ];
-
+    const n = currentMode.size;
+    const colors = Array.from({length: n}, () => Array(n).fill(null));
     const priority = {green: 3, yellow: 2, gray: 1};
 
-    for (const positions of wordGroups) {
+    for (const positions of currentMode.slots) {
       const solutionCounts = {};
       for (const [r, c] of positions) {
         const l = solution[r][c];
@@ -491,51 +577,73 @@
   }
 
   // ══════════════════════════════════════════════════════════════
+  //  ROOSTERMATEN — kleiner bij grotere roosters, past op het scherm
+  // ══════════════════════════════════════════════════════════════
+  function gridMetrics(n) {
+    const avail = Math.min((window.innerWidth || 400) - 24, 460);
+    const gap = n >= 7 ? 5 : 6;
+    let cell = Math.floor((avail - (n - 1) * gap) / n);
+    cell = Math.max(30, Math.min(68, cell));
+    const fs = Math.round(cell * 0.4);
+    const br = Math.max(6, Math.round(cell * 0.14));
+    return {cell, gap, fs, br};
+  }
+
+  // ══════════════════════════════════════════════════════════════
   //  RENDEREN
   // ══════════════════════════════════════════════════════════════
   function render() {
     const gridEl = document.getElementById('grid');
+    const n = currentMode.size;
+
+    const {cell, gap, fs, br} = gridMetrics(n);
+    gridEl.style.setProperty('--n', n);
+    gridEl.style.setProperty('--cell', cell + 'px');
+    gridEl.style.setProperty('--gap', gap + 'px');
+    gridEl.style.setProperty('--fs', fs + 'px');
+    gridEl.style.setProperty('--br', br + 'px');
+
     gridEl.innerHTML = '';
     const colors = computeColors(currentGrid, currentSolution);
 
-    for (let r = 0; r < 5; r++) {
-      for (let c = 0; c < 5; c++) {
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
         const letter = currentGrid[r][c];
-        const cell = document.createElement('div');
-        cell.classList.add('cell');
+        const cellEl = document.createElement('div');
+        cellEl.classList.add('cell');
 
         if (letter === null) {
-          cell.classList.add('empty');
+          cellEl.classList.add('empty');
         } else {
-          cell.classList.add(colors[r][c]);
-          cell.textContent = letter;
-          cell.dataset.r = r;
-          cell.dataset.c = c;
+          cellEl.classList.add(colors[r][c]);
+          cellEl.textContent = letter;
+          cellEl.dataset.r = r;
+          cellEl.dataset.c = c;
 
           // Groene letters staan al goed: die kun je niet meer wisselen
           if (!gameOver && colors[r][c] !== 'green') {
-            cell.draggable = true;
-            cell.addEventListener('dragstart', onDragStart);
-            cell.addEventListener('dragend',   onDragEnd);
-            cell.addEventListener('dragover',   onDragOver);
-            cell.addEventListener('dragleave',  onDragLeave);
-            cell.addEventListener('drop',       onDrop);
+            cellEl.draggable = true;
+            cellEl.addEventListener('dragstart', onDragStart);
+            cellEl.addEventListener('dragend',   onDragEnd);
+            cellEl.addEventListener('dragover',   onDragOver);
+            cellEl.addEventListener('dragleave',  onDragLeave);
+            cellEl.addEventListener('drop',       onDrop);
 
-            cell.addEventListener('touchstart', onTouchStart, {passive: false});
-            cell.addEventListener('touchmove',  onTouchMove,  {passive: false});
-            cell.addEventListener('touchend',   onTouchEnd,   {passive: false});
-            cell.addEventListener('touchcancel', onTouchCancel);
+            cellEl.addEventListener('touchstart', onTouchStart, {passive: false});
+            cellEl.addEventListener('touchmove',  onTouchMove,  {passive: false});
+            cellEl.addEventListener('touchend',   onTouchEnd,   {passive: false});
+            cellEl.addEventListener('touchcancel', onTouchCancel);
           }
         }
 
-        gridEl.appendChild(cell);
+        gridEl.appendChild(cellEl);
       }
     }
 
     document.getElementById('swaps-left').textContent = swapsLeft;
     document.getElementById('swaps-word').textContent = swapsLeft === 1 ? 'wissel' : 'wissels';
     document.getElementById('swaps').classList.toggle('low', swapsLeft <= 3);
-    document.getElementById('puzzle-subtitle').textContent = 'Spel #' + gameNumber;
+    document.getElementById('puzzle-subtitle').textContent = currentMode.label + ' · Spel #' + gameNumber;
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -647,8 +755,9 @@
       startCelebration();
     } else if (swapsLeft <= 0) {
       gameOver = true;
-      const words = [0, 2, 4].map(r => currentSolution[r].join(''))
-        .concat([0, 2, 4].map(c => currentSolution.map(row => row[c]).join('')));
+      const words = currentMode.slots.map(
+        slot => slot.map(([r, c]) => currentSolution[r][c]).join('')
+      );
       msgEl.innerHTML = '😢 Geen wissels meer. Probeer opnieuw!<br>' +
         '<span class="loss-words">De woorden waren: ' + words.join(', ') + '</span>';
       render();
@@ -722,9 +831,9 @@
   //  SPELBESTURING
   // ══════════════════════════════════════════════════════════════
   // "Opnieuw" herstelt exact dezelfde startpositie; alleen een nieuw spel of
-  // een andere moeilijkheid geeft een nieuwe schudding.
+  // een andere moeilijkheid/modus geeft een nieuwe schudding.
   function restartGame() {
-    swapsLeft = DIFFICULTY_CONFIG[currentDifficulty].maxSwaps;
+    swapsLeft = currentMode.difficulty[currentDifficulty].maxSwaps;
     gameOver = false;
     currentGrid = initialGrid.map(row => [...row]);
     stopCelebration(true);
@@ -740,13 +849,28 @@
 
   function newGame() {
     gameNumber++;
-    currentSolution = generatePuzzle();
+    currentSolution = generatePuzzle(currentMode);
     newRound();
+  }
+
+  function setMode(m) {
+    if (!MODES[m]) return;
+    currentModeKey = m;
+    currentMode = MODES[m];
+    currentPositions = modePositions(currentMode);
+    updateModeButtons();
+    newGame();
   }
 
   function setDifficulty(d) {
     currentDifficulty = d;
     newRound();
+  }
+
+  function updateModeButtons() {
+    ['klassiek', 'groot'].forEach(m => {
+      document.getElementById('mode-' + m).classList.toggle('active', m === currentModeKey);
+    });
   }
 
   function updateDiffButtons() {
@@ -756,7 +880,15 @@
     });
   }
 
+  // Bij draaien/verkleinen van het scherm: tegels opnieuw meten (niet tijdens slepen).
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { if (!touchSrc && currentGrid) render(); }, 150);
+  });
+
   // ── Start ──
+  updateModeButtons();
   newGame();
   </script>
 </body>
