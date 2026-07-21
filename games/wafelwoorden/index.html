@@ -16,7 +16,9 @@
       align-items: center;
       min-height: 100vh;
       padding: 16px;
-      touch-action: none; /* prevent page scroll while dragging */
+      padding-top: max(16px, env(safe-area-inset-top));
+      /* De pagina mag gewoon scrollen; alleen losse tegels vangen het
+         sleepgebaar af (zie .cell.movable). */
     }
 
     header { text-align: center; margin-bottom: 14px; }
@@ -95,6 +97,10 @@
     }
     .cell:active { cursor: grabbing; }
 
+    /* Alleen versleepbare tegels vangen touch af, zodat de rest van de
+       pagina normaal blijft scrollen. */
+    .cell.movable { touch-action: none; }
+
     .cell.empty {
       background: transparent;
       cursor: default;
@@ -142,7 +148,7 @@
       80%  { opacity: 1; }
       to   { transform: translate(var(--x1), var(--y1)) rotate(var(--rot)); opacity: 0; }
     }
-    .backlink{position:absolute;top:12px;left:14px;color:#888;text-decoration:none;font-size:.85rem;font-family:Arial,sans-serif;font-weight:normal;}
+    .backlink{align-self:flex-start;color:#888;text-decoration:none;font-size:.9rem;font-family:Arial,sans-serif;font-weight:normal;margin-bottom:6px;padding:4px 2px;}
   </style>
 </head>
 <body>
@@ -404,10 +410,10 @@
   ];
 
   const FALLBACK_MEGA = [
-    [[null,null,'Z','E','B','R','A',null,null],[null,null,'L',null,'L',null,'V',null,null],['A','B','A','K','O','V','E','N','B'],['A',null,'A',null,'E',null,'L',null,'O'],['P','I','R','A','M','I','D','E','S'],['J',null,'Z',null,'P',null,'J',null,'J'],['E','T','E','K','E','N','E','N','E'],[null,null,'N',null,'R',null,'S',null,null],[null,null,'B','A','K','E','N',null,null]],
-    [[null,null,'S','M','A','R','T',null,null],[null,null,'M',null,'C',null,'E',null,null],['L','N','A','C','H','T','E','N','R'],['E',null,'G',null,'T',null,'N',null,'E'],['D','O','N','D','E','R','D','A','G'],['E',null,'E',null,'R',null,'J',null,'E'],['R','L','E','E','U','W','E','N','L'],[null,null,'T',null,'I',null,'S',null,null],[null,null,'G','A','T','E','N',null,null]],
-    [[null,null,'W','E','V','E','R',null,null],[null,null,'F',null,'I',null,'N',null,null],['A','G','A','L','J','O','E','N','R'],['A',null,'M',null,'V',null,'S',null,'O'],['R','U','I','T','E','R','T','J','E'],['D',null,'L',null,'R',null,'J',null,'S'],['E','F','I','E','T','S','E','N','T'],[null,null,'E',null,'J',null,'S',null,null],[null,null,'K','L','E','U','R',null,null]],
-    [[null,null,'K','A','P','E','R',null,null],[null,null,'B',null,'I',null,'B',null,null],['J','L','A','A','R','Z','E','N','B'],['U',null,'K',null,'A',null,'H',null,'A'],['B','L','O','E','M','K','O','O','L'],['E',null,'V',null,'I',null,'R',null,'E'],['L','E','E','N','D','J','E','S','N'],[null,null,'N',null,'E',null,'N',null,null],[null,null,'P','A','S','E','N',null,null]],
+    [[null,null,null,null,'K',null,null,null,null],[null,null,'G',null,'A',null,'P',null,null],[null,'K','A','P','S','T','O','K',null],[null,null,'R',null,'T',null,'O',null,null],['L','A','N','T','A','A','R','N','S'],[null,null,'A',null,'N',null,'T',null,null],[null,'G','A','L','J','O','E','N',null],[null,null,'L',null,'E',null,'N',null,null],[null,null,null,null,'S',null,null,null,null]],
+    [[null,null,null,null,'B',null,null,null,null],[null,null,'S',null,'A',null,'G',null,null],[null,'S','P','I','N','R','A','G',null],[null,null,'O',null,'D',null,'R',null,null],['G','O','R','D','I','J','N','E','N'],[null,null,'T',null,'E',null,'A',null,null],[null,'B','E','S','T','A','A','N',null],[null,null,'N',null,'E',null,'L',null,null],[null,null,null,null,'N',null,null,null,null]],
+    [[null,null,null,null,'K',null,null,null,null],[null,null,'P',null,'O',null,'K',null,null],[null,'K','O','F','F','E','R','S',null],[null,null,'T',null,'F',null,'E',null,null],['D','O','L','F','I','J','N','E','N'],[null,null,'O',null,'E',null,'T',null,null],[null,'K','O','E','K','O','E','K',null],[null,null,'D',null,'O',null,'N',null,null],[null,null,null,null,'P',null,null,null,null]],
+    [[null,null,null,null,'Z',null,null,null,null],[null,null,'D',null,'E',null,'L',null,null],[null,'D','R','U','I','V','E','N',null],[null,null,'A',null,'L',null,'E',null,null],['J','A','A','R','B','E','U','R','S'],[null,null,'I',null,'O',null,'W',null,null],[null,'H','E','R','T','J','E','S',null],[null,null,'N',null,'E',null,'N',null,null],[null,null,null,null,'N',null,null,null,null]],
   ];
 
   const MODES = {
@@ -447,26 +453,23 @@
     },
     mega: {
       key: 'mega', label: 'Mega', size: 9,
-      // Wafel met woordlijnen op rijen/kolommen 0,2,4,6,8. De centrale
-      // rij en kolom zijn 9 letters, de ring erbinnen 7, de buitenrand 5.
-      // Vorm: een grote wafel met afgesneden hoeken (53 tegels, 10 woorden).
+      // Grote plus-wafel (net als Groot, maar een maat groter): de centrale
+      // rij en kolom zijn 9-letterwoorden, de ring erbinnen vier 7-letter-
+      // woorden. Ruime tussenruimte zodat woorden elkaar niet raken
+      // (37 tegels, 6 woorden).
       slots: [
         rowCells(4, 0, 9), // centrale rij   (9 letters)
         colCells(4, 0, 9), // centrale kolom (9 letters, kruist centrale rij)
         colCells(2, 1, 7), // 7-letter kolom
         colCells(6, 1, 7), // 7-letter kolom
-        colCells(0, 2, 5), // 5-letter kolom (buitenrand)
-        colCells(8, 2, 5), // 5-letter kolom (buitenrand)
         rowCells(2, 1, 7), // 7-letter rij   (3 kruispunten)
         rowCells(6, 1, 7), // 7-letter rij   (3 kruispunten)
-        rowCells(0, 2, 5), // 5-letter rij   (buitenrand)
-        rowCells(8, 2, 5), // 5-letter rij   (buitenrand)
       ],
       fallbacks: FALLBACK_MEGA,
       difficulty: {
-        makkelijk: { preSwaps: 8,    maxSwaps: 28 },
-        normaal:   { preSwaps: 16,   maxSwaps: 42 },
-        moeilijk:  { preSwaps: null, maxSwaps: 42 },
+        makkelijk: { preSwaps: 6,    maxSwaps: 18 },
+        normaal:   { preSwaps: 12,   maxSwaps: 26 },
+        moeilijk:  { preSwaps: null, maxSwaps: 34 },
       },
     },
   };
@@ -709,6 +712,7 @@
 
           // Groene letters staan al goed: die kun je niet meer wisselen
           if (!gameOver && colors[r][c] !== 'green') {
+            cellEl.classList.add('movable');
             cellEl.draggable = true;
             cellEl.addEventListener('dragstart', onDragStart);
             cellEl.addEventListener('dragend',   onDragEnd);
