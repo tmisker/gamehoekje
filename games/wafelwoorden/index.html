@@ -158,6 +158,7 @@
     <div class="btn-row" id="mode-row">
       <button id="mode-klassiek" onclick="setMode('klassiek')">🧇 Klassiek</button>
       <button id="mode-groot"    onclick="setMode('groot')">🍿 Groot</button>
+      <button id="mode-mega"     onclick="setMode('mega')">🚀 Mega</button>
     </div>
     <!-- moeilijkheid -->
     <div class="btn-row">
@@ -269,6 +270,12 @@
     // Z
     'ZACHT','ZAKEN','ZEGEN','ZEKER','ZEVEN','ZINGT','ZOEKT','ZOMER','ZWAAN',
     'ZWAAR','ZWART','ZWEET','ZWERM',
+    // Extra
+    'ADRES','AFRIT','AGENT','AKKER','ARENA','BAARS','BEELD','BEIGE','BREIN','BRUID',
+    'CACAO','DADEL','DEGEN','DELEN','EITJE','ELFJE','GRIEP','HALLO','HAPJE','KAJAK',
+    'KAPER','KEGEL','KOALA','KOKER','LOODS','MEEUW','NICHT','OMWEG','PAPPA','PATER',
+    'PRUIM','RADIO','RIJST','SALON','SFEER','TOETS','UITJE','VLIEG','VOSJE','WAFEL',
+    'ZAKJE','ZEBRA',
   ];
 
   // Veelgebruikte Nederlandse 7-letterwoorden (voor de "Groot"-modus)
@@ -292,6 +299,31 @@
     'BALLONS','BEERTJE','BOEKJES','EENDJES','FLESSEN','HAGEDIS','KAARTEN','KAMELEN',
     'KAPPERS','KASTJES','LEEUWIN','MONSTER','PLASSEN','POORTEN','RUPSJES','SNAVELS',
     'STERREN','STOKKEN','TROLLEN','VLEKKEN','ZAKDOEK','ZEESTER',
+    // Extra
+    'BAKOVEN','BALKONS','BEZOEKT','BLOKJES','BROEKEN','BRUGGEN','DOOLHOF','DRAKJES',
+    'DRUPPEL','ETALAGE','GALJOEN','GEHEIME','HELMPJE','HERTJES','HOEDJES','HUISJES',
+    'KLAVIER','KLEUTER','KOEKOEK','KOSTUUM','KRAAIEN','LIEDJES','MANEGES','MEEUWEN',
+    'NESTJES','PAPRIKA','PLANTEN','POORTJE','SPINRAG','STEKELS','TOETERS','TUINTJE',
+    'UILTJES','VELDJES','VESTJES','WANTJES','WESPJES',
+  ];
+
+  // Veelgebruikte Nederlandse 9-letterwoorden (voor de "Mega"-modus)
+  const WORDS9 = [
+    'AARDAPPEL','ACHTERUIT','ACROBATEN','AMBULANCE','AVONTUREN','BADKAMERS','BANDIETEN',
+    'BLIKSEMEN','BLOEMKOOL','BLOEMPERK','BOODSCHAP','BRANDWEER','CHOCOLADE','CIRKELTJE',
+    'COMPUTERS','CROISSANT','DAGBOEKEN','DIAMANTEN','DOLFIJNEN','DONDERDAG','EEKHOORNS',
+    'FLAMINGOS','FONTEINEN','GARDEROBE','GEDICHTEN','GITARISTE','GORDIJNEN','HOEFIJZER',
+    'HOOFDPIJN','IJSVOGELS','JAARBEURS','JACHTHOND','KABOUTERS','KANGOEROE','KAPITEINS',
+    'KAPSALONS','KASTANJES','KERSTBOOM','KETTINGEN','KIKKERTJE','KLEURTJES','KOEKENPAN',
+    'KOETSIERS','KOFFIEKOP','KOMKOMMER','KROKODILS','KROONTJES','LANTAARNS','LEEUWTJES',
+    'LEPELTJES','LIMONADES','MACHINIST','MANDARIJN','MEDAILLES','MOLENAARS','MOLENWIEK',
+    'MUZIKANTE','NIJLPAARD','OLIFANTEN','PARELMOER','PIRAMIDES','POSTBODES','PRINSESJE',
+    'PUDDINGEN','REGENBOOG','RIDDERTJE','RUITERTJE','SCHATKIST','SCHILDPAD','SCHOENTJE',
+    'SCHOMMELS','SNAVELTJE','SNEEUWBAL','SNEEUWPOP','SPAGHETTI','SPEELGOED','SPEELTUIN',
+    'SPROOKJES','STOELTJES','STOKPAARD','STRANDBAL','TELEFOONS','TIJGERTJE','TOVENAARS',
+    'TREINTJES','VAKANTIES','VERKLEDEN','VIJVERTJE','VLAGGETJE','VLIEGTUIG','VUURTOREN',
+    'WANDELAAR','WATERPLAS','WATERVERF','WINKELIER','WINTERJAS','WOONKAMER','ZAKLAMPEN',
+    'ZEEHONDEN','ZEILBOTEN','ZONNEBRIL','ZWEMBADEN',
   ];
 
   // ══════════════════════════════════════════════════════════════
@@ -308,8 +340,17 @@
     return idx;
   }
 
-  const ALLWORDS = {5: WORDS5, 7: WORDS7};
-  const INDEX    = {5: buildIndex(WORDS5, 5), 7: buildIndex(WORDS7, 7)};
+  // gededupliceerde woordenlijsten per lengte
+  const ALLWORDS = {
+    5: [...new Set(WORDS5)],
+    7: [...new Set(WORDS7)],
+    9: [...new Set(WORDS9)],
+  };
+  const INDEX = {
+    5: buildIndex(ALLWORDS[5], 5),
+    7: buildIndex(ALLWORDS[7], 7),
+    9: buildIndex(ALLWORDS[9], 9),
+  };
 
   function findMatching(idx, constraints) {
     let result = null;
@@ -362,6 +403,13 @@
     [[null,null,null,'S',null,null,null],[null,'B','O','C','H','T',null],[null,'E',null,'H',null,'R',null],['B','R','O','E','D','E','R'],[null,'E',null,'P',null,'K',null],[null,'N','O','E','M','T',null],[null,null,null,'N',null,null,null]],
   ];
 
+  const FALLBACK_MEGA = [
+    [[null,null,'Z','E','B','R','A',null,null],[null,null,'L',null,'L',null,'V',null,null],['A','B','A','K','O','V','E','N','B'],['A',null,'A',null,'E',null,'L',null,'O'],['P','I','R','A','M','I','D','E','S'],['J',null,'Z',null,'P',null,'J',null,'J'],['E','T','E','K','E','N','E','N','E'],[null,null,'N',null,'R',null,'S',null,null],[null,null,'B','A','K','E','N',null,null]],
+    [[null,null,'S','M','A','R','T',null,null],[null,null,'M',null,'C',null,'E',null,null],['L','N','A','C','H','T','E','N','R'],['E',null,'G',null,'T',null,'N',null,'E'],['D','O','N','D','E','R','D','A','G'],['E',null,'E',null,'R',null,'J',null,'E'],['R','L','E','E','U','W','E','N','L'],[null,null,'T',null,'I',null,'S',null,null],[null,null,'G','A','T','E','N',null,null]],
+    [[null,null,'W','E','V','E','R',null,null],[null,null,'F',null,'I',null,'N',null,null],['A','G','A','L','J','O','E','N','R'],['A',null,'M',null,'V',null,'S',null,'O'],['R','U','I','T','E','R','T','J','E'],['D',null,'L',null,'R',null,'J',null,'S'],['E','F','I','E','T','S','E','N','T'],[null,null,'E',null,'J',null,'S',null,null],[null,null,'K','L','E','U','R',null,null]],
+    [[null,null,'K','A','P','E','R',null,null],[null,null,'B',null,'I',null,'B',null,null],['J','L','A','A','R','Z','E','N','B'],['U',null,'K',null,'A',null,'H',null,'A'],['B','L','O','E','M','K','O','O','L'],['E',null,'V',null,'I',null,'R',null,'E'],['L','E','E','N','D','J','E','S','N'],[null,null,'N',null,'E',null,'N',null,null],[null,null,'P','A','S','E','N',null,null]],
+  ];
+
   const MODES = {
     klassiek: {
       key: 'klassiek', label: 'Klassiek', size: 5,
@@ -397,6 +445,30 @@
         moeilijk:  { preSwaps: null, maxSwaps: 22 },
       },
     },
+    mega: {
+      key: 'mega', label: 'Mega', size: 9,
+      // Wafel met woordlijnen op rijen/kolommen 0,2,4,6,8. De centrale
+      // rij en kolom zijn 9 letters, de ring erbinnen 7, de buitenrand 5.
+      // Vorm: een grote wafel met afgesneden hoeken (53 tegels, 10 woorden).
+      slots: [
+        rowCells(4, 0, 9), // centrale rij   (9 letters)
+        colCells(4, 0, 9), // centrale kolom (9 letters, kruist centrale rij)
+        colCells(2, 1, 7), // 7-letter kolom
+        colCells(6, 1, 7), // 7-letter kolom
+        colCells(0, 2, 5), // 5-letter kolom (buitenrand)
+        colCells(8, 2, 5), // 5-letter kolom (buitenrand)
+        rowCells(2, 1, 7), // 7-letter rij   (3 kruispunten)
+        rowCells(6, 1, 7), // 7-letter rij   (3 kruispunten)
+        rowCells(0, 2, 5), // 5-letter rij   (buitenrand)
+        rowCells(8, 2, 5), // 5-letter rij   (buitenrand)
+      ],
+      fallbacks: FALLBACK_MEGA,
+      difficulty: {
+        makkelijk: { preSwaps: 8,    maxSwaps: 28 },
+        normaal:   { preSwaps: 16,   maxSwaps: 42 },
+        moeilijk:  { preSwaps: null, maxSwaps: 42 },
+      },
+    },
   };
 
   // Alle cellen (gededupliceerd) die een tegel dragen in deze modus.
@@ -420,22 +492,37 @@
     const used = new Set();      // reeds gebruikte woorden (blijven uniek)
     const chosen = new Array(mode.slots.length).fill(null);
 
+    // Beperkingen (positie → vereiste letter) voor een slot uit reeds
+    // vastgelegde cellen.
+    function slotConstraints(slot) {
+      const cons = [];
+      for (let k = 0; k < slot.length; k++) {
+        const v = cell2[slot[k][0] + ',' + slot[k][1]];
+        if (v !== undefined) cons.push([k, v]);
+      }
+      return cons;
+    }
+
+    // Forward-checking: heeft elk nog-in-te-vullen slot nog minstens één
+    // passend woord? Zo niet, dan is deze tak dood — vroeg afkappen.
+    function forwardOk(from) {
+      for (let j = from; j < mode.slots.length; j++) {
+        const slot = mode.slots[j];
+        const cons = slotConstraints(slot);
+        if (cons.length && findMatching(INDEX[slot.length], cons).length === 0) return false;
+      }
+      return true;
+    }
+
     function backtrack(i) {
       if (Date.now() - t0 > 3000) return false;
       if (i === mode.slots.length) return true;
 
       const slot = mode.slots[i];
       const len = slot.length;
-      const idx = INDEX[len];
+      const cons = slotConstraints(slot);
 
-      const cons = [];
-      for (let k = 0; k < len; k++) {
-        const key = slot[k][0] + ',' + slot[k][1];
-        const v = cell2[key];
-        if (v !== undefined) cons.push([k, v]);
-      }
-
-      let cands = cons.length ? findMatching(idx, cons) : ALLWORDS[len];
+      let cands = cons.length ? findMatching(INDEX[len], cons) : ALLWORDS[len];
       cands = shuffleArray(cands);
 
       for (const w of cands) {
@@ -449,7 +536,7 @@
           if (cell2[key] === undefined) { cell2[key] = w[k]; setKeys.push(key); }
         }
 
-        if (backtrack(i + 1)) return true;
+        if (forwardOk(i + 1) && backtrack(i + 1)) return true;
 
         for (const key of setKeys) delete cell2[key];
         used.delete(w); chosen[i] = null;
@@ -581,11 +668,11 @@
   // ══════════════════════════════════════════════════════════════
   function gridMetrics(n) {
     const avail = Math.min((window.innerWidth || 400) - 24, 460);
-    const gap = n >= 7 ? 5 : 6;
+    const gap = n >= 9 ? 4 : (n >= 7 ? 5 : 6);
     let cell = Math.floor((avail - (n - 1) * gap) / n);
-    cell = Math.max(30, Math.min(68, cell));
-    const fs = Math.round(cell * 0.4);
-    const br = Math.max(6, Math.round(cell * 0.14));
+    cell = Math.max(26, Math.min(68, cell));
+    const fs = Math.round(cell * 0.42);
+    const br = Math.max(5, Math.round(cell * 0.14));
     return {cell, gap, fs, br};
   }
 
@@ -868,7 +955,7 @@
   }
 
   function updateModeButtons() {
-    ['klassiek', 'groot'].forEach(m => {
+    ['klassiek', 'groot', 'mega'].forEach(m => {
       document.getElementById('mode-' + m).classList.toggle('active', m === currentModeKey);
     });
   }
