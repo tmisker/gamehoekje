@@ -10,14 +10,16 @@
 (function(){
   const CS = window.CubeSolver;
 
-  // Kleur per vlak-index: 0=U 1=R 2=F 3=D 4=L 5=B. De solver bouwt de D-laag
-  // (onderkant) als eerste — die tonen we WIT — en eindigt met de U-laag
-  // (bovenkant), die we GEEL tonen. Zo los je (net als in elke beginnershand-
-  // leiding) de witte laag eerst op en eindig je met geel bovenaan. Alleen de
-  // weergave verschilt: de solver en de algoritmes werken op vlak-indexen en
+  // Kleur per vlak-index: 0=U 1=R 2=F 3=D 4=L 5=B. We tonen de kubus met WIT
+  // onder en GEEL boven, zodat de leer-modus (net als in elke beginnershand-
+  // leiding) de witte laag eerst opbouwt en met geel eindigt. Dat is een halve
+  // draai (180°) om de voor-achter-as t.o.v. de standaard: wit<->geel én
+  // rood<->oranje wisselen mee, groen blijft vóór. Twee paren omwisselen is een
+  // ECHTE draaiing; alleen wit<->geel zou een spiegelbeeld geven dat niet op een
+  // echte kubus bestaat. De solver/algoritmes werken op vlak-indexen — die
   // veranderen hier niets van.
-  const COLORS = ["#ffd500","#c41e3a","#1faa47","#f7f7f7","#ff7a1a","#0051ba"]; // U=geel, D=wit
-  const COLOR_NAMES = ["Geel","Rood","Groen","Wit","Oranje","Blauw"];
+  const COLORS = ["#ffd500","#ff7a1a","#1faa47","#f7f7f7","#c41e3a","#0051ba"]; // U=geel R=oranje F=groen D=wit L=rood B=blauw
+  const COLOR_NAMES = ["Geel","Oranje","Groen","Wit","Rood","Blauw"];
   const FACE_KEYS = ["U","R","F","D","L","B"];
   const FACE_NAMES = {U:"Boven",R:"Rechts",F:"Voor",D:"Onder",L:"Links",B:"Achter"};
 
