@@ -125,6 +125,33 @@
     .player{display:flex;gap:6px;justify-content:center;align-items:center;}
     .player button{padding:11px 12px;min-width:48px;font-size:1.05rem;}
 
+    /* ── modus-schakelaar (snel / leren) ── */
+    .modeseg{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:3px;margin-bottom:10px;}
+    .modeseg button{flex:1;background:transparent;color:var(--muted);border-radius:8px;padding:9px 6px;font-size:.86rem;}
+    .modeseg button.active{background:var(--accent);color:#fff;}
+    .modeseg button:active{transform:none;}
+    .modehint{font-size:.72rem;color:var(--muted);text-align:center;margin-bottom:8px;min-height:1em;}
+
+    /* ── fase-kop in de leer-modus ── */
+    .stagehdr{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;}
+    .stagepills{display:flex;gap:6px;justify-content:center;margin-bottom:10px;flex-wrap:wrap;}
+    .stagepill{width:30px;height:30px;padding:0;border-radius:50%;background:var(--panel);border:1px solid var(--line);
+      color:var(--muted);font-size:.8rem;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1;}
+    .stagepill.cur{background:var(--accent);color:#fff;border-color:var(--accent);transform:scale(1.14);}
+    .stagepill.done{background:var(--accentd);color:#fff;border-color:var(--accentd);}
+    .stagephase{font-size:.7rem;color:var(--muted);text-align:center;letter-spacing:.6px;text-transform:uppercase;}
+    .stagetitle{font-size:1.18rem;font-weight:800;text-align:center;margin:2px 0 4px;}
+    .stagedesc{font-size:.82rem;color:var(--muted);text-align:center;line-height:1.4;}
+    .stagealgs{margin-top:10px;display:flex;flex-direction:column;gap:6px;}
+    .algrow{display:flex;flex-direction:column;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;}
+    .algname{font-size:.72rem;color:var(--accent);font-weight:700;}
+    .algseq{font-family:'SFMono-Regular',Menlo,Consolas,monospace;font-size:.92rem;font-weight:700;letter-spacing:1px;}
+    .algnote{margin-top:8px;font-size:.78rem;color:var(--muted);text-align:center;font-style:italic;}
+    .stagesep{flex-basis:100%;width:100%;font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;
+      letter-spacing:.5px;margin:8px 2px 2px;text-align:left;}
+    .stagesep:first-child{margin-top:0;}
+    body.learnmode #movelist{max-height:190px;}
+
     .backlink{position:absolute;top:12px;left:14px;color:var(--muted);text-decoration:none;font-size:.85rem;}
     .backlink:active{color:#fff;}
 
@@ -152,13 +179,21 @@
     <div id="palette"></div>
   </div>
 
-  <div id="editControls" class="btnrow card">
-    <button id="scrambleBtn" class="grow">🎲 Door elkaar</button>
-    <button id="resetBtn" class="grow">↺ Leegmaken</button>
-    <button id="solveBtn" class="primary grow">✨ Los op!</button>
+  <div id="editControls" class="card">
+    <div class="modeseg" id="modeSeg">
+      <button data-m="fast" class="active">⚡ Snel oplossen</button>
+      <button data-m="learn">📚 Stap voor stap leren</button>
+    </div>
+    <div class="modehint" id="modeHint">Los de kubus in ±20 zetten op.</div>
+    <div class="btnrow">
+      <button id="scrambleBtn" class="grow">🎲 Door elkaar</button>
+      <button id="resetBtn" class="grow">↺ Leegmaken</button>
+      <button id="solveBtn" class="primary grow">✨ Los op!</button>
+    </div>
   </div>
 
   <div id="solvePanel" class="card">
+    <div id="stageHeader" class="stagehdr"></div>
     <div id="moveinfo"></div>
     <div id="movelist"></div>
     <div class="player">
@@ -173,7 +208,7 @@
     </div>
   </div>
 
-  <footer>Werkt volledig offline · Efficiënte oplossing in ±20 zetten (two-phase)</footer>
+  <footer>Werkt volledig offline · Snel oplossen (±20 zetten) of stap voor stap de trucjes leren</footer>
 
   <script id="solver-src">/*__SOLVER__*/</script>
   <script id="kociemba-src">/*__KOCIEMBA__*/</script>
