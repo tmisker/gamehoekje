@@ -18,9 +18,9 @@
       background:var(--bg); color:var(--text);
       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
       display:flex; flex-direction:column; align-items:center;
-      min-height:100%; padding:14px 12px 32px; gap:12px;
+      min-height:100%; padding:48px 14px 36px; gap:16px;
     }
-    header{text-align:center;}
+    header{text-align:center;margin-top:4px;}
     header h1{font-size:1.5rem;letter-spacing:1px;}
     header p{color:var(--muted);font-size:.78rem;margin-top:3px;}
 
@@ -31,8 +31,8 @@
 
     /* ── 3D cube (27 cubies) ── */
     .scene{
-      width:100%; max-width:460px; height:calc(var(--cs)*1.3);
-      perspective:1300px; margin:2px auto 0;
+      width:100%; max-width:460px; height:calc(var(--cs)*1.55);
+      perspective:1300px; margin:18px auto 12px;
       display:flex; align-items:center; justify-content:center;
     }
     .tilt{
@@ -152,7 +152,7 @@
     .stagesep:first-child{margin-top:0;}
     body.learnmode #movelist{max-height:190px;}
 
-    .backlink{position:absolute;top:12px;left:14px;color:var(--muted);text-decoration:none;font-size:.85rem;}
+    .backlink{position:absolute;top:16px;left:14px;padding:4px 6px;color:var(--muted);text-decoration:none;font-size:.9rem;}
     .backlink:active{color:#fff;}
 
     footer{font-size:.7rem;color:#55555a;text-align:center;margin-top:4px;}
