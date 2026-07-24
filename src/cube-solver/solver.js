@@ -423,6 +423,120 @@ function solveCube(state){
   return all;
 }
 
+// ============================================================================
+//  STAGED SOLVER  (leer-modus / beginnersmethode)
+//  Levert dezelfde oplossing, maar opgesplitst in aanleerbare fases die elk de
+//  klassieke algoritmes gebruiken. Zo leer je de trucjes stap voor stap.
+//  Fases:  1 kruis · 2 hoeken onderlaag · 3 middelste laag ·
+//          4 bovenkruis · 5 bovenvlak · 6 hoeken plaatsen · 7 randen plaatsen
+//  Alle fase 4-7 zetten zijn F2L-behoudend, dus de eerste twee lagen blijven
+//  staan. Correctheid wordt end-to-end getest (test/solver.test.js).
+// ============================================================================
+
+// laatste-laag deeldoelen (alleen de U-laag stukken 0..3)
+function uEdgesOriented(s){ return s.eo[0]===0&&s.eo[1]===0&&s.eo[2]===0&&s.eo[3]===0; }
+function uCornersOriented(s){ return s.co[0]===0&&s.co[1]===0&&s.co[2]===0&&s.co[3]===0; }
+function uCornersPlaced(s){ return s.cp[0]===0&&s.cp[1]===1&&s.cp[2]===2&&s.cp[3]===3; }
+function llSolved(s){
+  return uCornersPlaced(s)&&uCornersOriented(s)&&uEdgesOriented(s)&&
+         s.ep[0]===0&&s.ep[1]===1&&s.ep[2]===2&&s.ep[3]===3;
+}
+
+// De klassieke laatste-laag algoritmes (als losse zet-tokens).
+const ALG_EO       = ["F","R","U","R'","U'","F'"];        // randen oriënteren (bovenkruis)
+const ALG_SUNE     = ["R","U","R'","U","R","U2","R'"];    // hoeken oriënteren (Sune)
+const ALG_ANTISUNE = ["R","U2","R'","U'","R","U'","R'"];  // hoeken oriënteren (anti-Sune)
+const ALG_CORNER   = ["R'","F","R'","B2","R","F'","R'","B2","R2"]; // hoeken 3-wissel (A-perm, oriëntatie-behoudend)
+const ALG_UPERM    = ["R","U'","R","U","R","U","R","U'","R'","U'","R2"]; // randen 3-wissel (U-perm)
+const U_SETUPS     = [["U"],["U'"],["U2"]];               // AUF-instellingen
+
+// BFS over een kleine set macro-operaties (elk een tokenlijst) tot `goal` klopt.
+// Elke operatie is F2L-behoudend, dus alleen de U-laag verandert → we dedupen op
+// llKey. De deeldoelen liggen ondiep, dus dit is vrijwel instant.
+function llBFS(state, ops, goal, maxOps){
+  if(goal(state)) return [];
+  const seen=new Set([llKey(state)]);
+  let frontier=[{s:state, path:[]}];
+  for(let depth=0; depth<maxOps; depth++){
+    const next=[];
+    for(const node of frontier){
+      for(const op of ops){
+        const ns=applySeq(clone(node.s), op);
+        const k=llKey(ns);
+        if(seen.has(k)) continue;
+        const path=node.path.concat(op);
+        if(goal(ns)) return path;
+        seen.add(k);
+        next.push({s:ns, path});
+      }
+    }
+    frontier=next;
+    if(!frontier.length) break;
+  }
+  return null;
+}
+
+function solveStaged(state){
+  buildPieceDist();
+  const out={stages:[], moves:[]};
+  let s=clone(state);
+  const solvedSet=[];   // stukken die opgelost moeten blijven (kruis + hoeken)
+  const record=(key,seq)=>{ seq=compress(seq); out.stages.push({key,moves:seq.slice()}); out.moves=out.moves.concat(seq); };
+  const goalFor=(check,idx)=>{
+    const fE=solvedSet.filter(p=>p.t==='e').map(p=>p.i);
+    const fC=solvedSet.filter(p=>p.t==='c').map(p=>p.i);
+    return (st)=>{
+      if(!check(st,idx)) return false;
+      for(const e of fE) if(!pieceEdgeSolved(st,e)) return false;
+      for(const c of fC) if(!pieceCornerSolved(st,c)) return false;
+      return true;
+    };
+  };
+
+  // Fase 1 — kruis op de onderlaag (D-randen 4,5,6,7), intuïtief geplaatst.
+  let seq=[];
+  for(const e of [4,5,6,7]){
+    const sub=searchToGoal(s, goalFor(pieceEdgeSolved,e), 8, solvedSet.concat([{t:'e',i:e}]));
+    if(!sub) return null;
+    s=applySeq(s,sub); seq=seq.concat(sub); solvedSet.push({t:'e',i:e});
+  }
+  record("cross", seq);
+
+  // Fase 2 — hoeken van de onderlaag (D-hoeken 4,5,6,7).
+  seq=[];
+  for(const c of [4,5,6,7]){
+    const sub=searchToGoal(s, goalFor(pieceCornerSolved,c), 9, solvedSet.concat([{t:'c',i:c}]));
+    if(!sub) return null;
+    s=applySeq(s,sub); seq=seq.concat(sub); solvedSet.push({t:'c',i:c});
+  }
+  record("corners1", seq);
+
+  // Fase 3 — middelste laag (deterministische insteek-algoritmes).
+  const mid=solveMiddle(s);
+  if(!mid) return null;
+  s=mid.state; record("middle", mid.moves);
+
+  // Fase 4 — bovenkruis: de U-randen oriënteren met F R U R' U' F'.
+  let sub=llBFS(s, U_SETUPS.concat([ALG_EO]), uEdgesOriented, 12);
+  if(!sub) return null; s=applySeq(s,sub); record("eo", sub);
+
+  // Fase 5 — bovenvlak: de U-hoeken oriënteren met Sune / anti-Sune.
+  sub=llBFS(s, U_SETUPS.concat([ALG_SUNE, ALG_ANTISUNE]), st=>uCornersOriented(st)&&uEdgesOriented(st), 20);
+  if(!sub) return null; s=applySeq(s,sub); record("co", sub);
+
+  // Fase 6 — hoeken op hun plek (hoek-3-wissel).
+  sub=llBFS(s, U_SETUPS.concat([ALG_CORNER]), st=>uCornersPlaced(st)&&uCornersOriented(st)&&uEdgesOriented(st), 20);
+  if(!sub) return null; s=applySeq(s,sub); record("cp", sub);
+
+  // Fase 7 — randen op hun plek (U-perm): nu is de kubus opgelost.
+  sub=llBFS(s, U_SETUPS.concat([ALG_UPERM]), llSolved, 20);
+  if(!sub) return null; s=applySeq(s,sub); record("ep", sub);
+
+  // eindcontrole: de gecomprimeerde totaaloplossing moet echt kloppen.
+  if(!isSolved(applySeq(clone(state), out.moves))) return null;
+  return out;
+}
+
 // ---- scramble + facelet conversion (for tests / UI) -----------------------
 function randomScramble(n){
   const toks=[];
@@ -508,7 +622,7 @@ function faceletsToState(F){
   return {state:{cp,co,ep,eo}};
 }
 
-const CubeSolver={MOVES,solvedState,clone,applyMove,applySeq,isSolved,solveCube,
+const CubeSolver={MOVES,solvedState,clone,applyMove,applySeq,isSolved,solveCube,solveStaged,
   randomScramble,compress,searchToGoal,solveF2L,solveLL,ALL_MOVES,
   buildLLTable,_tableSize:()=>LL_TABLE?LL_TABLE.size:0,
   stateToFacelets,faceletsToState,cornerFacelet,edgeFacelet};

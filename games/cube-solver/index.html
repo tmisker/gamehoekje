@@ -125,6 +125,33 @@
     .player{display:flex;gap:6px;justify-content:center;align-items:center;}
     .player button{padding:11px 12px;min-width:48px;font-size:1.05rem;}
 
+    /* ── modus-schakelaar (snel / leren) ── */
+    .modeseg{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:3px;margin-bottom:10px;}
+    .modeseg button{flex:1;background:transparent;color:var(--muted);border-radius:8px;padding:9px 6px;font-size:.86rem;}
+    .modeseg button.active{background:var(--accent);color:#fff;}
+    .modeseg button:active{transform:none;}
+    .modehint{font-size:.72rem;color:var(--muted);text-align:center;margin-bottom:8px;min-height:1em;}
+
+    /* ── fase-kop in de leer-modus ── */
+    .stagehdr{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;}
+    .stagepills{display:flex;gap:6px;justify-content:center;margin-bottom:10px;flex-wrap:wrap;}
+    .stagepill{width:30px;height:30px;padding:0;border-radius:50%;background:var(--panel);border:1px solid var(--line);
+      color:var(--muted);font-size:.8rem;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1;}
+    .stagepill.cur{background:var(--accent);color:#fff;border-color:var(--accent);transform:scale(1.14);}
+    .stagepill.done{background:var(--accentd);color:#fff;border-color:var(--accentd);}
+    .stagephase{font-size:.7rem;color:var(--muted);text-align:center;letter-spacing:.6px;text-transform:uppercase;}
+    .stagetitle{font-size:1.18rem;font-weight:800;text-align:center;margin:2px 0 4px;}
+    .stagedesc{font-size:.82rem;color:var(--muted);text-align:center;line-height:1.4;}
+    .stagealgs{margin-top:10px;display:flex;flex-direction:column;gap:6px;}
+    .algrow{display:flex;flex-direction:column;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;}
+    .algname{font-size:.72rem;color:var(--accent);font-weight:700;}
+    .algseq{font-family:'SFMono-Regular',Menlo,Consolas,monospace;font-size:.92rem;font-weight:700;letter-spacing:1px;}
+    .algnote{margin-top:8px;font-size:.78rem;color:var(--muted);text-align:center;font-style:italic;}
+    .stagesep{flex-basis:100%;width:100%;font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;
+      letter-spacing:.5px;margin:8px 2px 2px;text-align:left;}
+    .stagesep:first-child{margin-top:0;}
+    body.learnmode #movelist{max-height:190px;}
+
     .backlink{position:absolute;top:12px;left:14px;color:var(--muted);text-decoration:none;font-size:.85rem;}
     .backlink:active{color:#fff;}
 
@@ -152,13 +179,21 @@
     <div id="palette"></div>
   </div>
 
-  <div id="editControls" class="btnrow card">
-    <button id="scrambleBtn" class="grow">🎲 Door elkaar</button>
-    <button id="resetBtn" class="grow">↺ Leegmaken</button>
-    <button id="solveBtn" class="primary grow">✨ Los op!</button>
+  <div id="editControls" class="card">
+    <div class="modeseg" id="modeSeg">
+      <button data-m="fast" class="active">⚡ Snel oplossen</button>
+      <button data-m="learn">📚 Stap voor stap leren</button>
+    </div>
+    <div class="modehint" id="modeHint">Los de kubus in ±20 zetten op.</div>
+    <div class="btnrow">
+      <button id="scrambleBtn" class="grow">🎲 Door elkaar</button>
+      <button id="resetBtn" class="grow">↺ Leegmaken</button>
+      <button id="solveBtn" class="primary grow">✨ Los op!</button>
+    </div>
   </div>
 
   <div id="solvePanel" class="card">
+    <div id="stageHeader" class="stagehdr"></div>
     <div id="moveinfo"></div>
     <div id="movelist"></div>
     <div class="player">
@@ -173,7 +208,7 @@
     </div>
   </div>
 
-  <footer>Werkt volledig offline · Efficiënte oplossing in ±20 zetten (two-phase)</footer>
+  <footer>Werkt volledig offline · Snel oplossen (±20 zetten) of stap voor stap de trucjes leren</footer>
 
   <script id="solver-src">
 // ============================================================================
@@ -601,6 +636,120 @@ function solveCube(state){
   return all;
 }
 
+// ============================================================================
+//  STAGED SOLVER  (leer-modus / beginnersmethode)
+//  Levert dezelfde oplossing, maar opgesplitst in aanleerbare fases die elk de
+//  klassieke algoritmes gebruiken. Zo leer je de trucjes stap voor stap.
+//  Fases:  1 kruis · 2 hoeken onderlaag · 3 middelste laag ·
+//          4 bovenkruis · 5 bovenvlak · 6 hoeken plaatsen · 7 randen plaatsen
+//  Alle fase 4-7 zetten zijn F2L-behoudend, dus de eerste twee lagen blijven
+//  staan. Correctheid wordt end-to-end getest (test/solver.test.js).
+// ============================================================================
+
+// laatste-laag deeldoelen (alleen de U-laag stukken 0..3)
+function uEdgesOriented(s){ return s.eo[0]===0&&s.eo[1]===0&&s.eo[2]===0&&s.eo[3]===0; }
+function uCornersOriented(s){ return s.co[0]===0&&s.co[1]===0&&s.co[2]===0&&s.co[3]===0; }
+function uCornersPlaced(s){ return s.cp[0]===0&&s.cp[1]===1&&s.cp[2]===2&&s.cp[3]===3; }
+function llSolved(s){
+  return uCornersPlaced(s)&&uCornersOriented(s)&&uEdgesOriented(s)&&
+         s.ep[0]===0&&s.ep[1]===1&&s.ep[2]===2&&s.ep[3]===3;
+}
+
+// De klassieke laatste-laag algoritmes (als losse zet-tokens).
+const ALG_EO       = ["F","R","U","R'","U'","F'"];        // randen oriënteren (bovenkruis)
+const ALG_SUNE     = ["R","U","R'","U","R","U2","R'"];    // hoeken oriënteren (Sune)
+const ALG_ANTISUNE = ["R","U2","R'","U'","R","U'","R'"];  // hoeken oriënteren (anti-Sune)
+const ALG_CORNER   = ["R'","F","R'","B2","R","F'","R'","B2","R2"]; // hoeken 3-wissel (A-perm, oriëntatie-behoudend)
+const ALG_UPERM    = ["R","U'","R","U","R","U","R","U'","R'","U'","R2"]; // randen 3-wissel (U-perm)
+const U_SETUPS     = [["U"],["U'"],["U2"]];               // AUF-instellingen
+
+// BFS over een kleine set macro-operaties (elk een tokenlijst) tot `goal` klopt.
+// Elke operatie is F2L-behoudend, dus alleen de U-laag verandert → we dedupen op
+// llKey. De deeldoelen liggen ondiep, dus dit is vrijwel instant.
+function llBFS(state, ops, goal, maxOps){
+  if(goal(state)) return [];
+  const seen=new Set([llKey(state)]);
+  let frontier=[{s:state, path:[]}];
+  for(let depth=0; depth<maxOps; depth++){
+    const next=[];
+    for(const node of frontier){
+      for(const op of ops){
+        const ns=applySeq(clone(node.s), op);
+        const k=llKey(ns);
+        if(seen.has(k)) continue;
+        const path=node.path.concat(op);
+        if(goal(ns)) return path;
+        seen.add(k);
+        next.push({s:ns, path});
+      }
+    }
+    frontier=next;
+    if(!frontier.length) break;
+  }
+  return null;
+}
+
+function solveStaged(state){
+  buildPieceDist();
+  const out={stages:[], moves:[]};
+  let s=clone(state);
+  const solvedSet=[];   // stukken die opgelost moeten blijven (kruis + hoeken)
+  const record=(key,seq)=>{ seq=compress(seq); out.stages.push({key,moves:seq.slice()}); out.moves=out.moves.concat(seq); };
+  const goalFor=(check,idx)=>{
+    const fE=solvedSet.filter(p=>p.t==='e').map(p=>p.i);
+    const fC=solvedSet.filter(p=>p.t==='c').map(p=>p.i);
+    return (st)=>{
+      if(!check(st,idx)) return false;
+      for(const e of fE) if(!pieceEdgeSolved(st,e)) return false;
+      for(const c of fC) if(!pieceCornerSolved(st,c)) return false;
+      return true;
+    };
+  };
+
+  // Fase 1 — kruis op de onderlaag (D-randen 4,5,6,7), intuïtief geplaatst.
+  let seq=[];
+  for(const e of [4,5,6,7]){
+    const sub=searchToGoal(s, goalFor(pieceEdgeSolved,e), 8, solvedSet.concat([{t:'e',i:e}]));
+    if(!sub) return null;
+    s=applySeq(s,sub); seq=seq.concat(sub); solvedSet.push({t:'e',i:e});
+  }
+  record("cross", seq);
+
+  // Fase 2 — hoeken van de onderlaag (D-hoeken 4,5,6,7).
+  seq=[];
+  for(const c of [4,5,6,7]){
+    const sub=searchToGoal(s, goalFor(pieceCornerSolved,c), 9, solvedSet.concat([{t:'c',i:c}]));
+    if(!sub) return null;
+    s=applySeq(s,sub); seq=seq.concat(sub); solvedSet.push({t:'c',i:c});
+  }
+  record("corners1", seq);
+
+  // Fase 3 — middelste laag (deterministische insteek-algoritmes).
+  const mid=solveMiddle(s);
+  if(!mid) return null;
+  s=mid.state; record("middle", mid.moves);
+
+  // Fase 4 — bovenkruis: de U-randen oriënteren met F R U R' U' F'.
+  let sub=llBFS(s, U_SETUPS.concat([ALG_EO]), uEdgesOriented, 12);
+  if(!sub) return null; s=applySeq(s,sub); record("eo", sub);
+
+  // Fase 5 — bovenvlak: de U-hoeken oriënteren met Sune / anti-Sune.
+  sub=llBFS(s, U_SETUPS.concat([ALG_SUNE, ALG_ANTISUNE]), st=>uCornersOriented(st)&&uEdgesOriented(st), 20);
+  if(!sub) return null; s=applySeq(s,sub); record("co", sub);
+
+  // Fase 6 — hoeken op hun plek (hoek-3-wissel).
+  sub=llBFS(s, U_SETUPS.concat([ALG_CORNER]), st=>uCornersPlaced(st)&&uCornersOriented(st)&&uEdgesOriented(st), 20);
+  if(!sub) return null; s=applySeq(s,sub); record("cp", sub);
+
+  // Fase 7 — randen op hun plek (U-perm): nu is de kubus opgelost.
+  sub=llBFS(s, U_SETUPS.concat([ALG_UPERM]), llSolved, 20);
+  if(!sub) return null; s=applySeq(s,sub); record("ep", sub);
+
+  // eindcontrole: de gecomprimeerde totaaloplossing moet echt kloppen.
+  if(!isSolved(applySeq(clone(state), out.moves))) return null;
+  return out;
+}
+
 // ---- scramble + facelet conversion (for tests / UI) -----------------------
 function randomScramble(n){
   const toks=[];
@@ -686,7 +835,7 @@ function faceletsToState(F){
   return {state:{cp,co,ep,eo}};
 }
 
-const CubeSolver={MOVES,solvedState,clone,applyMove,applySeq,isSolved,solveCube,
+const CubeSolver={MOVES,solvedState,clone,applyMove,applySeq,isSolved,solveCube,solveStaged,
   randomScramble,compress,searchToGoal,solveF2L,solveLL,ALL_MOVES,
   buildLLTable,_tableSize:()=>LL_TABLE?LL_TABLE.size:0,
   stateToFacelets,faceletsToState,cornerFacelet,edgeFacelet};
@@ -986,6 +1135,29 @@ if(typeof window!=="undefined") window.CubeSolver=CubeSolver;
   const cubies = {};          // "x,y,z" -> cubie element
   const padRef = new Array(54);  // facelet index -> coloured pad element
 
+  // learn mode --------------------------------------------------------------
+  let solveMode = "fast";     // "fast" (Kociemba ±20) | "learn" (staged beginner)
+  let stages = [];            // [{key,title,desc,algs,start,end,count}]
+  let stageOf = [];           // flat move index -> stage index
+
+  // Uitleg + algoritmes per fase van de beginnersmethode. De algoritme-notatie
+  // is de "schone" vorm die je leert; de zetjes in de lijst kunnen er een extra
+  // U-draai (AUF) omheen hebben om de kubus goed te zetten.
+  const STAGE_INFO = {
+    cross:    {title:"Bodemkruis",      desc:"Leg de vier randen van de onderste laag goed, zodat er een kruis ontstaat dat bij de zijkleuren past. Dit doe je op gevoel.", algs:[]},
+    corners1: {title:"Onderste hoeken", desc:"Zet de vier hoekstukken van de onderste laag op hun plek. De eerste laag is nu helemaal af.", algs:[]},
+    middle:   {title:"Middelste laag",  desc:"Plaats de vier randen van de middelste laag met de insteek-truc (en de gespiegelde versie voor de andere kant).",
+               algs:[{name:"Rechts insteken", seq:"U R U' R' U' F' U F"},{name:"Links insteken", seq:"U' L' U L U F U' F'"}]},
+    eo:       {title:"Bovenkruis",      desc:"Draai de bovenste randen zodat de bovenkant een kruis vormt. Herhaal de truc tot het kruis er staat.",
+               algs:[{name:"Kruis-truc", seq:"F R U R' U' F'"}]},
+    co:       {title:"Bovenvlak",       desc:"Draai de bovenste hoeken zodat de hele bovenkant één egale kleur wordt.",
+               algs:[{name:"Sune", seq:"R U R' U R U2 R'"},{name:"Anti-Sune", seq:"R U2 R' U' R U' R'"}]},
+    cp:       {title:"Hoeken plaatsen", desc:"Wissel de bovenste hoeken naar hun juiste plek. De kleuren staan al goed op de bovenkant.",
+               algs:[{name:"Hoekwissel (A-perm)", seq:"R' F R' B2 R F' R' B2 R2"}]},
+    ep:       {title:"Randen plaatsen", desc:"Wissel als laatste de bovenste randen om. Daarna is de kubus helemaal opgelost!",
+               algs:[{name:"Randwissel (U-perm)", seq:"R U' R U R U R U' R' U' R2"}]},
+  };
+
   // DOM ----------------------------------------------------------------------
   const $ = id => document.getElementById(id);
 
@@ -1162,7 +1334,7 @@ if(typeof window!=="undefined") window.CubeSolver=CubeSolver;
   // Run the (heavy) solve off the main thread when possible so the page never
   // freezes. The worker uses the Kociemba two-phase solver (~20-move solutions)
   // and falls back to the layer-by-layer solver if needed.
-  let worker, solveCallback=null;
+  let worker, solveCallback=null, stagedCallback=null;
   function getWorker(){
     if(worker!==undefined) return worker;
     try{
@@ -1170,24 +1342,36 @@ if(typeof window!=="undefined") window.CubeSolver=CubeSolver;
                   document.getElementById("kociemba-src").textContent +
         "\nonmessage=function(e){var d=e.data;" +
         "if(d.type==='warmup'){try{Kociemba.buildTables();}catch(_){};postMessage({type:'warmup'});return;}" +
+        "if(d.type==='staged'){var r;try{r=solveStaged(d.state);}catch(e3){r=null;}postMessage({type:'staged',res:r});return;}" +
         "var sol;try{Kociemba.buildTables();sol=Kociemba.solve(d.state,{maxTime:500});if(!sol)sol=solveCube(d.state);}" +
         "catch(err){try{sol=solveCube(d.state);}catch(e2){sol=null;}}" +
         "postMessage({type:'solve',sol:sol});};";
       const url = URL.createObjectURL(new Blob([src],{type:"application/javascript"}));
       worker = new Worker(url);
       worker.onmessage = (e)=>{
-        if(e.data.type==="solve" && solveCallback){ const cb=solveCallback; solveCallback=null; cb(e.data.sol); }
+        const d = e.data;
+        if(d.type==="solve" && solveCallback){ const cb=solveCallback; solveCallback=null; cb(d.sol); }
+        else if(d.type==="staged" && stagedCallback){ const cb=stagedCallback; stagedCallback=null; cb(d.res); }
       };
     }catch(e){ worker = null; }
     return worker;
   }
 
-  // main-thread solve (fallback when Workers are unavailable)
+  // main-thread solves (fallback when Workers are unavailable)
   function solveLocal(state){
     let sol=null;
     try{ if(window.Kociemba){ window.Kociemba.buildTables(); sol=window.Kociemba.solve(state,{maxTime:500}); } }catch(e){}
     if(!sol){ try{ sol=CS.solveCube(state); }catch(e){ sol=null; } }
     return sol;
+  }
+  function solveStagedLocal(state){ try{ return CS.solveStaged(state); }catch(e){ return null; } }
+
+  // build the per-step colour frames from the current `solution`; frames[i] is
+  // the cube after i moves (frames[0] = the entered cube).
+  function buildFrames(startState){
+    frames = [inputColors.slice()];
+    let st = CS.clone(startState);
+    for(const mv of solution){ st = CS.applySeq(st, [mv]); frames.push(CS.stateToFacelets(st)); }
   }
 
   function solve(){
@@ -1196,14 +1380,19 @@ if(typeof window!=="undefined") window.CubeSolver=CubeSolver;
     const res = CS.faceletsToState(inputColors);
     if(res.error){ setStatus("⚠ "+res.error, true); return; }
     btn.disabled = true;
+    if(solveMode==="learn") solveLearn(res.state);
+    else solveFast(res.state);
+  }
+
+  // ⚡ snelle Kociemba-oplossing (±20 zetten), één vlakke zettenlijst
+  function solveFast(state){
     setStatus("Bezig met oplossen…");
     const onSolved = (sol)=>{
-      btn.disabled = false;
+      $("solveBtn").disabled = false;
       if(sol===null||sol===undefined){ setStatus("⚠ Deze kubus kan niet opgelost worden.", true); return; }
       solution = sol;
-      frames = [inputColors.slice()];
-      let st = CS.clone(res.state);
-      for(const mv of sol){ st = CS.applySeq(st, [mv]); frames.push(CS.stateToFacelets(st)); }
+      stages = []; stageOf = [];
+      buildFrames(state);
       stepIndex = 0;
       setMode("solve");
       renderSolution();
@@ -1213,28 +1402,117 @@ if(typeof window!=="undefined") window.CubeSolver=CubeSolver;
       afterStep();
     };
     const w = getWorker();
-    if(w){
-      solveCallback = onSolved;
-      w.postMessage({type:"solve", state:res.state});
-    } else {
-      setTimeout(()=>onSolved(solveLocal(res.state)), 30);
-    }
+    if(w){ solveCallback = onSolved; w.postMessage({type:"solve", state}); }
+    else { setTimeout(()=>onSolved(solveLocal(state)), 30); }
+  }
+
+  // 📚 leer-oplossing: dezelfde kubus, opgesplitst in aanleerbare fases
+  function solveLearn(state){
+    setStatus("Leerroute berekenen…");
+    const onStaged = (staged)=>{
+      $("solveBtn").disabled = false;
+      if(!staged || !staged.stages){ setStatus("⚠ Deze kubus kan niet opgelost worden.", true); return; }
+      setupStaged(staged);
+      buildFrames(state);
+      stepIndex = 0;
+      setMode("solve");
+      renderSolution();
+      const nStages = stages.filter(s=>s.count>0).length;
+      setStatus(solution.length===0 ? "Deze kubus is al opgelost! 🎉"
+                                    : "Leerroute klaar — "+solution.length+" zetten in "+nStages+" fases");
+      if(solution.length) faceToFront(solution[0][0]);
+      afterStep();
+    };
+    const w = getWorker();
+    if(w){ stagedCallback = onStaged; w.postMessage({type:"staged", state}); }
+    else { setTimeout(()=>onStaged(solveStagedLocal(state)), 30); }
+  }
+
+  // turn a staged result into `stages` (with move-index bounds) + `stageOf`
+  function setupStaged(staged){
+    solution = staged.moves.slice();
+    stages = []; stageOf = [];
+    let idx = 0;
+    staged.stages.forEach((st, si)=>{
+      const info = STAGE_INFO[st.key] || {title:st.key, desc:"", algs:[]};
+      const start = idx, count = st.moves.length;
+      stages.push({key:st.key, title:info.title, desc:info.desc, algs:info.algs||[],
+                   start, end:start+count, count});
+      for(let k=0;k<count;k++) stageOf[idx++] = si;
+    });
   }
 
   // solution rendering -------------------------------------------------------
+  function makeChip(i){
+    const chip = document.createElement("span");
+    chip.className = "movechip";
+    chip.textContent = solution[i];
+    chip.dataset.i = i;
+    chip.onclick = ()=>{ if(animating) return; stopPlay(); snapTo(i); };
+    return chip;
+  }
   function renderSolution(){
     const list = $("movelist");
     list.innerHTML = "";
-    solution.forEach((mv,i)=>{
-      const chip = document.createElement("span");
-      chip.className = "movechip";
-      chip.textContent = mv;
-      chip.dataset.i = i;
-      chip.onclick = ()=>{ if(animating) return; stopPlay(); snapTo(i); };
-      list.appendChild(chip);
-    });
+    if(solveMode==="learn" && stages.length){
+      stages.forEach((st, si)=>{
+        if(st.count===0) return;              // overgeslagen fase (al klaar)
+        const sep = document.createElement("div");
+        sep.className = "stagesep";
+        sep.textContent = (si+1)+". "+st.title;
+        list.appendChild(sep);
+        for(let i=st.start;i<st.end;i++) list.appendChild(makeChip(i));
+      });
+    } else {
+      for(let i=0;i<solution.length;i++) list.appendChild(makeChip(i));
+    }
     updateChips();
     updateMoveInfo();
+    renderStageHeader();
+  }
+
+  // which stage is "current" for the header (stages.length == everything done)
+  function currentStageIndex(){
+    if(!stages.length) return -1;
+    if(stepIndex>=solution.length) return stages.length;
+    return stageOf[stepIndex];
+  }
+
+  function renderStageHeader(){
+    const h = $("stageHeader");
+    if(!h) return;
+    if(solveMode!=="learn" || !stages.length){ h.style.display="none"; return; }
+    h.style.display="block";
+    const csi = currentStageIndex();
+    let html = '<div class="stagepills">';
+    stages.forEach((st,i)=>{
+      const done = st.count>0 ? stepIndex>=st.end : csi>i;
+      const cur  = i===csi && csi<stages.length;
+      html += '<button class="stagepill'+(cur?' cur':(done?' done':''))+'" data-si="'+i+'">'+
+              ((done&&!cur)?'✓':(i+1))+'</button>';
+    });
+    html += '</div>';
+    if(csi>=stages.length){
+      html += '<div class="stagetitle">🎉 Helemaal opgelost!</div>'+
+              '<div class="stagedesc">Je hebt alle fases doorlopen. Druk op ✎ om het nog eens te oefenen.</div>';
+    } else {
+      const st = stages[csi];
+      html += '<div class="stagephase">Fase '+(csi+1)+' van '+stages.length+'</div>'+
+              '<div class="stagetitle">'+st.title+'</div>'+
+              '<div class="stagedesc">'+st.desc+'</div>';
+      if(st.algs && st.algs.length){
+        html += '<div class="stagealgs">';
+        st.algs.forEach(a=>{ html += '<div class="algrow"><span class="algname">'+a.name+
+                                     '</span><span class="algseq">'+a.seq+'</span></div>'; });
+        html += '</div>';
+      } else {
+        html += '<div class="algnote">Geen vast algoritme — plaats de stukken op gevoel en volg de zetten.</div>';
+      }
+    }
+    h.innerHTML = html;
+    h.querySelectorAll(".stagepill").forEach(b=>{
+      b.onclick = ()=>{ if(animating) return; stopPlay(); snapTo(stages[+b.dataset.si].start); };
+    });
   }
   function updateChips(){
     document.querySelectorAll(".movechip").forEach(c=>{
@@ -1258,6 +1536,7 @@ if(typeof window!=="undefined") window.CubeSolver=CubeSolver;
   // settle on a step without animating the turn (used for prev / jumps)
   function afterStep(){
     updateChips(); updateMoveInfo();
+    if(solveMode==="learn") renderStageHeader();
     if(mode==="solve" && stepIndex<solution.length) faceToFront(solution[stepIndex][0]);
     paintCube();
   }
@@ -1310,10 +1589,21 @@ if(typeof window!=="undefined") window.CubeSolver=CubeSolver;
   // mode / ui ----------------------------------------------------------------
   function setMode(m){
     mode=m;
-    $("editControls").style.display = m==="edit"?"flex":"none";
+    $("editControls").style.display = m==="edit"?"block":"none";
     $("solvePanel").style.display = m==="solve"?"block":"none";
     $("paletteWrap").style.display = m==="edit"?"block":"none";
     document.body.classList.toggle("solving", m==="solve");
+    document.body.classList.toggle("learnmode", m==="solve" && solveMode==="learn");
+    if(m!=="solve"){ const h=$("stageHeader"); if(h) h.style.display="none"; }
+  }
+  // snel vs. leren — bepaalt wat "Los op!" doet (alleen instelbaar in edit)
+  function setSolveMode(m){
+    solveMode = m;
+    document.querySelectorAll("#modeSeg button").forEach(b=>b.classList.toggle("active", b.dataset.m===m));
+    $("solveBtn").textContent = m==="learn" ? "📚 Leer oplossen" : "✨ Los op!";
+    $("modeHint").textContent = m==="learn"
+      ? "Leer de kubus zelf oplossen: 7 fases met de klassieke trucjes."
+      : "Los de kubus in ±20 zetten op.";
   }
   function setStatus(t, warn){
     const s=$("status"); s.textContent=t||""; s.classList.toggle("warn", !!warn);
@@ -1327,6 +1617,8 @@ if(typeof window!=="undefined") window.CubeSolver=CubeSolver;
     $("scrambleBtn").onclick = scramble;
     $("resetBtn").onclick = reset;
     $("solveBtn").onclick = solve;
+    document.querySelectorAll("#modeSeg button").forEach(b=>{ b.onclick = ()=>setSolveMode(b.dataset.m); });
+    setSolveMode("fast");
     $("rotSide").onclick = ()=>rotateView(0,-90);
     $("rotUp").onclick = ()=>rotateView(90,0);
     $("editBtn").onclick = ()=>{ stopPlay(); setMode("edit"); setStatus(""); paintCube(); };
