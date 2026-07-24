@@ -1084,9 +1084,14 @@ if(typeof window!=="undefined") window.CubeSolver=CubeSolver;
 (function(){
   const CS = window.CubeSolver;
 
-  // colour index: 0=U(wit) 1=R(rood) 2=F(groen) 3=D(geel) 4=L(oranje) 5=B(blauw)
-  const COLORS = ["#f7f7f7","#c41e3a","#1faa47","#ffd500","#ff7a1a","#0051ba"];
-  const COLOR_NAMES = ["Wit","Rood","Groen","Geel","Oranje","Blauw"];
+  // Kleur per vlak-index: 0=U 1=R 2=F 3=D 4=L 5=B. De solver bouwt de D-laag
+  // (onderkant) als eerste — die tonen we WIT — en eindigt met de U-laag
+  // (bovenkant), die we GEEL tonen. Zo los je (net als in elke beginnershand-
+  // leiding) de witte laag eerst op en eindig je met geel bovenaan. Alleen de
+  // weergave verschilt: de solver en de algoritmes werken op vlak-indexen en
+  // veranderen hier niets van.
+  const COLORS = ["#ffd500","#c41e3a","#1faa47","#f7f7f7","#ff7a1a","#0051ba"]; // U=geel, D=wit
+  const COLOR_NAMES = ["Geel","Rood","Groen","Wit","Oranje","Blauw"];
   const FACE_KEYS = ["U","R","F","D","L","B"];
   const FACE_NAMES = {U:"Boven",R:"Rechts",F:"Voor",D:"Onder",L:"Links",B:"Achter"};
 
@@ -1144,15 +1149,15 @@ if(typeof window!=="undefined") window.CubeSolver=CubeSolver;
   // is de "schone" vorm die je leert; de zetjes in de lijst kunnen er een extra
   // U-draai (AUF) omheen hebben om de kubus goed te zetten.
   const STAGE_INFO = {
-    cross:    {title:"Bodemkruis",      desc:"Leg de vier randen van de onderste laag goed, zodat er een kruis ontstaat dat bij de zijkleuren past. Dit doe je op gevoel.", algs:[]},
-    corners1: {title:"Onderste hoeken", desc:"Zet de vier hoekstukken van de onderste laag op hun plek. De eerste laag is nu helemaal af.", algs:[]},
+    cross:    {title:"Wit kruis",       desc:"Leg de vier witte randen onderaan goed, zodat er een wit kruis ontstaat dat aan de zijkanten bij de middens past. Dit doe je op gevoel.", algs:[]},
+    corners1: {title:"Witte hoeken",    desc:"Zet de vier witte hoeken op hun plek. De witte onderlaag is nu helemaal af.", algs:[]},
     middle:   {title:"Middelste laag",  desc:"Plaats de vier randen van de middelste laag met de insteek-truc (en de gespiegelde versie voor de andere kant).",
                algs:[{name:"Rechts insteken", seq:"U R U' R' U' F' U F"},{name:"Links insteken", seq:"U' L' U L U F U' F'"}]},
-    eo:       {title:"Bovenkruis",      desc:"Draai de bovenste randen zodat de bovenkant een kruis vormt. Herhaal de truc tot het kruis er staat.",
+    eo:       {title:"Geel kruis",      desc:"Draai de bovenste randen zodat er bovenop een geel kruis ontstaat. Herhaal de truc tot het kruis er staat.",
                algs:[{name:"Kruis-truc", seq:"F R U R' U' F'"}]},
-    co:       {title:"Bovenvlak",       desc:"Draai de bovenste hoeken zodat de hele bovenkant één egale kleur wordt.",
+    co:       {title:"Geel vlak",       desc:"Draai de bovenste hoeken zodat de hele bovenkant geel wordt.",
                algs:[{name:"Sune", seq:"R U R' U R U2 R'"},{name:"Anti-Sune", seq:"R U2 R' U' R U' R'"}]},
-    cp:       {title:"Hoeken plaatsen", desc:"Wissel de bovenste hoeken naar hun juiste plek. De kleuren staan al goed op de bovenkant.",
+    cp:       {title:"Hoeken plaatsen", desc:"Wissel de bovenste hoeken naar hun juiste plek. Het geel staat al goed bovenop.",
                algs:[{name:"Hoekwissel (A-perm)", seq:"R' F R' B2 R F' R' B2 R2"}]},
     ep:       {title:"Randen plaatsen", desc:"Wissel als laatste de bovenste randen om. Daarna is de kubus helemaal opgelost!",
                algs:[{name:"Randwissel (U-perm)", seq:"R U' R U R U R U' R' U' R2"}]},
