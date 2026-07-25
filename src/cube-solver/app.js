@@ -35,8 +35,6 @@
     "B":"Achterkant met de klok mee","B'":"Achterkant tegen de klok in","B2":"Achterkant halve draai",
   };
 
-  // Cube-rotation (rx,ry deg) that brings a given face straight to the viewer.
-  const FACE_VIEW = { F:[0,0], B:[0,180], R:[0,-90], L:[0,90], U:[-90,0], D:[90,0] };
 
   // Per-move animation: which layer rotates and around which CSS axis/angle.
   // Coordinates are CSS (x right, y DOWN, z toward viewer). Derived so the
@@ -193,18 +191,8 @@
     cube.style.setProperty("--ry", viewRY+"deg");
   }
   function rotateView(dx,dy){ viewRX+=dx; viewRY+=dy; applyView(); }
-  function faceToFront(face){
-    const [tx,ty] = FACE_VIEW[face] || [0,0];
-    viewRX = nearestAngle(viewRX, tx);
-    viewRY = nearestAngle(viewRY, ty);
-    applyView();
-  }
-  function nearestAngle(current, target){
-    let t = target;
-    while(t - current > 180) t -= 360;
-    while(t - current < -180) t += 360;
-    return t;
-  }
+  // reset naar de standaard 3/4-kijkhoek (geel boven, groen voor, oranje rechts)
+  function resetView(){ viewRX = 0; viewRY = 0; applyView(); }
 
   function onSticker(idx){
     if(mode!=="edit") return;
@@ -331,7 +319,7 @@
       renderSolution();
       setStatus(sol.length===0 ? "Deze kubus is al opgelost! 🎉"
                                : "Opgelost in "+sol.length+" zetten 🎉");
-      if(solution.length) faceToFront(solution[0][0]);
+      resetView();
       afterStep();
     };
     const w = getWorker();
@@ -353,7 +341,7 @@
       const nStages = stages.filter(s=>s.count>0).length;
       setStatus(solution.length===0 ? "Deze kubus is al opgelost! 🎉"
                                     : "Leerroute klaar — "+solution.length+" zetten in "+nStages+" fases");
-      if(solution.length) faceToFront(solution[0][0]);
+      resetView();
       afterStep();
     };
     const w = getWorker();
@@ -470,7 +458,6 @@
   function afterStep(){
     updateChips(); updateMoveInfo();
     if(solveMode==="learn") renderStageHeader();
-    if(mode==="solve" && stepIndex<solution.length) faceToFront(solution[stepIndex][0]);
     paintCube();
   }
   function snapTo(i){
@@ -483,20 +470,17 @@
     if(animating) return;
     if(stepIndex>=solution.length){ return; }
     const mv = solution[stepIndex];
-    faceToFront(mv[0]);                       // make sure the layer faces us
-    // give the cube a moment to rotate into view, then turn the layer
+    // de kubus blijft staan; alleen de laag draait (in de huidige kijkhoek)
     animating = true;
-    setTimeout(()=>{
-      animateTurn(mv, ()=>{
-        animating = false;
-        stepIndex++;
-        afterStep();
-        if(playing){
-          if(stepIndex>=solution.length){ stopPlay(); }
-          else { playTimer = setTimeout(advance, 350); }
-        }
-      });
-    }, 220);
+    animateTurn(mv, ()=>{
+      animating = false;
+      stepIndex++;
+      afterStep();
+      if(playing){
+        if(stepIndex>=solution.length){ stopPlay(); }
+        else { playTimer = setTimeout(advance, 350); }
+      }
+    });
   }
 
   function step(d){
