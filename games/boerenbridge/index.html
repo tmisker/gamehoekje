@@ -67,6 +67,15 @@
     details.lb summary::after{content:' ▸';color:var(--muted)}
     details.lb[open] summary::after{content:' ▾'}
     details.lb table{margin-top:10px}
+    .lb-filter{margin-top:12px}
+    .lb-filter .hint{color:var(--muted);font-size:.8rem;margin-bottom:6px}
+    .chips{display:flex;flex-wrap:wrap;gap:6px}
+    .chip{
+      padding:5px 11px;border:1px solid var(--line);border-radius:999px;background:var(--card2);
+      color:var(--muted);font-size:.82rem;font-weight:600;width:auto;
+    }
+    .chip.on{background:var(--red-dim);border-color:var(--red);color:var(--text)}
+    .lb-count{color:var(--muted);font-size:.8rem;margin-top:10px}
 
     /* Game */
     #game{width:100%;max-width:600px;display:none;flex-direction:column;gap:14px}
@@ -169,7 +178,9 @@
     <div class="panel">
       <details class="lb" id="lbDetails">
         <summary>🏆 Klassement</summary>
+        <div class="lb-filter" id="lbFilter"></div>
         <div id="lbArea" style="overflow-x:auto"></div>
+        <div class="lb-count" id="lbCount"></div>
       </details>
     </div>
     <a class="display-link" href="display/">📺 Scherm-weergave openen</a>
@@ -212,6 +223,12 @@
   const API = '../../api/boerenbridge';
   let game = null; // verrijkt serverobject; de server is autoritatief
   let lastFailed = null; // {run} — laatst mislukte actie, voor "Opnieuw proberen"
+  // Namen die het klassement buiten beschouwing laat: potjes waarin zij
+  // meededen tellen niet mee. Blijft staan tussen bezoeken.
+  const LB_KEY = 'bb-klassement-zonder';
+  let lbExclude = [];
+  try{ lbExclude = JSON.parse(localStorage.getItem(LB_KEY)) || []; }catch(e){}
+  if(!Array.isArray(lbExclude)) lbExclude = [];
 
   const $=s=>document.querySelector(s);
 
@@ -285,9 +302,9 @@
   }
 
   async function loadStartData(){
-    const [list, lb] = await Promise.all([
+    const [list] = await Promise.all([
       api('GET','/games?status=active'),
-      api('GET','/leaderboard'),
+      loadLeaderboard(),
     ]);
     // hervat-lijst
     const panel=$('#resumePanel'), listDiv=$('#resumeList');
@@ -305,21 +322,65 @@
       },'#startConn'));
       listDiv.appendChild(btn);
     });
-    // bekende namen + klassement
-    const dl=$('#knownNames');
-    dl.innerHTML='';
-    lb.leaderboard.forEach(e=>{
-      const opt=document.createElement('option');
-      opt.value=e.name;
-      dl.appendChild(opt);
-    });
-    renderLeaderboard(lb.leaderboard);
   }
 
-  function renderLeaderboard(rows){
-    const area=$('#lbArea');
+  async function loadLeaderboard(){
+    const qs = lbExclude.map(n=>'exclude='+encodeURIComponent(n)).join('&');
+    const lb = await api('GET','/leaderboard'+(qs?'?'+qs:''));
+    // Bekende namen komen uit de volledige spelerslijst, niet uit de
+    // gefilterde rijen — anders verdwijnen ze uit de suggesties.
+    const dl=$('#knownNames');
+    dl.innerHTML='';
+    lb.players.forEach(name=>{
+      const opt=document.createElement('option');
+      opt.value=name;
+      dl.appendChild(opt);
+    });
+    renderLbFilter(lb);
+    renderLeaderboard(lb);
+    $('#lbCount').textContent = lb.excluded.length
+      ? lb.gamesCounted+' van '+lb.gamesTotal+' potjes tellen mee'
+      : '';
+  }
+
+  // Chips om spelers uit te sluiten; klik = potjes met die speler weglaten.
+  function renderLbFilter(lb){
+    const box=$('#lbFilter');
+    box.innerHTML='';
+    if(!lb.players.length) return;
+    const hint=document.createElement('div');
+    hint.className='hint';
+    hint.textContent='Potjes weglaten waarin deze spelers meededen:';
+    const chips=document.createElement('div');
+    chips.className='chips';
+    const off = new Set(lb.excluded.map(n=>n.toLowerCase()));
+    lb.players.forEach(name=>{
+      const btn=document.createElement('button');
+      btn.className='chip'+(off.has(name.toLowerCase())?' on':'');
+      btn.textContent=name;
+      btn.addEventListener('click',()=>toggleExclude(name));
+      chips.appendChild(btn);
+    });
+    box.appendChild(hint);
+    box.appendChild(chips);
+  }
+
+  function toggleExclude(name){
+    const key=name.toLowerCase();
+    lbExclude = lbExclude.some(n=>n.toLowerCase()===key)
+      ? lbExclude.filter(n=>n.toLowerCase()!==key)
+      : lbExclude.concat(name);
+    try{ localStorage.setItem(LB_KEY, JSON.stringify(lbExclude)); }catch(e){}
+    attempt(loadLeaderboard,'#startConn');
+  }
+
+  function renderLeaderboard(lb){
+    const area=$('#lbArea'), rows=lb.leaderboard;
     if(!rows.length){
-      area.innerHTML='<p class="sub" style="margin:10px 0 0">Nog geen afgeronde spellen.</p>';
+      const msg = lb.excluded.length
+        ? 'Geen potjes zonder '+lb.excluded.join(', ')+'.'
+        : 'Nog geen afgeronde spellen.';
+      area.innerHTML='<p class="sub" style="margin:10px 0 0">'+esc(msg)+'</p>';
       return;
     }
     let html='<table><thead><tr><th>Speler</th><th>Potjes</th><th>Gewonnen</th><th>Gem.</th><th>Beste</th></tr></thead><tbody>';

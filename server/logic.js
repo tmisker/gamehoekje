@@ -177,14 +177,40 @@ function gameSummary(game) {
   };
 }
 
-// Leaderboard over afgeronde spellen; spelers gekoppeld op naam (case-insensitief).
-function leaderboard(games) {
+const nameKey = name => String(name == null ? '' : name).trim().toLowerCase();
+
+// Namen normaliseren tot een set sleutels; lege waarden vallen weg.
+function excludeSet(exclude) {
+  return new Set((Array.isArray(exclude) ? exclude : []).map(nameKey).filter(Boolean));
+}
+
+// Afgeronde spellen, eventueel zonder de potjes waarin een uitgesloten speler
+// meedeed. Uitsluiten geldt per potje, niet per speler: één kind aan tafel
+// haalt het hele spel uit het klassement.
+function finishedGames(games, exclude) {
+  const skip = excludeSet(exclude);
+  return games.filter(g =>
+    g.status === 'finished' && !g.players.some(n => skip.has(nameKey(n))));
+}
+
+// Alle spelers die in een afgerond spel voorkomen — de keuzelijst van het
+// filter (dus altijd ongefilterd, anders verdwijnt je eigen keuze).
+function leaderboardPlayers(games) {
   const byKey = new Map();
   for (const game of games) {
     if (game.status !== 'finished') continue;
+    for (const name of game.players) byKey.set(nameKey(name), name); // laatste schrijfwijze wint
+  }
+  return [...byKey.values()].sort((a, b) => a.localeCompare(b, 'nl'));
+}
+
+// Leaderboard over afgeronde spellen; spelers gekoppeld op naam (case-insensitief).
+function leaderboard(games, exclude) {
+  const byKey = new Map();
+  for (const game of finishedGames(games, exclude)) {
     const totals = getTotals(game);
     game.players.forEach((name, i) => {
-      const key = name.trim().toLowerCase();
+      const key = nameKey(name);
       let e = byKey.get(key);
       if (!e) {
         e = { name, gamesPlayed: 0, wins: 0, totalPoints: 0, bestScore: -Infinity };
@@ -208,9 +234,24 @@ function leaderboard(games) {
   return rows;
 }
 
+// Payload voor /leaderboard: rijen + de keuzelijst + hoeveel potjes meetellen.
+function leaderboardView(games, exclude) {
+  const skip = excludeSet(exclude);
+  const players = leaderboardPlayers(games);
+  const excluded = players.filter(n => skip.has(nameKey(n)));
+  return {
+    leaderboard: leaderboard(games, exclude),
+    players,
+    excluded,
+    gamesCounted: finishedGames(games, exclude).length,
+    gamesTotal: finishedGames(games).length,
+  };
+}
+
 module.exports = {
   SUITS, SUIT_NAMES, SUIT_COLORS,
   buildRounds, scoreRound, dealerIdx, playerOrder,
   createGame, applyPredictions, applyActuals, undo, abandon,
-  getTotals, enrich, gameSummary, leaderboard, httpError,
+  getTotals, enrich, gameSummary,
+  finishedGames, leaderboardPlayers, leaderboard, leaderboardView, httpError,
 };
