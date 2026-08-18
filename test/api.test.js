@@ -222,6 +222,43 @@ async function main() {
     console.log('OK leaderboard-aggregatie (incl. case-insensitieve namen)');
   }
 
+  // --- klassement zonder bepaalde spelers ---
+  {
+    // Eén potje waarin "Kind" meedoet en wint; dat potje moet uit het
+    // klassement vallen zodra Kind wordt uitgesloten.
+    const pick = (r, cards) => ({ preds: [cards, 0, 0], acts: [cards, 0, 0] });
+    await playGame(['Kind', 'Vera', 'Wim'], pick);
+
+    const full = (await api('GET', '/api/boerenbridge/leaderboard')).body;
+    assert.ok(full.players.includes('Kind'), 'keuzelijst bevat alle spelers');
+    assert.deepEqual(full.excluded, []);
+    assert.equal(full.gamesCounted, full.gamesTotal);
+    const veraFull = full.leaderboard.find(e => e.name.toLowerCase() === 'vera');
+    assert.equal(veraFull.gamesPlayed, 3, 'vera speelde 3 potjes');
+
+    const filtered = (await api('GET', '/api/boerenbridge/leaderboard?exclude=kind')).body;
+    assert.deepEqual(filtered.excluded, ['Kind'], 'schrijfwijze uit de spellen');
+    assert.ok(filtered.players.includes('Kind'), 'uitgesloten speler blijft kiesbaar');
+    assert.ok(!filtered.leaderboard.some(e => e.name === 'Kind'), 'Kind niet in rijen');
+    assert.equal(filtered.gamesCounted, filtered.gamesTotal - 1);
+    const veraFiltered = filtered.leaderboard.find(e => e.name.toLowerCase() === 'vera');
+    assert.equal(veraFiltered.gamesPlayed, 2, 'potje met Kind telt niet mee');
+    assert.equal(veraFiltered.wins, 2, 'verlies tegen Kind telt niet mee');
+
+    // Meerdere namen, komma-vorm en losse params geven hetzelfde resultaat.
+    const a = (await api('GET', '/api/boerenbridge/leaderboard?exclude=Kind,Wim')).body;
+    const b = (await api('GET', '/api/boerenbridge/leaderboard?exclude=kind&exclude=WIM')).body;
+    assert.deepEqual(a.leaderboard, b.leaderboard, 'komma == herhaalde param');
+    // Vera speelde alleen potjes met Wim erbij → ze verdwijnt volledig.
+    assert.ok(!a.leaderboard.some(e => e.name.toLowerCase() === 'vera'));
+    assert.equal(a.gamesCounted, full.gamesTotal - 3, 'drie potjes met Wim eruit');
+    // Lege/onbekende waarden veranderen niets.
+    const noop = (await api('GET', '/api/boerenbridge/leaderboard?exclude=,%20&exclude=Niemand')).body;
+    assert.deepEqual(noop.leaderboard, full.leaderboard);
+    assert.deepEqual(noop.excluded, []);
+    console.log('OK klassement-filter (potjes zonder bepaalde spelers)');
+  }
+
   // --- current-snapshot: actief spel > recent afgerond > idle ---
   {
     let cur = (await api('GET', '/api/boerenbridge/current')).body;

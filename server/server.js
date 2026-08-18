@@ -152,7 +152,10 @@ async function handleApi(req, res, pathname, query) {
   }
 
   if (req.method === 'GET' && sub[0] === 'leaderboard' && sub.length === 1) {
-    return sendJson(res, 200, { leaderboard: logic.leaderboard(games) });
+    // ?exclude=Naam&exclude=Naam of ?exclude=Naam,Naam — potjes met deze
+    // spelers tellen niet mee (zie logic.finishedGames).
+    const exclude = query.getAll('exclude').flatMap(v => v.split(','));
+    return sendJson(res, 200, logic.leaderboardView(games, exclude));
   }
 
   if (sub[0] === 'games') {

@@ -36,6 +36,10 @@ De server (Node ≥ 18, geen npm-dependencies) serveert de hele site op
 2. Open `games/boerenbridge/display/` op een tweede apparaat (bijv. een iPad
    op tafel) — dit scorebord volgt het spel live via Server-Sent Events.
    Zonder actief spel toont het scherm het klassement.
+3. Onder 🏆 Klassement op de telefoon kun je spelers aantikken om potjes
+   waarin zij meededen weg te laten — handig als er af en toe kinderen
+   meespelen. Je keuze blijft op dat toestel bewaard; het display toont
+   altijd het volledige klassement.
 
 Er is bewust geen authenticatie of koppelcode: dit is bedoeld voor een
 vertrouwd thuisnetwerk. Zet het niet zonder extra maatregelen (reverse proxy
