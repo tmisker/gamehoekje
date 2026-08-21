@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f0f12">
+  <title>Klaverjas – Score bijhouden</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    :root{
+      --bg:#0f0f12;--card:#1b1b20;--card2:#232329;--line:#2e2e36;
+      --text:#f4f4f6;--muted:#9a9aa3;--accent:#4caf50;--accent-dim:rgba(76,175,80,.15);
+      --red:#e53935;--red-dim:rgba(229,57,53,.12);--gold:#ffd600;
+    }
+    html{height:100%}
+    body{
+      min-height:100%;background:var(--bg);color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+      display:flex;flex-direction:column;align-items:center;padding:16px 10px 60px;
+    }
+    a.backlink{
+      align-self:flex-start;color:var(--muted);text-decoration:none;font-size:.9rem;
+      margin-bottom:12px;
+    }
+    a.backlink:hover{color:var(--accent)}
+    h1{font-size:1.5rem;margin-bottom:4px;text-align:center}
+    .sub{color:var(--muted);font-size:.85rem;margin-bottom:16px;text-align:center}
+
+    /* Start / setup */
+    #start{max-width:400px;width:100%;display:flex;flex-direction:column;gap:14px}
+    .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+    .panel h2{font-size:1rem;margin-bottom:12px}
+    .panel label{display:block;margin-bottom:6px;font-weight:600;font-size:.95rem}
+    .player-inputs{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+    .player-inputs .seat{display:flex;align-items:center;gap:8px}
+    .player-inputs .seat .num{
+      width:26px;height:26px;flex:none;border-radius:50%;font-size:.78rem;font-weight:700;
+      display:flex;align-items:center;justify-content:center;background:var(--card2);
+      border:1px solid var(--line);color:var(--muted);
+    }
+    .player-inputs input{
+      flex:1;min-width:0;padding:10px;border:1px solid var(--line);border-radius:8px;
+      background:var(--card2);color:var(--text);font-size:1rem;
+    }
+    .hint{color:var(--muted);font-size:.8rem;line-height:1.4}
+    .team-preview{
+      display:flex;gap:8px;margin:10px 0 14px;
+    }
+    .team-preview div{
+      flex:1;background:var(--card2);border:1px solid var(--line);border-radius:10px;
+      padding:8px 10px;font-size:.85rem;font-weight:600;text-align:center;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    }
+    button{
+      padding:10px 20px;border:none;border-radius:10px;font-size:1rem;font-weight:700;
+      cursor:pointer;transition:background .15s,transform .1s;color:#fff;
+    }
+    button:active{transform:scale(.96)}
+    button:disabled{opacity:.5;cursor:default}
+    .btn-primary{background:var(--accent);width:100%}
+    .btn-primary:hover{background:#43a047}
+    .btn-small{padding:7px 14px;font-size:.85rem;border-radius:8px;background:#3a3a3c}
+    .btn-small:hover{background:#555}
+    .btn-danger{background:var(--red)}
+    .btn-danger:hover{background:#c62828}
+
+    .resume-item{
+      display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;
+      background:var(--card2);border:1px solid var(--line);border-radius:10px;
+      padding:12px;margin-bottom:8px;font-weight:400;
+    }
+    .resume-item:hover{border-color:var(--accent)}
+    .resume-item .who{font-weight:700}
+    .resume-item .meta{color:var(--muted);font-size:.82rem}
+    .display-link{display:block;text-align:center;color:var(--muted);font-size:.9rem;text-decoration:none;padding:6px}
+    .display-link:hover{color:var(--accent)}
+    details.lb summary{cursor:pointer;font-weight:700;font-size:1rem;list-style:none}
+    details.lb summary::-webkit-details-marker{display:none}
+    details.lb summary::after{content:' ▸';color:var(--muted)}
+    details.lb[open] summary::after{content:' ▾'}
+    details.lb table{margin-top:10px}
+    .lb-filter{margin-top:12px}
+    .lb-filter .hint{margin-bottom:6px}
+    .chips{display:flex;flex-wrap:wrap;gap:6px}
+    .chip{
+      padding:5px 11px;border:1px solid var(--line);border-radius:999px;background:var(--card2);
+      color:var(--muted);font-size:.82rem;font-weight:600;width:auto;
+    }
+    .chip.on{background:var(--red-dim);border-color:var(--red);color:var(--text)}
+    .lb-count{color:var(--muted);font-size:.8rem;margin-top:10px}
+
+    /* Spel */
+    #game{width:100%;max-width:600px;display:none;flex-direction:column;gap:14px}
+    .round-header{
+      text-align:center;background:var(--card);border:1px solid var(--line);
+      border-radius:12px;padding:14px;
+    }
+    .round-header .step{font-size:1.1rem;font-weight:700}
+    .round-header .dealer{color:var(--gold);font-size:.9rem;margin-top:6px;font-weight:600}
+    .round-header .voorhand{color:var(--muted);font-size:.82rem;margin-top:2px}
+
+    .totals{display:flex;gap:10px}
+    .totals .tcard{
+      flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;
+      padding:12px;text-align:center;min-width:0;
+    }
+    .totals .tcard.lead{border-color:var(--accent)}
+    .totals .tname{
+      font-size:.82rem;color:var(--muted);font-weight:600;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    }
+    .totals .tscore{font-size:1.8rem;font-weight:800;margin-top:2px}
+
+    .input-section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+    .field{margin-bottom:14px}
+    .field:last-child{margin-bottom:0}
+    .field > label{display:block;font-size:.95rem;font-weight:600;margin-bottom:8px;color:var(--muted)}
+    .pick{display:flex;gap:8px}
+    .pick button{
+      flex:1;min-width:0;background:var(--card2);border:1px solid var(--line);color:var(--muted);
+      font-size:.9rem;padding:12px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    }
+    .pick button.on{background:var(--accent-dim);border-color:var(--accent);color:var(--text)}
+    .pick.suits button{font-size:1.5rem;padding:10px 4px;font-weight:400}
+    .pick.suits button.on{background:var(--card2)}
+    .pts-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+    .pts-row input{
+      width:90px;padding:10px;border:1px solid var(--line);border-radius:8px;
+      background:var(--card2);color:var(--text);font-size:1.2rem;text-align:center;font-weight:700;
+    }
+    .pts-row .pname{
+      flex:1;min-width:0;font-size:.9rem;font-weight:600;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    }
+    /* De spelende partij: die telling gaat naar de server, de rest is afgeleid. */
+    .pts-row.playing .pname{color:var(--text)}
+    .pts-row.playing .pname::before{content:'▸ ';color:var(--accent)}
+    .pts-row:not(.playing) .pname{color:var(--muted)}
+    .pts-row.playing input{border-color:var(--accent)}
+    .label-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+    .label-row .of{font-size:.8rem;font-weight:400;color:var(--muted)}
+    .flag-btn{
+      flex:1;background:var(--card2);border:1px solid var(--line);color:var(--muted);
+      font-size:.95rem;padding:12px 8px;
+    }
+    .flag-btn.nat.on{background:var(--red-dim);border-color:var(--red);color:#ff8a85}
+    .flag-btn.pit.on{background:rgba(255,214,0,.14);border-color:var(--gold);color:var(--gold)}
+    .pts-row.off{opacity:.4}
+    .pts-row input:disabled{cursor:not-allowed}
+    .phase-hint{color:var(--muted);font-size:.82rem;margin-bottom:12px;line-height:1.4}
+    /* Gekozen troef + spelende partij, vastgelegd bij de start van de ronde. */
+    .chosen{
+      display:flex;align-items:center;gap:14px;background:var(--card2);
+      border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:14px;
+    }
+    .chosen .suit{font-size:2.2rem;line-height:1}
+    .chosen .txt{font-size:.9rem;color:var(--muted);line-height:1.35}
+    .chosen .txt b{color:var(--text);font-size:1rem}
+    .roem-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .roem-row:last-child{margin-bottom:0}
+    .roem-row .rname{
+      flex:1;min-width:0;font-size:.9rem;font-weight:600;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    }
+    .roem-row input{
+      width:64px;padding:8px;border:1px solid var(--line);border-radius:8px;
+      background:var(--card2);color:var(--text);font-size:1rem;text-align:center;
+    }
+    .roem-row .add{
+      padding:6px 9px;font-size:.78rem;border-radius:7px;background:var(--card2);
+      border:1px solid var(--line);color:var(--muted);width:auto;
+    }
+    .roem-row .add:hover{border-color:var(--accent);color:var(--text)}
+    .warn{color:var(--gold);font-size:.82rem;text-align:center;margin-top:4px}
+    .error{color:var(--red);font-size:.82rem;text-align:center;margin-top:4px}
+    .notice{
+      background:var(--accent-dim);border:1px solid var(--accent);border-radius:10px;
+      padding:10px;font-size:.88rem;text-align:center;
+    }
+    .notice.bad{background:var(--red-dim);border-color:var(--red)}
+    .conn-banner{
+      display:none;background:var(--red-dim);border:1px solid var(--red);border-radius:10px;
+      padding:10px;text-align:center;font-size:.9rem;
+    }
+    .conn-banner button{margin-top:8px}
+    .btn-row{display:flex;gap:8px;justify-content:center;margin-top:6px}
+
+    /* Scorebord */
+    .scoreboard{
+      background:var(--card);border:1px solid var(--line);border-radius:12px;
+      padding:14px;overflow-x:auto;
+    }
+    table{width:100%;border-collapse:collapse;font-size:.85rem;white-space:nowrap}
+    th,td{padding:6px 8px;text-align:center;border-bottom:1px solid var(--line)}
+    th{color:var(--muted);font-weight:600}
+    th:first-child,td:first-child{text-align:left}
+    td.played{font-weight:800}
+    td.nat{color:var(--red)}
+    td.win{color:var(--accent)}
+    tr.last-round{background:var(--accent-dim)}
+    tfoot td{font-weight:800;font-size:1rem;border-top:2px solid var(--line)}
+    .legend{color:var(--muted);font-size:.75rem;margin-top:8px;line-height:1.5}
+    .empty{color:var(--muted);font-size:.85rem;text-align:center;padding:10px 0}
+
+    .winner-banner{
+      text-align:center;padding:20px;background:var(--card);border:2px solid var(--gold);
+      border-radius:14px;
+    }
+    .winner-banner .trophy{font-size:3rem}
+    .winner-banner .name{font-size:1.3rem;font-weight:800;color:var(--gold);margin-top:6px}
+    .winner-banner .score{color:var(--muted);margin-top:4px}
+
+    @media(max-width:400px){
+      table{font-size:.78rem}
+      th,td{padding:4px 5px}
+      .totals .tscore{font-size:1.5rem}
+    }
+  </style>
+</head>
+<body>
+  <a class="backlink" href="../../index.html">← Alle spellen</a>
+  <h1>🂡 Klaverjas</h1>
+  <p class="sub">Score bijhouden · 16 rondes</p>
+
+  <!-- START -->
+  <div id="start">
+    <div class="conn-banner" id="startConn">
+      Geen verbinding met de server
+      <button class="btn-small" id="startRetry">Opnieuw proberen</button>
+    </div>
+    <div class="panel" id="resumePanel" style="display:none">
+      <h2>Verder spelen</h2>
+      <div id="resumeList"></div>
+    </div>
+    <div class="panel">
+      <h2>Nieuw potje</h2>
+      <label>Namen — op zitvolgorde</label>
+      <div class="player-inputs" id="nameInputs"></div>
+      <datalist id="knownNames"></datalist>
+      <p class="hint">Maten zitten tegenover elkaar: 1 &amp; 3 vormen samen een team, 2 &amp; 4 ook.</p>
+      <div class="team-preview" id="teamPreview"></div>
+      <div id="startWarn"></div>
+      <button class="btn-primary" id="startBtn">Starten</button>
+    </div>
+    <a class="display-link" href="display/">📺 Scorebord openen</a>
+    <div class="panel">
+      <details class="lb" id="lbDetails">
+        <summary>🏆 Klassement</summary>
+        <div class="lb-filter" id="lbFilter"></div>
+        <div id="lbArea" style="overflow-x:auto"></div>
+        <div class="lb-count" id="lbCount"></div>
+      </details>
+    </div>
+  </div>
+
+  <!-- SPEL -->
+  <div id="game">
+    <div class="round-header">
+      <div class="step" id="roundStep"></div>
+      <div class="dealer" id="roundDealer"></div>
+      <div class="voorhand" id="roundVoorhand"></div>
+    </div>
+
+    <div class="totals" id="totalsArea"></div>
+
+    <div class="conn-banner" id="gameConn">
+      Geen verbinding met de server
+      <button class="btn-small" id="gameRetry">Opnieuw proberen</button>
+    </div>
+
+    <div id="noticeArea"></div>
+    <div class="input-section" id="inputSection"></div>
+
+    <div class="scoreboard">
+      <table id="scoreTable">
+        <thead id="scoreHead"></thead>
+        <tbody id="scoreBody"></tbody>
+        <tfoot id="scoreFoot"></tfoot>
+      </table>
+      <div class="legend" id="scoreLegend"></div>
+    </div>
+
+    <div id="winnerArea"></div>
+
+    <div class="btn-row">
+      <button class="btn-small" id="backToStartBtn">↩ Naar overzicht</button>
+      <button class="btn-small btn-danger" id="abandonBtn">Potje afbreken</button>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const API = '../../api/klaverjas';
+  const N_SEATS = 4;
+  let game = null;      // verrijkt serverobject; de server is autoritatief
+  let choice = null;    // troefkeuze aan het begin van de ronde
+  let draft = null;     // telling van de ronde die nog niet is opgeslagen
+  let lastFailed = null;
+  // Namen die het klassement buiten beschouwing laat: potjes waarin zij
+  // meededen tellen niet mee. Blijft staan tussen bezoeken.
+  const LB_KEY = 'kj-klassement-zonder';
+  let lbExclude = [];
+  try{ lbExclude = JSON.parse(localStorage.getItem(LB_KEY)) || []; }catch(e){}
+  if(!Array.isArray(lbExclude)) lbExclude = [];
+
+  const $=s=>document.querySelector(s);
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // ---- API-helper ----
+  async function api(method, path, body){
+    const res = await fetch(API + path, {
+      method,
+      headers: body ? {'Content-Type':'application/json'} : {},
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    let data = null;
+    try{ data = await res.json(); }catch(e){}
+    if(!res.ok){
+      const err = new Error((data && data.error) || 'Serverfout');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
+  // Voert een actie uit; bij netwerk/serverfout → banner + retry, bij 409 → refetch.
+  async function attempt(run, connBannerId){
+    lastFailed = null;
+    $('#startConn').style.display='none';
+    $('#gameConn').style.display='none';
+    try{
+      await run();
+    }catch(err){
+      if(err.status === 409 && game){
+        game = await api('GET','/games/'+game.id).catch(()=>null);
+        if(game) renderGame({text:'Potje is elders bijgewerkt', bad:true});
+        else showStart();
+        return;
+      }
+      if(err.status === 404 && game){ game=null; showStart(); return; }
+      if(err.status && err.status < 500){
+        const warn = $('#roundWarn') || $('#startWarn');
+        if(warn) warn.innerHTML = '<span class="error">'+esc(err.message)+'</span>';
+        return;
+      }
+      lastFailed = run;
+      $(connBannerId).style.display='block';
+    }
+  }
+  $('#startRetry').addEventListener('click',()=>{ if(lastFailed) attempt(lastFailed,'#startConn'); });
+  $('#gameRetry').addEventListener('click',()=>{ if(lastFailed) attempt(lastFailed,'#gameConn'); });
+
+  // ---- startscherm ----
+  const nameDiv=$('#nameInputs');
+  for(let i=0;i<N_SEATS;i++){
+    const row=document.createElement('div');
+    row.className='seat';
+    row.innerHTML='<span class="num">'+(i+1)+'</span>';
+    const inp=document.createElement('input');
+    inp.placeholder='Speler '+(i+1);
+    inp.setAttribute('list','knownNames');
+    inp.addEventListener('input',renderTeamPreview);
+    row.appendChild(inp);
+    nameDiv.appendChild(row);
+  }
+  const seatInputs=()=>[...nameDiv.querySelectorAll('input')];
+  const seatNames=()=>seatInputs().map((inp,i)=>inp.value.trim()||('Speler '+(i+1)));
+
+  function renderTeamPreview(){
+    const n=seatNames();
+    $('#teamPreview').innerHTML=
+      '<div>'+esc(n[0])+' &amp; '+esc(n[2])+'</div>'+
+      '<div>'+esc(n[1])+' &amp; '+esc(n[3])+'</div>';
+  }
+  renderTeamPreview();
+
+  function showStart(){
+    game=null; choice=null; draft=null;
+    $('#game').style.display='none';
+    $('#start').style.display='flex';
+    $('#startWarn').innerHTML='';
+    attempt(loadStartData,'#startConn');
+  }
+
+  async function loadStartData(){
+    const [list] = await Promise.all([
+      api('GET','/games?status=active'),
+      loadLeaderboard(),
+    ]);
+    const panel=$('#resumePanel'), listDiv=$('#resumeList');
+    listDiv.innerHTML='';
+    panel.style.display = list.games.length ? '' : 'none';
+    list.games.forEach(g=>{
+      const btn=document.createElement('button');
+      btn.className='resume-item';
+      const date=new Date(g.createdAt).toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
+      btn.innerHTML='<span class="who">'+g.teamNames.map(esc).join('  vs  ')+'</span>'
+        +'<span class="meta">Ronde '+Math.min(g.currentRound+1,g.totalRounds)+' van '+g.totalRounds
+        +' · '+g.totals[0]+'–'+g.totals[1]+' · '+date+'</span>';
+      btn.addEventListener('click',()=>attempt(async()=>{
+        game = await api('GET','/games/'+g.id);
+        renderGame();
+      },'#startConn'));
+      listDiv.appendChild(btn);
+    });
+  }
+
+  async function loadLeaderboard(){
+    const qs = lbExclude.map(n=>'exclude='+encodeURIComponent(n)).join('&');
+    const lb = await api('GET','/leaderboard'+(qs?'?'+qs:''));
+    // Bekende namen komen uit de volledige spelerslijst, niet uit de
+    // gefilterde rijen — anders verdwijnen ze uit de suggesties.
+    const dl=$('#knownNames');
+    dl.innerHTML='';
+    lb.players.forEach(name=>{
+      const opt=document.createElement('option');
+      opt.value=name;
+      dl.appendChild(opt);
+    });
+    renderLbFilter(lb);
+    renderLeaderboard(lb);
+    $('#lbCount').textContent = lb.excluded.length
+      ? lb.gamesCounted+' van '+lb.gamesTotal+' potjes tellen mee'
+      : '';
+  }
+
+  // Chips om spelers uit te sluiten; klik = potjes met die speler weglaten.
+  function renderLbFilter(lb){
+    const box=$('#lbFilter');
+    box.innerHTML='';
+    if(!lb.players.length) return;
+    const hint=document.createElement('div');
+    hint.className='hint';
+    hint.textContent='Potjes weglaten waarin deze spelers meededen:';
+    const chips=document.createElement('div');
+    chips.className='chips';
+    const off = new Set(lb.excluded.map(n=>n.toLowerCase()));
+    lb.players.forEach(name=>{
+      const btn=document.createElement('button');
+      btn.className='chip'+(off.has(name.toLowerCase())?' on':'');
+      btn.textContent=name;
+      btn.addEventListener('click',()=>toggleExclude(name));
+      chips.appendChild(btn);
+    });
+    box.appendChild(hint);
+    box.appendChild(chips);
+  }
+
+  function toggleExclude(name){
+    const key=name.toLowerCase();
+    lbExclude = lbExclude.some(n=>n.toLowerCase()===key)
+      ? lbExclude.filter(n=>n.toLowerCase()!==key)
+      : lbExclude.concat(name);
+    try{ localStorage.setItem(LB_KEY, JSON.stringify(lbExclude)); }catch(e){}
+    attempt(loadLeaderboard,'#startConn');
+  }
+
+  function renderLeaderboard(lb){
+    const area=$('#lbArea'), rows=lb.leaderboard;
+    if(!rows.length){
+      const msg = lb.excluded.length
+        ? 'Geen potjes zonder '+lb.excluded.join(', ')+'.'
+        : 'Nog geen afgeronde potjes.';
+      area.innerHTML='<p class="sub" style="margin:10px 0 0">'+esc(msg)+'</p>';
+      return;
+    }
+    let html='<table><thead><tr><th>Speler</th><th>Potjes</th><th>Gewonnen</th><th>Gem.</th><th>Beste</th></tr></thead><tbody>';
+    rows.forEach(e=>{
+      html+='<tr><td>'+esc(e.name)+'</td><td>'+e.gamesPlayed+'</td><td>'+e.wins+'</td><td>'+e.avgPoints+'</td><td>'+e.bestScore+'</td></tr>';
+    });
+    area.innerHTML=html+'</tbody></table>';
+  }
+
+  $('#startBtn').addEventListener('click',()=>{
+    const names=seatNames();
+    attempt(async()=>{
+      game = await api('POST','/games',{players:names});
+      renderGame();
+    },'#startConn');
+  });
+
+  // ---- spelscherm ----
+  const teamOfSeat = seat => game.teams.findIndex(t=>t.indexOf(seat)>=0);
+
+  function renderGame(notice){
+    $('#start').style.display='none';
+    $('#game').style.display='flex';
+    $('#gameConn').style.display='none';
+    $('#noticeArea').innerHTML = notice
+      ? '<div class="notice'+(notice.bad?' bad':'')+'">'+esc(notice.text)+'</div>' : '';
+    renderTotals();
+    renderScoreTable();
+
+    if(game.status!=='active'){
+      $('#roundStep').textContent = game.status==='finished' ? 'Potje afgelopen!' : 'Potje afgebroken';
+      $('#roundDealer').textContent='';
+      $('#roundVoorhand').textContent='';
+      $('#inputSection').style.display='none';
+      $('#winnerArea').innerHTML='';
+      if(game.status==='finished') showWinner();
+      // Na afloop nog wel kunnen corrigeren.
+      if(game.status==='finished') $('#winnerArea').appendChild(undoButtonRow());
+      return;
+    }
+    $('#winnerArea').innerHTML='';
+    $('#inputSection').style.display='';
+    $('#roundStep').textContent='Ronde '+(game.currentRound+1)+' van '+game.totalRounds;
+    $('#roundDealer').textContent='Deler: '+game.players[game.dealerIdx];
+    $('#roundVoorhand').textContent = game.phase==='choose'
+      ? game.players[game.voorhandIdx]+' mag als eerste kiezen'
+      : 'Vul de telling in als de ronde uit is';
+    if(game.phase==='choose'){ resetChoice(); renderChooseForm(); }
+    else { resetDraft(); renderScoreForm(); }
+  }
+
+  // Het spelende team van de lopende ronde (door de server vastgelegd).
+  function playingTeam(){ return game.pending.playingTeam; }
+
+  function undoButtonRow(){
+    const row=document.createElement('div');
+    row.className='btn-row';
+    const btn=document.createElement('button');
+    btn.className='btn-small';
+    btn.textContent='← Laatste ronde terugnemen';
+    btn.addEventListener('click',doUndo);
+    row.appendChild(btn);
+    return row;
+  }
+
+  function renderTotals(){
+    const lead=Math.max(...game.totals);
+    $('#totalsArea').innerHTML = game.teamNames.map((name,i)=>
+      '<div class="tcard'+(game.totals[i]===lead&&lead>0?' lead':'')+'">'
+      +'<div class="tname">'+esc(name)+'</div>'
+      +'<div class="tscore">'+game.totals[i]+'</div></div>').join('');
+  }
+
+  function resetChoice(){
+    // Voorhand speelt meestal; alvast voorgeselecteerd, maar vrij te wijzigen.
+    choice={playingTeam:teamOfSeat(game.voorhandIdx), trump:null};
+  }
+
+  function resetDraft(){
+    // points hoort bij pointsTeam; de andere partij is altijd het restant.
+    draft={points:'', pointsTeam:playingTeam(), roem:[0,0], pit:false, nat:false};
+  }
+
+  // ---- fase 1: troef kiezen aan het begin van de ronde ----
+  function renderChooseForm(){
+    const sec=$('#inputSection');
+    sec.innerHTML=
+      '<p class="phase-hint">Kies dit vóór het spelen — het scorebord laat de troef dan zien.</p>'
+      +'<div class="field"><label>Wie speelt?</label><div class="pick" id="pickTeam">'
+      +game.teamNames.map((n,i)=>'<button data-team="'+i+'">'+esc(n)+'</button>').join('')
+      +'</div></div>'
+
+      +'<div class="field"><label>Troef</label><div class="pick suits" id="pickTrump">'
+      +game.trumps.map((t,i)=>'<button data-trump="'+i+'" title="'+t.name+'" style="color:'+t.color+'">'+t.symbol+'</button>').join('')
+      +'</div></div>'
+
+      +'<div id="roundWarn"></div>'
+      +'<div class="btn-row">'
+      +(game.currentRound>0?'<button class="btn-small" id="undoBtn">← Terug</button>':'')
+      +'<button class="btn-primary" style="flex:1" id="startBtn2">Ronde starten →</button></div>';
+
+    sec.querySelectorAll('[data-team]').forEach(b=>b.addEventListener('click',()=>{
+      choice.playingTeam=+b.dataset.team; syncChoose();
+    }));
+    sec.querySelectorAll('[data-trump]').forEach(b=>b.addEventListener('click',()=>{
+      choice.trump=+b.dataset.trump; syncChoose();
+    }));
+    const undo=document.getElementById('undoBtn');
+    if(undo) undo.addEventListener('click',doUndo);
+    $('#startBtn2').addEventListener('click',startRound);
+    syncChoose();
+  }
+
+  function syncChoose(){
+    const sec=$('#inputSection');
+    sec.querySelectorAll('[data-team]').forEach(b=>
+      b.classList.toggle('on', +b.dataset.team===choice.playingTeam));
+    sec.querySelectorAll('[data-trump]').forEach(b=>
+      b.classList.toggle('on', +b.dataset.trump===choice.trump));
+  }
+
+  function startRound(){
+    const warn=$('#roundWarn');
+    warn.innerHTML='';
+    if(choice.trump===null){
+      warn.innerHTML='<span class="error">Kies een troefkleur</span>';
+      return;
+    }
+    const btn=$('#startBtn2');
+    btn.disabled=true;
+    const round=game.currentRound;
+    attempt(async()=>{
+      game = await api('POST','/games/'+game.id+'/start',
+        {round:round, playingTeam:choice.playingTeam, trump:choice.trump});
+      renderGame();
+    },'#gameConn').finally(()=>{ if(btn.isConnected) btn.disabled=false; });
+  }
+
+  // ---- fase 2: tellen na afloop van de ronde ----
+  function renderScoreForm(){
+    const sec=$('#inputSection');
+    const t=game.trumpInfo;
+    sec.innerHTML=
+      '<div class="chosen"><span class="suit" style="color:'+t.color+'">'+t.symbol+'</span>'
+      +'<span class="txt"><b>'+esc(t.name)+'</b><br>'+esc(game.teamNames[playingTeam()])+' speelt</span></div>'
+
+      +'<div class="field">'
+      +'<div class="label-row"><label>Punten</label><span class="of">samen '+game.totalPoints+'</span></div>'
+      +game.teamNames.map((n,i)=>
+        '<div class="pts-row" data-ptsrow="'+i+'"><span class="pname">'+esc(n)+'</span>'
+        +'<input type="number" id="pts'+i+'" min="0" max="'+game.totalPoints+'" inputmode="numeric" placeholder="0">'
+        +'</div>').join('')
+      +'</div>'
+
+      +'<div class="field"><div class="pick flags">'
+      +'<button class="flag-btn nat" id="natBtn">Nat</button>'
+      +'<button class="flag-btn pit" id="pitBtn">Pit</button>'
+      +'</div><p class="hint" id="flagHint"></p></div>'
+
+      +'<div class="field"><label>Roem</label>'
+      +game.teamNames.map((n,i)=>
+        '<div class="roem-row"><span class="rname">'+esc(n)+'</span>'
+        +'<button class="add" data-roem="'+i+'" data-add="20">+20</button>'
+        +'<button class="add" data-roem="'+i+'" data-add="50">+50</button>'
+        +'<button class="add" data-roem="'+i+'" data-add="100">+100</button>'
+        +'<input type="number" id="roem'+i+'" min="0" step="10" inputmode="numeric" value="0">'
+        +'</div>').join('')
+      +'</div>'
+
+      +'<div id="roundWarn"></div>'
+      +'<div class="btn-row">'
+      +'<button class="btn-small" id="undoBtn">← Terug</button>'
+      +'<button class="btn-primary" style="flex:1" id="saveBtn">Ronde opslaan ✓</button></div>';
+
+    [0,1].forEach(i=>document.getElementById('pts'+i).addEventListener('input',e=>{
+      draft.pointsTeam=i; draft.points=e.target.value; draft.nat=false; syncForm();
+    }));
+    sec.querySelectorAll('[data-roem]').forEach(b=>b.addEventListener('click',()=>{
+      const i=+b.dataset.roem;
+      draft.roem[i]=(draft.roem[i]||0)+(+b.dataset.add);
+      syncForm();
+    }));
+    [0,1].forEach(i=>document.getElementById('roem'+i).addEventListener('input',e=>{
+      draft.roem[i]= e.target.value===''?0:+e.target.value; syncForm();
+    }));
+    // Nat en pit sluiten elkaar uit: nat = niet gehaald, pit = alles gehaald.
+    $('#natBtn').addEventListener('click',()=>{
+      draft.nat=!draft.nat;
+      if(draft.nat){ draft.pit=false; draft.points=''; }
+      syncForm();
+    });
+    $('#pitBtn').addEventListener('click',()=>{
+      draft.pit=!draft.pit;
+      if(draft.pit){
+        draft.nat=false;
+        draft.pointsTeam=playingTeam();
+        draft.points=String(game.totalPoints);
+        draft.roem[1-playingTeam()]=0;
+      }
+      syncForm();
+    });
+    $('#undoBtn').addEventListener('click',doUndo);
+    $('#saveBtn').addEventListener('click',saveRound);
+    syncForm();
+  }
+
+  // Zet de knoppen/afgeleide velden gelijk aan de draft. Rekent geen score
+  // uit — dat doet de server.
+  function syncForm(){
+    const sec=$('#inputSection');
+    // De ingetikte kant blijft staan; de andere kant is het restant van 162.
+    const entered=enteredPoints();
+    [0,1].forEach(i=>{
+      const el=document.getElementById('pts'+i);
+      const val = draft.nat ? '' : (i===draft.pointsTeam
+        ? draft.points
+        : (entered===null ? '' : String(game.totalPoints-entered)));
+      if(el.value!==val) el.value=val;
+      el.disabled=draft.nat;
+    });
+    sec.querySelectorAll('[data-ptsrow]').forEach(r=>{
+      r.classList.toggle('playing', +r.dataset.ptsrow===playingTeam());
+      r.classList.toggle('off', draft.nat);
+    });
+    $('#natBtn').classList.toggle('on',draft.nat);
+    $('#pitBtn').classList.toggle('on',draft.pit);
+    $('#flagHint').textContent = draft.nat
+      ? 'Alle punten én alle roem gaan naar de tegenpartij. Tellen hoeft dan niet.'
+      : draft.pit
+        ? 'Alle acht slagen voor '+game.teamNames[playingTeam()]+': '+game.totalPoints+' punten plus '+game.pitBonus+' bonus.'
+        : '';
+    [0,1].forEach(i=>{
+      const el=document.getElementById('roem'+i);
+      if(el.value!==String(draft.roem[i])) el.value=draft.roem[i];
+    });
+  }
+
+  // De ingevoerde punten als geldig getal, anders null.
+  function enteredPoints(){
+    if(draft.points==='') return null;
+    const n=Number(draft.points);
+    return (Number.isInteger(n) && n>=0 && n<=game.totalPoints) ? n : null;
+  }
+
+  function saveRound(){
+    const warn=$('#roundWarn');
+    warn.innerHTML='';
+    const body={round:game.currentRound, roem:[draft.roem[0],draft.roem[1]], pit:draft.pit};
+    if(draft.nat){
+      body.nat=true;
+    }else{
+      const entered=enteredPoints();
+      if(entered===null){
+        warn.innerHTML='<span class="error">Vul de punten in (0–'+game.totalPoints+')</span>';
+        return;
+      }
+      // Het API rekent met de punten van de spelende partij.
+      body.points = draft.pointsTeam===playingTeam()
+        ? entered : game.totalPoints-entered;
+    }
+    if(draft.roem.some(r=>!Number.isInteger(r)||r<0||r%10!==0)){
+      warn.innerHTML='<span class="error">Roem is altijd een veelvoud van 10</span>';
+      return;
+    }
+    const btn=$('#saveBtn');
+    btn.disabled=true;
+    const round=game.currentRound;
+    attempt(async()=>{
+      game = await api('POST','/games/'+game.id+'/round',body);
+      renderGame(roundNotice(round));
+    },'#gameConn').finally(()=>{ if(btn.isConnected) btn.disabled=false; });
+  }
+
+  function roundNotice(idx){
+    const r=game.rounds[idx];
+    if(!r) return null;
+    let text='Ronde '+(idx+1)+': ';
+    if(r.nat) text+=game.teamNames[r.playingTeam]+' was nat → '+r.scores[1-r.playingTeam]+' voor '+game.teamNames[1-r.playingTeam];
+    else text+=game.teamNames[0]+' '+r.scores[0]+' – '+r.scores[1]+' '+game.teamNames[1];
+    if(r.pit) text+=' · pit voor '+game.teamNames[r.playingTeam]+'!';
+    return {text:text, bad:r.nat};
+  }
+
+  function doUndo(){
+    attempt(async()=>{
+      game = await api('POST','/games/'+game.id+'/undo');
+      renderGame();
+    },'#gameConn');
+  }
+
+  function renderScoreTable(){
+    $('#scoreHead').innerHTML='<tr><th>Ronde</th><th>Troef</th><th>'
+      +esc(game.teamNames[0])+'</th><th>'+esc(game.teamNames[1])+'</th></tr>';
+
+    if(!game.rounds.length){
+      $('#scoreBody').innerHTML='<tr><td colspan="4" class="empty">Nog geen rondes gespeeld.</td></tr>';
+      $('#scoreFoot').innerHTML='';
+      $('#scoreLegend').textContent='';
+      return;
+    }
+
+    let body='';
+    game.rounds.forEach((r,i)=>{
+      const t=game.trumps[r.trump];
+      const cls=i===game.rounds.length-1?' class="last-round"':'';
+      body+='<tr'+cls+'><td>'+(i+1)+'</td>'
+        +'<td style="color:'+t.color+'">'+t.symbol+'</td>';
+      [0,1].forEach(team=>{
+        const playing=team===r.playingTeam;
+        const classes=[];
+        if(playing) classes.push('played');
+        if(playing&&r.nat) classes.push('nat');
+        if(playing&&r.pit) classes.push('win');
+        let cell=String(r.scores[team]);
+        if(playing) cell='▸ '+cell;
+        if(playing&&r.nat) cell+=' nat';
+        if(playing&&r.pit) cell+=' pit';
+        body+='<td class="'+classes.join(' ')+'">'+cell+'</td>';
+      });
+      body+='</tr>';
+    });
+    $('#scoreBody').innerHTML=body;
+    $('#scoreFoot').innerHTML='<tr><td>Totaal</td><td></td><td>'+game.totals[0]+'</td><td>'+game.totals[1]+'</td></tr>';
+    $('#scoreLegend').innerHTML='▸ = speelde die ronde · <span style="color:var(--red)">nat</span> = haalde het niet, alles naar de tegenpartij · '
+      +'<span style="color:var(--accent)">pit</span> = alle acht slagen (+'+game.pitBonus+')';
+  }
+
+  function showWinner(){
+    const idxs=game.winnerTeamIdxs||[];
+    const max=Math.max(...game.totals);
+    const names=idxs.map(i=>esc(game.teamNames[i])).join(' en ');
+    $('#winnerArea').innerHTML='<div class="winner-banner">'
+      +'<div class="trophy">🏆</div>'
+      +'<div class="name">'+(idxs.length>1?'Gelijkspel!':names+' wint!')+'</div>'
+      +'<div class="score">'+(idxs.length>1?names+' · ':'')+max+' punten</div></div>';
+  }
+
+  // ---- knoppen onder het spel ----
+  $('#backToStartBtn').addEventListener('click',showStart);
+  $('#abandonBtn').addEventListener('click',()=>{
+    if(game && game.status!=='active'){ showStart(); return; }
+    if(!confirm('Dit potje afbreken? Het telt dan niet mee voor het klassement.')) return;
+    attempt(async()=>{
+      await api('POST','/games/'+game.id+'/abandon');
+      showStart();
+    },'#gameConn');
+  });
+
+  // Telefoon uit slaapstand: state kan verouderd zijn → refetch.
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState!=='visible') return;
+    if(game) attempt(async()=>{
+      game = await api('GET','/games/'+game.id);
+      renderGame();
+    },'#gameConn');
+    else showStart();
+  });
+
+  showStart();
+})();
+</script>
+</body>
+</html>

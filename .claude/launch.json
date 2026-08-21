@@ -2,9 +2,23 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "spellenhoek",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "server/server.js"
+      ],
+      "port": 3000,
+      "autoPort": true
+    },
+    {
       "name": "wafelwoorden",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["serve", "-p", "3456", "."],
+      "runtimeArgs": [
+        "serve",
+        "-p",
+        "3456",
+        "."
+      ],
       "port": 3456
     }
   ]

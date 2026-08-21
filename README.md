@@ -2,7 +2,7 @@
 
 Een kleine verzameling spellen en speel-tools voor in de browser. De site
 wordt geserveerd door een minimale Node-server (zonder dependencies) die ook
-de boerenbridge-scores synchroniseert; de overige spellen werken gewoon
+de scores van de kaartspellen bijhoudt; de overige spellen werken gewoon
 offline als losse pagina's.
 
 ## Spellen
@@ -12,6 +12,7 @@ offline als losse pagina's.
 | 🧩 **Kubus Solver** | `games/cube-solver/` | Kleur je Rubik's kubus in en los hem in ±20 zetten op (Kociemba two-phase), stap voor stap. |
 | 🧇 **Wafelwoorden** | `games/wafelwoorden/` | Sleep de letters op hun plek en los de woordwafel op. |
 | 🃏 **Boerenbridge** | `games/boerenbridge/` | Score bijhouden met twee apparaten: invoer op je telefoon, live scorebord op een tweede scherm. Met klassement over alle potjes. |
+| 🂡 **Klaverjas** | `games/klaverjas/` | Een boompje van 16 rondes met twee teams: troef, punten, roem, nat en pit. Met live scorebord op een tweede scherm en klassement. |
 
 Elk spel is een zelfstandige pagina onder `games/<naam>/index.html` met een
 link terug naar de homepage.
@@ -23,11 +24,12 @@ node server/server.js
 ```
 
 De server (Node ≥ 18, geen npm-dependencies) serveert de hele site op
-`http://localhost:3000` en biedt het boerenbridge-API onder
-`/api/boerenbridge/`. Configuratie via omgevingsvariabelen:
+`http://localhost:3000` en biedt de spel-API's onder `/api/boerenbridge/` en
+`/api/klaverjas/`, elk met een eigen SSE-kanaal voor het scorebord. Configuratie via omgevingsvariabelen:
 
 - `PORT` – poort (standaard `3000`)
-- `DATA_DIR` – map voor het databestand `boerenbridge.json` (standaard `./data`)
+- `DATA_DIR` – map voor de databestanden `boerenbridge.json` en
+  `klaverjas.json` (standaard `./data`)
 
 ## Boerenbridge met twee apparaten
 
@@ -47,6 +49,40 @@ met auth) open naar internet.
 
 Tip voor het display: zet automatische schermvergrendeling uit op het
 apparaat, dat kan de pagina zelf niet regelen.
+
+## Klaverjas met twee apparaten
+
+1. Open `games/klaverjas/` op de telefoon van de scorebijhouder en vul vier
+   namen in op zitvolgorde: speler 1 & 3 vormen samen een team, 2 & 4 ook.
+2. Open `games/klaverjas/display/` op een tweede scherm — dat toont live de
+   troef, wie er speelt, de standen en het scoreblok. Zonder actief potje
+   staat daar het klassement.
+
+Elke ronde gaat in twee stappen:
+
+- **Vóór het spelen:** kies wie er speelt en wat troef is. Zodra je op
+  *Ronde starten* drukt, staat de troef groot op het scorebord.
+- **Na afloop:** vul de telling in. De punten zet je bij de partij die het
+  snelst te tellen is — pakte de tegenpartij maar één slag, tik dan díe kant
+  in; de andere kant vult zichzelf aan tot 162. Roem vul je per team in.
+
+De server rekent de ronde uit:
+
+- Haalt de spelende partij méér dan de tegenpartij, dan houdt elke partij
+  haar eigen punten plus roem.
+- Haalt ze het niet — ook bij precies gelijk — dan is ze **nat** en gaan alle
+  kaartpunten én alle roem naar de tegenpartij. Weet je al dat ze nat zijn,
+  druk dan gewoon op **Nat**: tellen hoeft dan niet meer, want de verdeling
+  maakt voor de score toch niets uit.
+- **Pit** (alle acht slagen) levert 100 punten bonus op. Huisregel hier: pit
+  is voorbehouden aan de spelende partij — tegenpit bestaat niet. Wil je dat
+  anders, dan zit die regel op één plek in `server/klaverjas.js`.
+
+Na 16 rondes (elke speler heeft dan vier keer gedeeld) sluit het potje zichzelf
+af en telt het mee voor het klassement. Een ronde verkeerd ingevoerd? Met
+← Terug ga je stap voor stap terug — eerst de telling, dan de troefkeuze — ook
+nadat het potje al is afgelopen. Net als bij boerenbridge kun je onder
+🏆 Klassement spelers aantikken om potjes waarin zij meededen weg te laten.
 
 ## Docker
 
@@ -69,13 +105,14 @@ spellenhoek:
 ```
 
 Achter een reverse proxy: zet response-buffering uit voor
-`/api/boerenbridge/events` (SSE); de server stuurt daarvoor zelf al
-`X-Accel-Buffering: no` en een heartbeat elke 25 s.
+`/api/boerenbridge/events` en `/api/klaverjas/events` (SSE); de server stuurt
+daarvoor zelf al `X-Accel-Buffering: no` en een heartbeat elke 25 s.
 
 ## Testen
 
 ```
 node test/api.test.js
+node test/klaverjas.test.js
 node test/solver.test.js
 ```
 
@@ -83,6 +120,10 @@ node test/solver.test.js
 en test het volledige spelverloop, de scoreformule (tegen een onafhankelijke
 herimplementatie), validatie en 409-guards, undo, het klassement, SSE,
 path-traversal-bescherming en persistentie over een herstart.
+`klaverjas.test.js` doet hetzelfde voor het klaverjas-API: de telling van
+nat, roem en pit (opnieuw tegen een onafhankelijke herimplementatie), de twee
+fasen per ronde, validatie, undo, het klassement per speler, SSE en de
+gescheiden opslag naast boerenbridge.
 `solver.test.js` lost honderden willekeurige scrambles op met beide
 oplossers en verifieert elke oplossing (aantallen instelbaar via
 `N_KOCIEMBA` / `N_LBL`).
@@ -92,18 +133,23 @@ oplossers en verifieert elke oplossing (aantallen instelbaar via
 ```
 index.html                     # homepage / spellenoverzicht
 server/
-  server.js                    # statische site + boerenbridge-API + SSE
-  logic.js                     # autoritatieve spellogica (ook testbaar in Node)
+  server.js                    # statische site + spel-API's + SSE
+  shared.js                    # gedeelde helpers (klassement, foutobjecten)
+  logic.js                     # autoritatieve boerenbridge-logica
+  klaverjas.js                 # autoritatieve klaverjas-logica
 games/
   boerenbridge/index.html      # invoerpagina (telefoon)
   boerenbridge/display/        # live scorebord (tweede scherm)
+  klaverjas/index.html         # klaverjas-invoerpagina (telefoon)
+  klaverjas/display/           # live scorebord (tweede scherm)
   cube-solver/index.html       # zelfstandige (gebouwde) solver-pagina
   wafelwoorden/index.html      # woordspel
 src/
   cube-solver/                 # bron van de solver-pagina
     template.html  solver.js  kociemba.js  app.js
 build.js                       # bouwt de cube-solver naar games/cube-solver/
-test/api.test.js               # end-to-end API-test
+test/api.test.js               # end-to-end API-test (boerenbridge)
+test/klaverjas.test.js         # end-to-end API-test (klaverjas)
 data/                          # spelgegevens (niet in git; Docker-volume)
 ```
 
