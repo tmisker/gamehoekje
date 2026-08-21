@@ -2,6 +2,9 @@
 // Puur (geen I/O); ook bruikbaar in Node-tests via module.exports.
 'use strict';
 
+const shared = require('./shared.js');
+const { httpError } = shared;
+
 const SUITS = ['♣', '♥', '♦', '♠', 'Sans'];
 const SUIT_NAMES = ['Klaver', 'Harten', 'Ruiten', 'Schoppen', 'Sans'];
 const SUIT_COLORS = ['#4caf50', '#e53935', '#ff9800', '#42a5f5', '#b0bec5'];
@@ -29,12 +32,6 @@ function playerOrder(nPlayers, round) {
   const order = [];
   for (let i = 0; i < nPlayers; i++) order.push((first + i) % nPlayers);
   return order;
-}
-
-function httpError(status, message) {
-  const err = new Error(message);
-  err.status = status;
-  return err;
 }
 
 function createGame(names) {
@@ -177,75 +174,24 @@ function gameSummary(game) {
   };
 }
 
-const nameKey = name => String(name == null ? '' : name).trim().toLowerCase();
-
-// Namen normaliseren tot een set sleutels; lege waarden vallen weg.
-function excludeSet(exclude) {
-  return new Set((Array.isArray(exclude) ? exclude : []).map(nameKey).filter(Boolean));
-}
-
-// Afgeronde spellen, eventueel zonder de potjes waarin een uitgesloten speler
-// meedeed. Uitsluiten geldt per potje, niet per speler: één kind aan tafel
-// haalt het hele spel uit het klassement.
-function finishedGames(games, exclude) {
-  const skip = excludeSet(exclude);
-  return games.filter(g =>
-    g.status === 'finished' && !g.players.some(n => skip.has(nameKey(n))));
-}
-
-// Alle spelers die in een afgerond spel voorkomen — de keuzelijst van het
-// filter (dus altijd ongefilterd, anders verdwijnt je eigen keuze).
-function leaderboardPlayers(games) {
-  const byKey = new Map();
-  for (const game of games) {
-    if (game.status !== 'finished') continue;
-    for (const name of game.players) byKey.set(nameKey(name), name); // laatste schrijfwijze wint
-  }
-  return [...byKey.values()].sort((a, b) => a.localeCompare(b, 'nl'));
-}
-
 // Leaderboard over afgeronde spellen; spelers gekoppeld op naam (case-insensitief).
 function leaderboard(games, exclude) {
-  const byKey = new Map();
-  for (const game of finishedGames(games, exclude)) {
+  return buildRows(shared.finishedGames(games, exclude));
+}
+
+function buildRows(finished) {
+  return shared.aggregate(finished, game => {
     const totals = getTotals(game);
-    game.players.forEach((name, i) => {
-      const key = nameKey(name);
-      let e = byKey.get(key);
-      if (!e) {
-        e = { name, gamesPlayed: 0, wins: 0, totalPoints: 0, bestScore: -Infinity };
-        byKey.set(key, e);
-      }
-      e.name = name; // meest recente schrijfwijze wint
-      e.gamesPlayed++;
-      if (game.winnerIdxs && game.winnerIdxs.includes(i)) e.wins++;
-      e.totalPoints += totals[i];
-      if (totals[i] > e.bestScore) e.bestScore = totals[i];
-    });
-  }
-  const rows = [...byKey.values()].map(e => ({
-    name: e.name,
-    gamesPlayed: e.gamesPlayed,
-    wins: e.wins,
-    avgPoints: Math.round((e.totalPoints / e.gamesPlayed) * 10) / 10,
-    bestScore: e.bestScore,
-  }));
-  rows.sort((a, b) => b.wins - a.wins || b.avgPoints - a.avgPoints);
-  return rows;
+    return game.players.map((_, i) => ({
+      points: totals[i],
+      won: !!game.winnerIdxs && game.winnerIdxs.includes(i),
+    }));
+  });
 }
 
 // Payload voor /leaderboard: rijen + de keuzelijst + hoeveel potjes meetellen.
 function leaderboardView(games, exclude) {
-  const skip = excludeSet(exclude);
-  const players = leaderboardPlayers(games);
-  const excluded = players.filter(n => skip.has(nameKey(n)));
-  return {
-    leaderboard: leaderboard(games, exclude),
-    players,
-    excluded,
-    gamesCounted: finishedGames(games, exclude).length,
-    gamesTotal: finishedGames(games).length,
-  };
+  return shared.leaderboardView(games, exclude, buildRows);
 }
 
 module.exports = {
@@ -253,5 +199,8 @@ module.exports = {
   buildRounds, scoreRound, dealerIdx, playerOrder,
   createGame, applyPredictions, applyActuals, undo, abandon,
   getTotals, enrich, gameSummary,
-  finishedGames, leaderboardPlayers, leaderboard, leaderboardView, httpError,
+  leaderboard, leaderboardView,
+  finishedGames: shared.finishedGames,
+  leaderboardPlayers: shared.leaderboardPlayers,
+  httpError,
 };

@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Verifieer wijzigingen aan de Spellenhoek-server of de boerenbridge-pagina's end-to-end (server draaien, browser aansturen, SSE checken).
+description: Verifieer wijzigingen aan de Spellenhoek-server of de kaartspel-pagina's (boerenbridge, klaverjas) end-to-end (server draaien, browser aansturen, SSE checken).
 ---
 
 # Spellenhoek verifiëren
@@ -8,11 +8,16 @@ description: Verifieer wijzigingen aan de Spellenhoek-server of de boerenbridge-
 ## Server + API
 
 ```bash
-node test/api.test.js        # end-to-end API-suite, spawnt zelf de server
+node test/api.test.js        # end-to-end API-suite boerenbridge, spawnt zelf de server
+node test/klaverjas.test.js  # idem voor klaverjas
 ```
 
+Draai ze allebei bij elke wijziging in `server/`: `shared.js` wordt door beide
+spellen gebruikt.
+
 Voor handmatig prikken: `PORT=3100 DATA_DIR=/tmp/bb-data node server/server.js`
-en dan `curl localhost:3100/api/boerenbridge/current`.
+en dan `curl localhost:3100/api/boerenbridge/current` of
+`curl localhost:3100/api/klaverjas/leaderboard`.
 
 ## Pagina's in een echte browser (headless Chromium)
 

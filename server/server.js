@@ -1,99 +1,138 @@
-// Spellenhoek-server: statische site + boerenbridge-API + SSE.
+// Spellenhoek-server: statische site + spel-API's (boerenbridge, klaverjas) + SSE.
 // Zero dependencies — alleen Node-ingebouwde modules. Start: node server/server.js
 'use strict';
 
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const shared = require('./shared.js');
 const logic = require('./logic.js');
+const klaverjas = require('./klaverjas.js');
 
 const PORT = +(process.env.PORT || 3000);
 const ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(ROOT, 'data'));
-const DATA_FILE = path.join(DATA_DIR, 'boerenbridge.json');
 
 // ---------- opslag ----------
 
-let games = [];
-
-function load() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(DATA_FILE)) return;
-  try {
-    const parsed = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-    if (!Array.isArray(parsed.games)) throw new Error('onverwachte vorm');
-    games = parsed.games;
-  } catch (err) {
-    // Nooit crash-loopen op een kapot bestand: opzij zetten en leeg starten.
-    const quarantine = DATA_FILE.replace(/\.json$/, '.corrupt-' + Date.now() + '.json');
-    fs.renameSync(DATA_FILE, quarantine);
-    console.error('FOUT: databestand onleesbaar (' + err.message + '); verplaatst naar ' + quarantine);
-  }
+// Eén databestand per spel; elke store houdt zijn eigen lijst potjes bij.
+function createStore(filename, notFound) {
+  const file = path.join(DATA_DIR, filename);
+  const store = {
+    file,
+    games: [],
+    load() {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+      if (!fs.existsSync(file)) return;
+      try {
+        const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+        if (!Array.isArray(parsed.games)) throw new Error('onverwachte vorm');
+        store.games = parsed.games;
+      } catch (err) {
+        // Nooit crash-loopen op een kapot bestand: opzij zetten en leeg starten.
+        const quarantine = file.replace(/\.json$/, '.corrupt-' + Date.now() + '.json');
+        fs.renameSync(file, quarantine);
+        console.error('FOUT: databestand onleesbaar (' + err.message + '); verplaatst naar ' + quarantine);
+      }
+    },
+    save() {
+      // Synchronous + atomische rename: geen half geschreven bestand na een crash.
+      const tmp = file + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify({ games: store.games }, null, 1));
+      fs.renameSync(tmp, file);
+    },
+    find(id) {
+      const game = store.games.find(g => g.id === id);
+      if (!game) throw shared.httpError(404, notFound);
+      return game;
+    },
+  };
+  return store;
 }
 
-function save() {
-  // Synchronous + atomische rename: geen half geschreven bestand na een crash.
-  const tmp = DATA_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify({ games }, null, 1));
-  fs.renameSync(tmp, DATA_FILE);
-}
+const bb = createStore('boerenbridge.json', 'Spel niet gevonden');
+const kj = createStore('klaverjas.json', 'Potje niet gevonden');
 
-function findGame(id) {
-  const game = games.find(g => g.id === id);
-  if (!game) throw logic.httpError(404, 'Spel niet gevonden');
-  return game;
-}
+// Zolang het winnaarscherm blijft staan na een afgerond potje.
+const WINNER_WINDOW = 10 * 60 * 1000;
 
-// Snapshot voor display + SSE: laatste actieve spel, anders het spel dat
-// < 10 min geleden eindigde (winnaarscherm), anders idle + leaderboard.
-function currentSnapshot() {
+// Snapshot voor display + SSE: laatste actieve potje, anders het potje dat
+// < 10 min geleden eindigde (winnaarscherm), anders idle + klassement.
+function snapshotOf(store, mod) {
   const byUpdated = (a, b) => (a.updatedAt < b.updatedAt ? 1 : -1);
-  const active = games.filter(g => g.status === 'active').sort(byUpdated);
-  if (active.length) return { game: logic.enrich(active[0]), leaderboard: logic.leaderboard(games) };
-  const justFinished = games
-    .filter(g => g.status === 'finished' && Date.now() - Date.parse(g.finishedAt) < 10 * 60 * 1000)
+  const active = store.games.filter(g => g.status === 'active').sort(byUpdated);
+  if (active.length) {
+    return { game: mod.enrich(active[0]), leaderboard: mod.leaderboard(store.games) };
+  }
+  const justFinished = store.games
+    .filter(g => g.status === 'finished' && Date.now() - Date.parse(g.finishedAt) < WINNER_WINDOW)
     .sort(byUpdated);
   return {
-    game: justFinished.length ? logic.enrich(justFinished[0]) : null,
-    leaderboard: logic.leaderboard(games),
+    game: justFinished.length ? mod.enrich(justFinished[0]) : null,
+    leaderboard: mod.leaderboard(store.games),
   };
 }
 
 // ---------- SSE ----------
 
-const sseClients = new Set();
+// Eén live-kanaal per spel. Bij connect en na elke mutatie gaat de **volledige
+// snapshot** over de lijn (nooit deltas).
+function createChannel(snapshotFn) {
+  const clients = new Set();
+  let expiryTimer = null;
 
-function sseSend(res, payload) {
-  res.write('event: state\ndata: ' + JSON.stringify(payload) + '\n\n');
-}
-
-function broadcast() {
-  const payload = currentSnapshot();
-  scheduleWinnerExpiry(payload);
-  if (!sseClients.size) return;
-  for (const res of sseClients) {
-    try { sseSend(res, payload); } catch { sseClients.delete(res); }
+  function send(res, payload) {
+    res.write('event: state\ndata: ' + JSON.stringify(payload) + '\n\n');
   }
-}
 
-// Het winnaarscherm valt na 10 min uit de snapshot, maar zonder mutatie komt
-// er geen broadcast — plan er dus zelf één zodra de vervaltijd verstrijkt.
-let expiryTimer = null;
-function scheduleWinnerExpiry(snapshot) {
-  if (expiryTimer) { clearTimeout(expiryTimer); expiryTimer = null; }
-  const g = snapshot.game;
-  if (!g || g.status !== 'finished') return;
-  const left = 10 * 60 * 1000 - (Date.now() - Date.parse(g.finishedAt));
-  expiryTimer = setTimeout(broadcast, Math.max(left, 0) + 1000);
-  expiryTimer.unref();
-}
-
-// Benoemd event (geen comment): clients kunnen zo zien dat de lijn nog leeft.
-setInterval(() => {
-  for (const res of sseClients) {
-    try { res.write('event: ping\ndata: {}\n\n'); } catch { sseClients.delete(res); }
+  // Het winnaarscherm valt na 10 min uit de snapshot, maar zonder mutatie komt
+  // er geen broadcast — plan er dus zelf één zodra de vervaltijd verstrijkt.
+  function scheduleWinnerExpiry(snapshot) {
+    if (expiryTimer) { clearTimeout(expiryTimer); expiryTimer = null; }
+    const g = snapshot.game;
+    if (!g || g.status !== 'finished') return;
+    const left = WINNER_WINDOW - (Date.now() - Date.parse(g.finishedAt));
+    expiryTimer = setTimeout(broadcast, Math.max(left, 0) + 1000);
+    expiryTimer.unref();
   }
-}, 25000).unref();
+
+  function broadcast() {
+    const payload = snapshotFn();
+    scheduleWinnerExpiry(payload);
+    if (!clients.size) return;
+    for (const res of clients) {
+      try { send(res, payload); } catch { clients.delete(res); }
+    }
+  }
+
+  function attach(req, res) {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no', // reverse proxy mag SSE niet bufferen
+    });
+    clients.add(res);
+    const snapshot = snapshotFn();
+    send(res, snapshot);
+    scheduleWinnerExpiry(snapshot);
+    req.on('close', () => clients.delete(res));
+  }
+
+  // Benoemd event (geen comment): clients kunnen zo zien dat de lijn nog leeft.
+  function ping() {
+    for (const res of clients) {
+      try { res.write('event: ping\ndata: {}\n\n'); } catch { clients.delete(res); }
+    }
+  }
+
+  return { broadcast, attach, ping };
+}
+
+const bbLive = createChannel(() => snapshotOf(bb, logic));
+const kjLive = createChannel(() => snapshotOf(kj, klaverjas));
+
+setInterval(() => { bbLive.ping(); kjLive.ping(); }, 25000).unref();
 
 // ---------- HTTP-helpers ----------
 
@@ -128,39 +167,28 @@ function readBody(req) {
 
 // ---------- API ----------
 
-async function handleApi(req, res, pathname, query) {
+async function handleBoerenbridgeApi(req, res, pathname, query) {
   const parts = pathname.split('/').filter(Boolean); // ['api','boerenbridge',...]
   const sub = parts.slice(2);
 
   if (req.method === 'GET' && sub[0] === 'events' && sub.length === 1) {
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no', // reverse proxy mag SSE niet bufferen
-    });
-    sseClients.add(res);
-    const snapshot = currentSnapshot();
-    sseSend(res, snapshot);
-    scheduleWinnerExpiry(snapshot);
-    req.on('close', () => sseClients.delete(res));
-    return;
+    return bbLive.attach(req, res);
   }
 
   if (req.method === 'GET' && sub[0] === 'current' && sub.length === 1) {
-    return sendJson(res, 200, currentSnapshot());
+    return sendJson(res, 200, snapshotOf(bb, logic));
   }
 
   if (req.method === 'GET' && sub[0] === 'leaderboard' && sub.length === 1) {
     // ?exclude=Naam&exclude=Naam of ?exclude=Naam,Naam — potjes met deze
     // spelers tellen niet mee (zie logic.finishedGames).
     const exclude = query.getAll('exclude').flatMap(v => v.split(','));
-    return sendJson(res, 200, logic.leaderboardView(games, exclude));
+    return sendJson(res, 200, logic.leaderboardView(bb.games, exclude));
   }
 
   if (sub[0] === 'games') {
     if (req.method === 'GET' && sub.length === 1) {
-      let list = games;
+      let list = bb.games;
       if (query.get('status')) list = list.filter(g => g.status === query.get('status'));
       list = [...list].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
       return sendJson(res, 200, { games: list.map(logic.gameSummary) });
@@ -168,15 +196,15 @@ async function handleApi(req, res, pathname, query) {
     if (req.method === 'POST' && sub.length === 1) {
       const body = await readBody(req);
       const game = logic.createGame(body.players);
-      games.push(game);
-      save(); broadcast();
+      bb.games.push(game);
+      bb.save(); bbLive.broadcast();
       return sendJson(res, 201, logic.enrich(game));
     }
     if (sub.length === 2 && req.method === 'GET') {
-      return sendJson(res, 200, logic.enrich(findGame(sub[1])));
+      return sendJson(res, 200, logic.enrich(bb.find(sub[1])));
     }
     if (sub.length === 3 && req.method === 'POST') {
-      const game = findGame(sub[1]);
+      const game = bb.find(sub[1]);
       const body = await readBody(req);
       switch (sub[2]) {
         case 'predictions': logic.applyPredictions(game, body.round, body.predictions); break;
@@ -185,12 +213,65 @@ async function handleApi(req, res, pathname, query) {
         case 'abandon': logic.abandon(game); break;
         default: throw logic.httpError(404, 'Onbekende actie');
       }
-      save(); broadcast();
+      bb.save(); bbLive.broadcast();
       return sendJson(res, 200, logic.enrich(game));
     }
   }
 
   throw logic.httpError(404, 'Niet gevonden');
+}
+
+async function handleKlaverjasApi(req, res, pathname, query) {
+  const sub = pathname.split('/').filter(Boolean).slice(2); // na ['api','klaverjas']
+
+  if (req.method === 'GET' && sub[0] === 'events' && sub.length === 1) {
+    return kjLive.attach(req, res);
+  }
+
+  if (req.method === 'GET' && sub[0] === 'current' && sub.length === 1) {
+    return sendJson(res, 200, snapshotOf(kj, klaverjas));
+  }
+
+  if (req.method === 'GET' && sub[0] === 'leaderboard' && sub.length === 1) {
+    // ?exclude=Naam&exclude=Naam of ?exclude=Naam,Naam — potjes met deze
+    // spelers tellen niet mee (zie shared.finishedGames).
+    const exclude = query.getAll('exclude').flatMap(v => v.split(','));
+    return sendJson(res, 200, klaverjas.leaderboardView(kj.games, exclude));
+  }
+
+  if (sub[0] === 'games') {
+    if (req.method === 'GET' && sub.length === 1) {
+      let list = kj.games;
+      if (query.get('status')) list = list.filter(g => g.status === query.get('status'));
+      list = [...list].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+      return sendJson(res, 200, { games: list.map(klaverjas.gameSummary) });
+    }
+    if (req.method === 'POST' && sub.length === 1) {
+      const body = await readBody(req);
+      const game = klaverjas.createGame(body.players);
+      kj.games.push(game);
+      kj.save(); kjLive.broadcast();
+      return sendJson(res, 201, klaverjas.enrich(game));
+    }
+    if (sub.length === 2 && req.method === 'GET') {
+      return sendJson(res, 200, klaverjas.enrich(kj.find(sub[1])));
+    }
+    if (sub.length === 3 && req.method === 'POST') {
+      const game = kj.find(sub[1]);
+      const body = await readBody(req);
+      switch (sub[2]) {
+        case 'start': klaverjas.startRound(game, body.round, body); break;
+        case 'round': klaverjas.applyRound(game, body.round, body); break;
+        case 'undo': klaverjas.undo(game); break;
+        case 'abandon': klaverjas.abandon(game); break;
+        default: throw shared.httpError(404, 'Onbekende actie');
+      }
+      kj.save(); kjLive.broadcast();
+      return sendJson(res, 200, klaverjas.enrich(game));
+    }
+  }
+
+  throw shared.httpError(404, 'Niet gevonden');
 }
 
 // ---------- statische bestanden ----------
@@ -259,7 +340,9 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (pathname.startsWith('/api/boerenbridge/')) {
-      await handleApi(req, res, pathname, url.searchParams);
+      await handleBoerenbridgeApi(req, res, pathname, url.searchParams);
+    } else if (pathname.startsWith('/api/klaverjas/')) {
+      await handleKlaverjasApi(req, res, pathname, url.searchParams);
     } else {
       serveStatic(req, res, pathname);
     }
@@ -274,7 +357,8 @@ const server = http.createServer(async (req, res) => {
 // Node ≥18 kapt anders long-lived responses (SSE) na 5 minuten af.
 server.requestTimeout = 0;
 
-load();
+bb.load();
+kj.load();
 server.listen(PORT, () => {
-  console.log('Spellenhoek draait op http://localhost:' + PORT + ' (data: ' + DATA_FILE + ')');
+  console.log('Spellenhoek draait op http://localhost:' + PORT + ' (data: ' + DATA_DIR + ')');
 });
