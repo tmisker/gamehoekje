@@ -47,13 +47,31 @@
       position:relative;
     }
     .pcard.leader{border-color:var(--gold)}
+    .pcard.chosen{border-color:var(--accent)}
     .pcard .crown{position:absolute;top:-14px;left:50%;transform:translateX(-50%);font-size:1.3rem}
     .pcard .nm{font-size:1.15rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .pcard .lab{color:var(--muted);font-size:.85rem}
     .pcard .tot{font-size:2.6rem;font-weight:800;line-height:1.1}
+    .pcard .tot .unknown{color:var(--muted)}
     .pcard .stat{color:var(--muted);font-size:.95rem;min-height:1.3em}
     .pcard .stat .pos{color:var(--accent);font-weight:700}
     .pcard .stat .neg{color:var(--red);font-weight:700}
     .pcard .dealerdot{color:var(--gold);font-size:.85rem}
+
+    /* groot "samen gevraagd"-blok (voorspel- en speelscherm) */
+    .fillcenter{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center}
+    .askbar{
+      background:var(--card);border:1px solid var(--line);border-radius:20px;
+      padding:28px 24px;text-align:center;
+    }
+    .askbar .lbl{color:var(--muted);font-size:1.3rem;font-weight:600}
+    .askbar .num{font-size:5.5rem;font-weight:800;line-height:1.1}
+    .askbar .num .of{font-size:2.2rem;color:var(--muted);font-weight:700}
+    .askbar .delta{font-size:1.4rem;font-weight:700;margin-top:4px}
+    .askbar .delta.over{color:var(--red)}
+    .askbar .delta.under{color:var(--gold)}
+    .askbar .delta.even{color:var(--accent)}
+    .askbar .delta.wait{color:var(--muted);font-weight:600}
 
     /* scoretabel */
     .scoreboard{
@@ -94,6 +112,9 @@
       .topbar{flex-direction:column;gap:6px}
       .topbar .dealer,.topbar .round{text-align:center}
       .pcard .tot{font-size:1.9rem}
+      .askbar .num{font-size:3.5rem}
+      .askbar .num .of{font-size:1.5rem}
+      .askbar .delta{font-size:1.1rem}
     }
   </style>
 </head>
@@ -113,50 +134,118 @@
   const SUITS=['♣','♥','♦','♠','Sans'];
 
   // ---- renderen ----
+  // Vier schermen: voorspellen (draft-invoer loopt) → spelen (voorspellingen
+  // bevestigd) → tussenstand (ronde geteld, nog geen nieuwe invoer) → eindstand.
   function render(snapshot){
     const g = snapshot.game;
     app.style.display='contents';
     if(!g){ renderIdle(snapshot.leaderboard); return; }
     if(g.status==='finished'){ renderWinner(g); return; }
-    renderActive(g);
+    const d=g.draft;
+    if(g.phase==='predict'&&d&&d.phase==='predict'&&d.values.some(v=>v!=null)){
+      renderBidding(g,d); return;
+    }
+    if(g.phase==='actual'){
+      renderPlaying(g, d&&d.phase==='actual'?d:null); return;
+    }
+    renderStandings(g);
   }
 
-  function renderActive(g){
-    const n=g.players.length;
+  function topbarHtml(g,label){
     const ri=g.roundInfo;
-    const preds=g.predictions[g.currentRound];
-    const leaderMax=Math.max(...g.totals);
-    const hasScores=g.roundScores.length>0;
-
-    let html='<div class="topbar">'
+    return '<div class="topbar">'
       +'<div class="trump"><span class="suit" style="color:'+ri.suitColor+'">'+ri.suit+'</span>'
       +'<span class="txt"><span class="big">'+esc(ri.suitName)+' · '+ri.cards+' kaarten</span><br>'
-      +'<span class="small">'+(g.phase==='predict'?'Voorspellen':'Spelen')+'</span></span></div>'
+      +'<span class="small">'+label+'</span></span></div>'
       +'<div class="round">Ronde '+(g.currentRound+1)+' / '+g.rounds.length+'</div>'
       +'<div class="dealer">Deler: '+esc(g.players[g.dealerIdx])+'</div>'
       +'</div>';
+  }
 
-    html+='<div class="players" style="grid-template-columns:repeat('+n+',1fr)">';
+  // cell(i) → {main, stat, lab?, cls?, crown?}
+  function pcardsHtml(g, cell){
+    let html='<div class="players" style="grid-template-columns:repeat('+g.players.length+',1fr)">';
     g.players.forEach((p,i)=>{
-      const isLeader=hasScores&&g.totals[i]===leaderMax;
-      let stat;
-      if(preds!==undefined&&preds[i]!==undefined){
-        stat='Voorspeld: <b>'+preds[i]+'</b>';
-      }else if(g.currentRound>0){
-        const last=g.roundScores[g.currentRound-1][i];
-        stat='Vorige ronde: <span class="'+(last>0?'pos':last<0?'neg':'')+'">'+(last>0?'+':'')+last+'</span>';
-      }else{
-        stat='wacht op voorspellingen…';
-      }
-      html+='<div class="pcard'+(isLeader?' leader':'')+'">'
-        +(isLeader?'<span class="crown">👑</span>':'')
+      const c=cell(i);
+      html+='<div class="pcard'+(c.cls||'')+'">'
+        +(c.crown?'<span class="crown">👑</span>':'')
         +'<span class="nm">'+esc(p)+(i===g.dealerIdx?' <span class="dealerdot">●</span>':'')+'</span>'
-        +'<span class="tot">'+g.totals[i]+'</span>'
-        +'<span class="stat">'+stat+'</span>'
+        +(c.lab?'<span class="lab">'+c.lab+'</span>':'')
+        +'<span class="tot">'+c.main+'</span>'
+        +'<span class="stat">'+c.stat+'</span>'
         +'</div>';
     });
-    html+='</div>';
+    return html+'</div>';
+  }
 
+  function askbarHtml(total,cards,delta){
+    return '<div class="fillcenter"><div class="askbar">'
+      +'<div class="lbl">Samen gevraagd</div>'
+      +'<div class="num">'+total+'<span class="of"> van '+cards+'</span></div>'
+      +'<div class="delta '+delta.cls+'">'+delta.txt+'</div>'
+      +'</div></div>';
+  }
+
+  function deltaInfo(total,cards){
+    if(total>cards) return {cls:'over',txt:(total-cards)+' te veel — er gaat iemand de boot in'};
+    if(total<cards) return {cls:'under',txt:(cards-total)+' te weinig — er blijven slagen over'};
+    return {cls:'even',txt:'precies rond'};
+  }
+
+  // Scherm 1: voorspellen — live meekijken met de invoer op de telefoon.
+  function renderBidding(g,draft){
+    const cards=g.roundInfo.cards;
+    const vals=draft.values;
+    const total=vals.reduce((a,v)=>a+(v||0),0);
+    const missing=vals.filter(v=>v==null).length;
+    const delta=missing
+      ? {cls:'wait',txt:'nog '+missing+(missing===1?' speler moet':' spelers moeten')+' voorspellen'}
+      : deltaInfo(total,cards);
+    app.innerHTML=topbarHtml(g,'Voorspellen')
+      +pcardsHtml(g,i=>({
+        main: vals[i]!=null?vals[i]:'<span class="unknown">?</span>',
+        stat: 'totaal: '+g.totals[i]+' pt',
+        cls: vals[i]!=null?' chosen':'',
+      }))
+      +askbarHtml(total,cards,delta);
+  }
+
+  // Scherm 2: tijdens het kaarten — ieders voorspelling + samen gevraagd,
+  // en zodra de slagen-invoer loopt live wie wat gehaald heeft.
+  function renderPlaying(g,draft){
+    const cards=g.roundInfo.cards;
+    const preds=g.predictions[g.currentRound];
+    const total=preds.reduce((a,b)=>a+b,0);
+    app.innerHTML=topbarHtml(g,'Spelen')
+      +pcardsHtml(g,i=>{
+        const got=draft?draft.values[i]:null;
+        return {
+          lab:'gevraagd',
+          main: preds[i],
+          stat: got!=null
+            ? 'gehaald: <span class="'+(got===preds[i]?'pos':'neg')+'">'+got+'</span>'
+            : 'totaal: '+g.totals[i]+' pt',
+        };
+      })
+      +askbarHtml(total,cards,deltaInfo(total,cards));
+  }
+
+  // Scherm 3: tussenstand — na de telling, tot de eerste nieuwe voorspelling.
+  function renderStandings(g){
+    const leaderMax=Math.max(...g.totals);
+    const hasScores=g.roundScores.length>0;
+    let html=topbarHtml(g,'Voorspellen')
+      +pcardsHtml(g,i=>{
+        const isLeader=hasScores&&g.totals[i]===leaderMax;
+        let stat;
+        if(g.currentRound>0){
+          const last=g.roundScores[g.currentRound-1][i];
+          stat='Vorige ronde: <span class="'+(last>0?'pos':last<0?'neg':'')+'">'+(last>0?'+':'')+last+'</span>';
+        }else{
+          stat='wacht op voorspellingen…';
+        }
+        return {main:g.totals[i], stat, cls:isLeader?' leader':'', crown:isLeader};
+      });
     html+='<div class="scoreboard"><table>'+scoreTableHtml(g)+'</table></div>';
     app.innerHTML=html;
     // nieuwste ronde in beeld houden

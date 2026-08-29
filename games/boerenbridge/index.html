@@ -93,18 +93,22 @@
       background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;
     }
     .input-section h3{font-size:.95rem;margin-bottom:10px;color:var(--muted)}
-    .input-row{
-      display:flex;align-items:center;gap:10px;margin-bottom:8px;
+    .num-row{margin-bottom:12px}
+    .num-row .top{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px}
+    .num-row .pname{font-weight:600;font-size:.95rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .num-row .dealer-badge{font-size:.75rem;color:var(--gold);margin-left:4px;font-weight:400}
+    .num-row .predicted{color:var(--muted);font-size:.85rem;white-space:nowrap}
+    .numgrid{display:grid;gap:5px}
+    .numbtn{
+      padding:0;height:42px;min-width:0;border:1px solid var(--line);border-radius:9px;
+      background:var(--card2);color:var(--text);font-size:1rem;font-weight:700;
     }
-    .input-row .pname{flex:1;font-weight:600;font-size:.95rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .input-row .dealer-badge{font-size:.75rem;color:var(--gold);margin-left:4px;font-weight:400}
-    .input-row input{
-      width:60px;padding:8px;border:1px solid var(--line);border-radius:8px;
-      background:var(--card2);color:var(--text);font-size:1rem;text-align:center;
-    }
-    .input-row .predicted{
-      color:var(--muted);font-size:.85rem;min-width:40px;text-align:center;
-    }
+    .numbtn.sel{background:var(--accent);border-color:var(--accent)}
+    .numbtn:disabled{opacity:.25;cursor:default}
+    /* in de slagen-fase: gouden ring om het voorspelde aantal */
+    .numbtn.predmark{box-shadow:inset 0 0 0 2px var(--gold)}
+    .sumline{color:var(--muted);font-size:.9rem;text-align:center;margin:2px 0 4px}
+    .sumline b{color:var(--text)}
     .warn{color:var(--gold);font-size:.82rem;text-align:center;margin-top:4px}
     .error{color:var(--red);font-size:.82rem;text-align:center;margin-top:4px}
     .conn-banner{
@@ -138,8 +142,9 @@
     .winner-banner .name{font-size:1.4rem;font-weight:800;color:var(--gold);margin-top:6px}
     .winner-banner .score{color:var(--muted);margin-top:4px}
 
-    @media(max-width:400px){
-      .input-row input{width:50px;padding:6px}
+    @media(max-width:380px){
+      .numbtn{height:38px;font-size:.9rem;border-radius:7px}
+      .numgrid{gap:4px}
       table{font-size:.78rem}
       th,td{padding:4px 5px}
     }
@@ -425,57 +430,119 @@
     else showActualForm(notice);
   }
 
-  function inputRows(withPredicted){
+  // ---- knopgroep-invoer ----
+  // sel = huidige keuze per speler (null = nog niet gekozen). Elke wijziging
+  // gaat als concept ("draft") naar de server zodat het scorebord live meekijkt.
+  let sel=[];
+  let draftChain=Promise.resolve();
+
+  function initSel(){
+    const n=game.players.length, d=game.draft;
+    sel=(d&&d.phase===game.phase&&Array.isArray(d.values)&&d.values.length===n)
+      ? d.values.slice()
+      : new Array(n).fill(null);
+  }
+
+  function sendDraft(){
+    const payload={round:game.currentRound,phase:game.phase,values:sel.slice()};
+    const id=game.id;
+    // serialiseer: snelle tikken mogen elkaar niet inhalen; fouten zijn
+    // niet-blokkerend (de echte bevestiging vangt alles alsnog af)
+    draftChain=draftChain.then(async()=>{
+      try{ await api('POST','/games/'+id+'/draft',payload); }
+      catch(err){
+        // 409 door een eigen bevestiging die de draft inhaalde → stil negeren;
+        // alleen refetchen als we lokaal nog in dezelfde ronde/fase zitten.
+        if(err.status===409&&game&&game.id===id
+           &&game.currentRound===payload.round&&game.phase===payload.phase){
+          try{ game=await api('GET','/games/'+id); renderGame('Spel is elders bijgewerkt'); }catch(e){}
+        }
+      }
+    });
+  }
+
+  function numRows(withPredicted){
     const preds=game.predictions[game.currentRound];
+    const cards=game.roundInfo.cards;
     let html='';
     game.playerOrder.forEach(pi=>{
       const badge=pi===game.dealerIdx?' <span class="dealer-badge">(deler)</span>':'';
-      html+='<div class="input-row"><span class="pname">'+esc(game.players[pi])+badge+'</span>'
+      html+='<div class="num-row" data-pi="'+pi+'"><div class="top">'
+        +'<span class="pname">'+esc(game.players[pi])+badge+'</span>'
         +(withPredicted?'<span class="predicted">voorspeld: '+preds[pi]+'</span>':'')
-        +'<input type="number" min="0" max="'+game.roundInfo.cards+'" data-pi="'+pi+'" inputmode="numeric"></div>';
+        +'</div><div class="numgrid" style="grid-template-columns:repeat('+(cards+1)+',1fr)">';
+      for(let v=0;v<=cards;v++){
+        html+='<button type="button" class="numbtn'+(withPredicted&&v===preds[pi]?' predmark':'')
+          +'" data-v="'+v+'">'+v+'</button>';
+      }
+      html+='</div></div>';
     });
     return html;
   }
 
-  function wireEnterChain(sec, okId){
-    const first=sec.querySelector('input');
-    if(first) first.focus();
-    sec.querySelectorAll('input').forEach((inp,i,all)=>{
-      inp.addEventListener('keydown',e=>{
-        if(e.key==='Enter'){
-          e.preventDefault();
-          if(i<all.length-1) all[i+1].focus();
-          else document.getElementById(okId).click();
-        }
+  // Uitgrijzen in de slagen-fase: samen nooit boven het aantal kaarten, en wie
+  // als laatste nog moet kiezen kan alleen het exacte restant aantikken.
+  // Een al gekozen speler mag wél lager (correctie); de som-check bij
+  // Bevestigen blijft de eindcontrole.
+  function refreshNumRows(sec,isActual){
+    const cards=game.roundInfo.cards;
+    sec.querySelectorAll('.num-row').forEach(row=>{
+      const pi=+row.dataset.pi;
+      let sOthers=0,uOthers=0;
+      sel.forEach((v,j)=>{ if(j===pi)return; if(v==null)uOthers++; else sOthers+=v; });
+      row.querySelectorAll('.numbtn').forEach(btn=>{
+        const v=+btn.dataset.v;
+        btn.classList.toggle('sel',sel[pi]===v);
+        btn.disabled=isActual&&!(sOthers+v<=cards&&(uOthers>0||sel[pi]!=null||sOthers+v===cards));
       });
     });
   }
 
-  function collectValues(sec, max, warnId){
-    const vals=new Array(game.players.length);
-    let valid=true;
-    sec.querySelectorAll('input[data-pi]').forEach(inp=>{
-      const pi=+inp.dataset.pi, v=inp.value;
-      if(v===''||isNaN(+v)||+v<0||+v>max){valid=false;}
-      vals[pi]=+v;
+  function wireNumRows(sec,isActual,onChange){
+    sec.querySelectorAll('.num-row').forEach(row=>{
+      const pi=+row.dataset.pi;
+      row.querySelectorAll('.numbtn').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+          const v=+btn.dataset.v;
+          sel[pi]=(sel[pi]===v)?null:v; // nogmaals tikken = keuze wissen
+          refreshNumRows(sec,isActual);
+          sendDraft();
+          onChange();
+        });
+      });
     });
-    if(!valid){
-      document.getElementById(warnId).innerHTML='<span class="error">Vul geldige aantallen in (0–'+max+')</span>';
-      return null;
-    }
-    return vals;
+    refreshNumRows(sec,isActual);
   }
+
+  function selTotal(){ return sel.reduce((a,v)=>a+(v||0),0); }
+  function selMissing(){ return sel.filter(v=>v==null).length; }
 
   function showPredictForm(notice){
     const cards=game.roundInfo.cards;
     const sec=$('#inputSection');
+    initSel();
     sec.innerHTML='<h3>Hoeveel slagen raad je? (max '+cards+')</h3>'
-      +inputRows(false)
+      +numRows(false)
+      +'<div class="sumline" id="predSum"></div>'
       +'<div id="predWarn">'+(notice?'<span class="warn">'+esc(notice)+'</span>':'')+'</div>'
       +'<div class="btn-row">'
       +(game.currentRound>0?'<button class="btn-small" id="predUndo">← Terug</button>':'')
       +'<button class="btn-primary" style="flex:1" id="predOk">Slagen invoeren →</button></div>';
-    wireEnterChain(sec,'predOk');
+
+    const okBtn=document.getElementById('predOk');
+    function updateState(){
+      const total=selTotal(), missing=selMissing();
+      $('#predSum').innerHTML='Samen voorspeld: <b>'+total+'</b> van '+cards+' slagen'
+        +(missing?' · nog '+missing+(missing===1?' speler':' spelers'):'');
+      okBtn.disabled=missing>0;
+    }
+    updateState();
+    wireNumRows(sec,false,()=>{
+      const w=document.getElementById('predWarn');
+      delete w.dataset.warned;
+      w.innerHTML='';
+      updateState();
+    });
 
     const undoBtn=document.getElementById('predUndo');
     if(undoBtn) undoBtn.addEventListener('click',()=>attempt(async()=>{
@@ -483,9 +550,9 @@
       renderGame();
     },'#gameConn'));
 
-    document.getElementById('predOk').addEventListener('click',()=>{
-      const preds=collectValues(sec,cards,'predWarn');
-      if(!preds) return;
+    okBtn.addEventListener('click',()=>{
+      if(selMissing()>0) return;
+      const preds=sel.slice();
       const total=preds.reduce((a,b)=>a+b,0);
       // advieswaarschuwing blijft client-side; blokkeert niet
       if(total===cards){
@@ -496,45 +563,52 @@
           return;
         }
       }
-      const btn=document.getElementById('predOk');
-      btn.disabled=true;
+      okBtn.disabled=true;
       attempt(async()=>{
         game = await api('POST','/games/'+game.id+'/predictions',{round:game.currentRound,predictions:preds});
         renderGame();
-      },'#gameConn').finally(()=>{ btn.disabled=false; });
+      },'#gameConn').finally(()=>{ okBtn.disabled=selMissing()>0; });
     });
   }
 
   function showActualForm(notice){
     const cards=game.roundInfo.cards;
     const sec=$('#inputSection');
+    initSel();
     sec.innerHTML='<h3>Werkelijke slagen</h3>'
-      +inputRows(true)
+      +numRows(true)
+      +'<div class="sumline" id="actSum"></div>'
       +'<div id="actWarn">'+(notice?'<span class="warn">'+esc(notice)+'</span>':'')+'</div>'
       +'<div class="btn-row">'
       +'<button class="btn-small" id="actBack">← Terug</button>'
       +'<button class="btn-primary" style="flex:1" id="actOk">Bevestigen ✓</button></div>';
-    wireEnterChain(sec,'actOk');
+
+    const okBtn=document.getElementById('actOk');
+    function updateState(){
+      const total=selTotal(), missing=selMissing();
+      $('#actSum').innerHTML='Samen: <b>'+total+'</b> van '+cards+' slagen'
+        +(missing?' · nog '+missing+(missing===1?' speler':' spelers'):'');
+      okBtn.disabled=missing>0||total!==cards;
+    }
+    updateState();
+    wireNumRows(sec,true,()=>{
+      document.getElementById('actWarn').innerHTML='';
+      updateState();
+    });
 
     document.getElementById('actBack').addEventListener('click',()=>attempt(async()=>{
       game = await api('POST','/games/'+game.id+'/undo');
       renderGame();
     },'#gameConn'));
 
-    document.getElementById('actOk').addEventListener('click',()=>{
-      const acts=collectValues(sec,cards,'actWarn');
-      if(!acts) return;
-      const total=acts.reduce((a,b)=>a+b,0);
-      if(total!==cards){
-        document.getElementById('actWarn').innerHTML='<span class="error">Totaal slagen ('+total+') is niet gelijk aan kaarten ('+cards+')</span>';
-        return;
-      }
-      const btn=document.getElementById('actOk');
-      btn.disabled=true;
+    okBtn.addEventListener('click',()=>{
+      const acts=sel.slice();
+      if(selMissing()>0||selTotal()!==cards) return;
+      okBtn.disabled=true;
       attempt(async()=>{
         game = await api('POST','/games/'+game.id+'/actuals',{round:game.currentRound,actuals:acts});
         renderGame();
-      },'#gameConn').finally(()=>{ btn.disabled=false; });
+      },'#gameConn').finally(()=>{ okBtn.disabled=selMissing()>0||selTotal()!==cards; });
     });
   }
 

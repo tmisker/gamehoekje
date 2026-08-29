@@ -197,6 +197,40 @@ async function main() {
     console.log('OK validatie, 409-guards, undo, abandon');
   }
 
+  // --- draft: concept-invoer voor live meekijken op het scorebord ---
+  {
+    const created = await api('POST', '/api/boerenbridge/games', { players: ['D1', 'D2', 'D3'] });
+    const id = created.body.id;
+    assert.equal(created.body.draft, null, 'nieuw spel heeft geen draft');
+    // gedeeltelijke voorspelling → draft in het spel én in de snapshot
+    let r = await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'predict', values: [2, null, null] });
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body.draft, { phase: 'predict', values: [2, null, null] });
+    let cur = (await api('GET', '/api/boerenbridge/current')).body;
+    assert.deepEqual(cur.game.draft.values, [2, null, null], 'draft zit in de snapshot');
+    // verkeerde fase of ronde → 409
+    assert.equal((await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'actual', values: [2, null, null] })).status, 409);
+    assert.equal((await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 1, phase: 'predict', values: [2, null, null] })).status, 409);
+    // waarde buiten bereik of verkeerde lengte → 400
+    assert.equal((await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'predict', values: [9, null, null] })).status, 400);
+    assert.equal((await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'predict', values: [1, null] })).status, 400);
+    // alles null → draft weer leeg
+    r = await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'predict', values: [null, null, null] });
+    assert.equal(r.body.draft, null);
+    // bevestigen van de voorspellingen wist de draft
+    await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'predict', values: [2, 3, 3] });
+    r = await api('POST', '/api/boerenbridge/games/' + id + '/predictions', { round: 0, predictions: [2, 3, 3] });
+    assert.equal(r.body.phase, 'actual');
+    assert.equal(r.body.draft, null, 'predictions wist de draft');
+    // draft in de slagen-fase; undo wist hem ook
+    r = await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'actual', values: [1, null, null] });
+    assert.deepEqual(r.body.draft, { phase: 'actual', values: [1, null, null] });
+    r = await api('POST', '/api/boerenbridge/games/' + id + '/undo', {});
+    assert.equal(r.body.draft, null, 'undo wist de draft');
+    await api('POST', '/api/boerenbridge/games/' + id + '/abandon', {});
+    console.log('OK draft-invoer (live meekijken)');
+  }
+
   // --- leaderboard-wiskunde met bekende uitkomsten ---
   {
     // Twee identieke deterministische spellen: Vera raadt exact alles (cards+5 per ronde),
@@ -283,11 +317,13 @@ async function main() {
     });
     await new Promise(r => setTimeout(r, 300)); // wacht op connect + snapshot
     const created = await api('POST', '/api/boerenbridge/games', { players: ['S1', 'S2', 'S3'] });
+    await api('POST', '/api/boerenbridge/games/' + created.body.id + '/draft', { round: 0, phase: 'predict', values: [3, null, null] });
     await new Promise(r => setTimeout(r, 300));
     req.destroy();
     const stream = events.join('');
     assert.ok(stream.includes('event: state'), 'state-events ontvangen');
     assert.ok(stream.includes(created.body.id), 'mutatie-broadcast bevat nieuw spel');
+    assert.ok(stream.includes('"values":[3,null,null]'), 'draft-broadcast bevat de concept-invoer');
     await api('POST', '/api/boerenbridge/games/' + created.body.id + '/abandon', {});
     console.log('OK SSE snapshot + broadcast');
   }
