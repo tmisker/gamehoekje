@@ -293,20 +293,25 @@ async function main() {
     console.log('OK klassement-filter (potjes zonder bepaalde spelers)');
   }
 
-  // --- naamsuggesties: vaakst-meespelend eerst, uit álle potjes ---
+  // --- naamsuggesties: vaakst-meespelend eerst, zonder afgebroken potjes ---
   {
     const pick = (r, cards) => ({ preds: [cards, 0, 0], acts: [cards, 0, 0] });
     await playGame(['Fien', 'Gijs', 'Hein'], pick);
     await playGame(['Fien', 'Gijs', 'Hein'], pick);
-    // Derde potje (straks afgebroken) met een andere schrijfwijze van Fien.
+    // Derde potje met een andere schrijfwijze van Fien.
     await new Promise(res => setTimeout(res, 10)); // eigen createdAt voor de recentheids-sortering
-    const g = (await api('POST', '/api/boerenbridge/games', { players: ['fien', 'Iris', 'Joep'] })).body;
-    await api('POST', '/api/boerenbridge/games/' + g.id + '/abandon');
+    await playGame(['fien', 'Iris', 'Joep'], pick);
+    // Afgebroken potje (vaak een testje met onzin-namen) telt niet mee.
+    const ab = (await api('POST', '/api/boerenbridge/games', { players: ['Qqq', 'Iris', 'Joep'] })).body;
+    await api('POST', '/api/boerenbridge/games/' + ab.id + '/abandon');
+    // Een lopend potje telt wél mee.
+    const act = (await api('POST', '/api/boerenbridge/games', { players: ['Roos', 'Stan', 'Teun'] })).body;
 
     const sug = (await api('GET', '/api/boerenbridge/leaderboard')).body.suggestions;
     const pos = name => sug.indexOf(name);
     assert.ok(pos('fien') >= 0 && pos('Fien') === -1, 'recentste schrijfwijze wint');
-    assert.ok(pos('Iris') >= 0 && pos('Joep') >= 0, 'afgebroken potje telt mee als suggestie');
+    assert.equal(pos('Qqq'), -1, 'afgebroken potje telt niet mee');
+    assert.ok(pos('Roos') >= 0, 'actief potje telt mee');
     assert.ok(pos('fien') < pos('Gijs'), '3 potjes vóór 2 potjes');
     assert.ok(pos('Gijs') < pos('Iris'), '2 potjes vóór 1 potje');
     assert.ok(pos('Iris') < pos('Kind'), 'bij gelijk aantal wint het recentste potje');
@@ -314,7 +319,9 @@ async function main() {
     // Het klassement-filter raakt de suggesties niet.
     const ex = (await api('GET', '/api/boerenbridge/leaderboard?exclude=fien')).body.suggestions;
     assert.deepEqual(ex, sug, 'exclude laat suggesties intact');
-    console.log('OK naamsuggesties (frequentie, recentheid, alle potjes)');
+    // Opruimen: het lopende potje mag de current-snapshot-test niet verstoren.
+    await api('POST', '/api/boerenbridge/games/' + act.id + '/abandon');
+    console.log('OK naamsuggesties (frequentie, recentheid, zonder afgebroken potjes)');
   }
 
   // --- current-snapshot: actief spel > recent afgerond > idle ---

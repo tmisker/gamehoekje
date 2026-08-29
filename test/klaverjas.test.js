@@ -391,7 +391,8 @@ async function main() {
     const kjLb = (await api('GET', API + '/leaderboard')).body;
     assert.ok(!kjLb.players.includes('X1'), 'aparte klassementen');
     assert.ok(!kjLb.suggestions.includes('X1'), 'aparte naamsuggesties');
-    assert.ok(kjLb.suggestions.includes('S1'), 'afgebroken potje telt mee als suggestie');
+    assert.ok(!kjLb.suggestions.includes('S1'), 'afgebroken potje telt niet mee als suggestie');
+    assert.ok(kjLb.suggestions.includes('Gijs'), 'afgeronde potjes wel');
     const kjCur = (await api('GET', API + '/current')).body;
     assert.ok(!kjCur.game || kjCur.game.id !== bb.body.id, 'aparte snapshots');
     assert.equal((await fetch(BASE + '/games/klaverjas/')).status, 200, 'invoerpagina');
