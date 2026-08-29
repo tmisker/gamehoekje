@@ -35,9 +35,19 @@ De server (Node ≥ 18, geen npm-dependencies) serveert de hele site op
 
 1. Open `games/boerenbridge/` op de telefoon van de scorebijhouder — hier
    start of hervat je een spel en voer je voorspellingen en slagen in.
+   Aantallen tik je aan op knoppen (0 t/m het aantal kaarten). Bij de
+   werkelijke slagen grijst de pagina onmogelijke aantallen uit: samen nooit
+   meer dan het aantal kaarten, en de laatste speler kan alleen nog het
+   exacte restant kiezen. Nogmaals tikken wist een keuze weer.
 2. Open `games/boerenbridge/display/` op een tweede apparaat (bijv. een iPad
    op tafel) — dit scorebord volgt het spel live via Server-Sent Events.
-   Zonder actief spel toont het scherm het klassement.
+   Zonder actief spel toont het scherm het klassement. Tijdens een potje
+   schakelt het vanzelf tussen vier weergaven: zodra de eerste voorspelling
+   wordt aangetikt zie je live wie hoeveel vraagt en groot het totaal
+   ("samen gevraagd"); tijdens het kaarten blijven ieders voorspelling en dat
+   totaal groot in beeld (mét of er te veel of te weinig gevraagd is); na de
+   telling komt de tussenstand met het scoreblok; en na de laatste ronde de
+   eindstand.
 3. Onder 🏆 Klassement op de telefoon kun je spelers aantikken om potjes
    waarin zij meededen weg te laten — handig als er af en toe kinderen
    meespelen. Je keuze blijft op dat toestel bewaard; het display toont

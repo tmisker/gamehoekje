@@ -71,6 +71,14 @@ Dockerfile                     # node:22-alpine, geen npm install
 - **Concurrency-guard:** mutaties sturen `round` mee; klopt die niet met
   `currentRound`/`phase` op de server → 409, en de client refetcht. Geen
   client-side reconciliatie.
+- **Boerenbridge kent concept-invoer ("draft"):** de invoerpagina POST elke
+  aangetikte keuze naar `.../draft` (`{round, phase, values}` met `null` voor
+  "nog niet gekozen"). Dat is niet-autoritatief — het telt nergens in mee —
+  maar komt wel in `game.draft` en dus in de SSE-snapshot, zodat het scorebord
+  live kan tonen wie hoeveel vraagt/haalt. Elke echte mutatie
+  (predictions/actuals/undo/abandon) wist de draft. Het display kiest op basis
+  van `phase` + `draft` tussen vier schermen: voorspellen (draft-invoer
+  loopt), spelen, tussenstand, eindstand.
 - **SSE** (`/api/<spel>/events`): bij connect en na elke mutatie gaat
   de **volledige snapshot** over de lijn (nooit deltas), plus een
   `ping`-event elke 25 s. `server.requestTimeout = 0` staat bewust aan —

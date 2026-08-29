@@ -59,6 +59,7 @@ function createGame(names) {
     phase: 'predict', // predict | actual
     status: 'active', // active | finished | abandoned
     winnerIdxs: null,
+    draft: null, // concept-invoer voor live meekijken: {phase, values} of null
   };
 }
 
@@ -82,6 +83,28 @@ function applyPredictions(game, round, preds) {
   checkValues(game, round, preds, 'Voorspellingen');
   game.predictions[game.currentRound] = preds;
   game.phase = 'actual';
+  game.draft = null;
+  game.updatedAt = new Date().toISOString();
+}
+
+// Concept-invoer: wat de invoerder al heeft aangetikt (null = nog niet gekozen).
+// Niet-autoritatief — telt nergens in mee, maar gaat wel mee in de SSE-snapshot
+// zodat het scorebord live kan tonen wie hoeveel vraagt/haalt.
+function applyDraft(game, round, phase, values) {
+  if (game.status !== 'active') throw httpError(409, 'Dit spel is al afgelopen');
+  if (round !== game.currentRound || phase !== game.phase) {
+    throw httpError(409, 'Spel is elders bijgewerkt');
+  }
+  const r = game.rounds[game.currentRound];
+  if (!Array.isArray(values) || values.length !== game.players.length) {
+    throw httpError(400, 'Invoer ontbreekt');
+  }
+  for (const v of values) {
+    if (v !== null && (!Number.isInteger(v) || v < 0 || v > r.cards)) {
+      throw httpError(400, 'Vul geldige aantallen in (0–' + r.cards + ')');
+    }
+  }
+  game.draft = values.some(v => v !== null) ? { phase, values } : null;
   game.updatedAt = new Date().toISOString();
 }
 
@@ -96,6 +119,7 @@ function applyActuals(game, round, acts) {
   game.actuals[game.currentRound] = acts;
   game.roundScores[game.currentRound] = acts.map((act, i) => scoreRound(preds[i], act));
   game.currentRound++;
+  game.draft = null;
   game.updatedAt = new Date().toISOString();
   if (game.currentRound >= game.rounds.length) {
     game.status = 'finished';
@@ -128,12 +152,14 @@ function undo(game) {
   } else {
     throw httpError(409, 'Niets om ongedaan te maken');
   }
+  game.draft = null;
   game.updatedAt = new Date().toISOString();
 }
 
 function abandon(game) {
   if (game.status !== 'active') throw httpError(409, 'Dit spel is al afgelopen');
   game.status = 'abandoned';
+  game.draft = null;
   game.updatedAt = new Date().toISOString();
 }
 
@@ -197,7 +223,7 @@ function leaderboardView(games, exclude) {
 module.exports = {
   SUITS, SUIT_NAMES, SUIT_COLORS,
   buildRounds, scoreRound, dealerIdx, playerOrder,
-  createGame, applyPredictions, applyActuals, undo, abandon,
+  createGame, applyPredictions, applyDraft, applyActuals, undo, abandon,
   getTotals, enrich, gameSummary,
   leaderboard, leaderboardView,
   finishedGames: shared.finishedGames,
