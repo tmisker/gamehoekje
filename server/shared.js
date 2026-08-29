@@ -35,12 +35,14 @@ function leaderboardPlayers(games) {
   return [...byKey.values()].sort((a, b) => a.localeCompare(b, 'nl'));
 }
 
-// Naamsuggesties voor de invoerpagina's: iedereen die ooit meedeed (ook in
-// actieve of afgebroken potjes), gesorteerd op vaakst-meespelend; bij een
-// gelijk aantal wint wie het recentst aan tafel zat.
+// Naamsuggesties voor de invoerpagina's: iedereen uit actieve en afgeronde
+// potjes, gesorteerd op vaakst-meespelend; bij een gelijk aantal wint wie het
+// recentst aan tafel zat. Afgebroken potjes tellen niet mee — dat zijn nogal
+// eens testjes met onzin-namen.
 function playerSuggestions(games) {
   const byKey = new Map();
   for (const game of games) {
+    if (game.status === 'abandoned') continue;
     const at = Date.parse(game.createdAt) || 0;
     for (const name of game.players) {
       const key = nameKey(name);

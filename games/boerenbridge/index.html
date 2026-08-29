@@ -389,9 +389,9 @@
   async function loadLeaderboard(){
     const qs = lbExclude.map(n=>'exclude='+encodeURIComponent(n)).join('&');
     const lb = await api('GET','/leaderboard'+(qs?'?'+qs:''));
-    // Suggesties komen uit álle potjes (dus ook actieve/afgebroken) en staan
-    // op vaakst-meespelend; het klassement-filter erop toepassen zou namen
-    // uit de invoerhulp laten verdwijnen.
+    // Suggesties komen uit actieve en afgeronde potjes (afgebroken niet) en
+    // staan op vaakst-meespelend; het klassement-filter erop toepassen zou
+    // namen uit de invoerhulp laten verdwijnen.
     knownNames = lb.suggestions || lb.players;
     renderNameSuggest();
     const dl=$('#knownNames');
