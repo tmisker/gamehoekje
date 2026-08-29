@@ -293,6 +293,30 @@ async function main() {
     console.log('OK klassement-filter (potjes zonder bepaalde spelers)');
   }
 
+  // --- naamsuggesties: vaakst-meespelend eerst, uit álle potjes ---
+  {
+    const pick = (r, cards) => ({ preds: [cards, 0, 0], acts: [cards, 0, 0] });
+    await playGame(['Fien', 'Gijs', 'Hein'], pick);
+    await playGame(['Fien', 'Gijs', 'Hein'], pick);
+    // Derde potje (straks afgebroken) met een andere schrijfwijze van Fien.
+    await new Promise(res => setTimeout(res, 10)); // eigen createdAt voor de recentheids-sortering
+    const g = (await api('POST', '/api/boerenbridge/games', { players: ['fien', 'Iris', 'Joep'] })).body;
+    await api('POST', '/api/boerenbridge/games/' + g.id + '/abandon');
+
+    const sug = (await api('GET', '/api/boerenbridge/leaderboard')).body.suggestions;
+    const pos = name => sug.indexOf(name);
+    assert.ok(pos('fien') >= 0 && pos('Fien') === -1, 'recentste schrijfwijze wint');
+    assert.ok(pos('Iris') >= 0 && pos('Joep') >= 0, 'afgebroken potje telt mee als suggestie');
+    assert.ok(pos('fien') < pos('Gijs'), '3 potjes vóór 2 potjes');
+    assert.ok(pos('Gijs') < pos('Iris'), '2 potjes vóór 1 potje');
+    assert.ok(pos('Iris') < pos('Kind'), 'bij gelijk aantal wint het recentste potje');
+    assert.ok(pos('Iris') < pos('Joep'), 'daarna alfabetisch');
+    // Het klassement-filter raakt de suggesties niet.
+    const ex = (await api('GET', '/api/boerenbridge/leaderboard?exclude=fien')).body.suggestions;
+    assert.deepEqual(ex, sug, 'exclude laat suggesties intact');
+    console.log('OK naamsuggesties (frequentie, recentheid, alle potjes)');
+  }
+
   // --- current-snapshot: actief spel > recent afgerond > idle ---
   {
     let cur = (await api('GET', '/api/boerenbridge/current')).body;

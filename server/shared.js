@@ -35,6 +35,27 @@ function leaderboardPlayers(games) {
   return [...byKey.values()].sort((a, b) => a.localeCompare(b, 'nl'));
 }
 
+// Naamsuggesties voor de invoerpagina's: iedereen die ooit meedeed (ook in
+// actieve of afgebroken potjes), gesorteerd op vaakst-meespelend; bij een
+// gelijk aantal wint wie het recentst aan tafel zat.
+function playerSuggestions(games) {
+  const byKey = new Map();
+  for (const game of games) {
+    const at = Date.parse(game.createdAt) || 0;
+    for (const name of game.players) {
+      const key = nameKey(name);
+      if (!key) continue;
+      let e = byKey.get(key);
+      if (!e) { e = { name, count: 0, last: -1 }; byKey.set(key, e); }
+      e.count++;
+      if (at >= e.last) { e.last = at; e.name = name; } // recentste schrijfwijze wint
+    }
+  }
+  return [...byKey.values()]
+    .sort((a, b) => b.count - a.count || b.last - a.last || a.name.localeCompare(b.name, 'nl'))
+    .map(e => e.name);
+}
+
 // Klassementsrijen per speler; `scoreOf(game)` geeft per spelerindex
 // {points, won}. Spelers worden gekoppeld op naam (case-insensitief), zodat
 // dezelfde persoon over potjes heen optelt.
@@ -67,8 +88,8 @@ function aggregate(games, scoreOf) {
   return rows;
 }
 
-// Payload voor /leaderboard: rijen + de keuzelijst + hoeveel potjes meetellen.
-// `buildRows` krijgt de al gefilterde lijst afgeronde potjes.
+// Payload voor /leaderboard: rijen + de keuzelijst + naamsuggesties + hoeveel
+// potjes meetellen. `buildRows` krijgt de al gefilterde lijst afgeronde potjes.
 function leaderboardView(games, exclude, buildRows) {
   const skip = excludeSet(exclude);
   const players = leaderboardPlayers(games);
@@ -76,6 +97,7 @@ function leaderboardView(games, exclude, buildRows) {
   return {
     leaderboard: buildRows(counted),
     players,
+    suggestions: playerSuggestions(games),
     excluded: players.filter(n => skip.has(nameKey(n))),
     gamesCounted: counted.length,
     gamesTotal: finishedGames(games).length,
@@ -84,5 +106,5 @@ function leaderboardView(games, exclude, buildRows) {
 
 module.exports = {
   httpError, nameKey, excludeSet,
-  finishedGames, leaderboardPlayers, aggregate, leaderboardView,
+  finishedGames, leaderboardPlayers, playerSuggestions, aggregate, leaderboardView,
 };

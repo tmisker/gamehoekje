@@ -76,6 +76,10 @@
     }
     .chip.on{background:var(--red-dim);border-color:var(--red);color:var(--text)}
     .lb-count{color:var(--muted);font-size:.8rem;margin-top:10px}
+    /* naamsuggesties onder de invoervelden */
+    #nameSuggest .chips{margin:-4px 0 14px}
+    #nameSuggest .chip.used{background:var(--accent-dim);border-color:var(--accent);color:var(--text)}
+    #nameSuggest .chip.more{color:var(--accent);border-style:dashed}
 
     /* Game */
     #game{width:100%;max-width:600px;display:none;flex-direction:column;gap:14px}
@@ -176,6 +180,7 @@
       </select>
       <label>Namen</label>
       <div class="player-inputs" id="nameInputs"></div>
+      <div id="nameSuggest"></div>
       <datalist id="knownNames"></datalist>
       <div id="startWarn"></div>
       <button class="btn-primary" id="startBtn">Starten</button>
@@ -286,16 +291,68 @@
   const countSel=$('#playerCount'), nameDiv=$('#nameInputs');
   function updateNameInputs(){
     const n=+countSel.value;
+    const old=[...nameDiv.querySelectorAll('input')].map(inp=>inp.value);
     nameDiv.innerHTML='';
     for(let i=0;i<n;i++){
       const inp=document.createElement('input');
       inp.placeholder='Speler '+(i+1);
       inp.setAttribute('list','knownNames');
+      inp.autocapitalize='words';
       inp.dataset.idx=i;
+      if(old[i]) inp.value=old[i];
       nameDiv.appendChild(inp);
     }
+    renderNameSuggest();
   }
   countSel.addEventListener('change',updateNameInputs);
+  nameDiv.addEventListener('input',renderNameSuggest);
+
+  // Tikbare naamsuggesties: de server sorteert op vaakst-meespelend, dus de
+  // vaste groep staat vooraan. Tikken vult het eerste lege veld; nogmaals
+  // tikken haalt de naam weer weg. Typen kan altijd nog (nieuwe spelers).
+  let knownNames=[]; // volgorde van de server (lb.suggestions)
+  let namesOpen=false;
+  const NAME_LIMIT=12;
+
+  function renderNameSuggest(){
+    const box=$('#nameSuggest');
+    box.innerHTML='';
+    if(!knownNames.length) return;
+    const used=new Set([...nameDiv.querySelectorAll('input')]
+      .map(inp=>inp.value.trim().toLowerCase()).filter(Boolean));
+    const chips=document.createElement('div');
+    chips.className='chips';
+    (namesOpen?knownNames:knownNames.slice(0,NAME_LIMIT)).forEach(name=>{
+      const btn=document.createElement('button');
+      btn.type='button';
+      btn.className='chip'+(used.has(name.toLowerCase())?' used':'');
+      btn.textContent=name;
+      btn.addEventListener('click',()=>toggleName(name));
+      chips.appendChild(btn);
+    });
+    if(knownNames.length>NAME_LIMIT){
+      const more=document.createElement('button');
+      more.type='button';
+      more.className='chip more';
+      more.textContent=namesOpen?'minder':'+'+(knownNames.length-NAME_LIMIT)+' meer';
+      more.addEventListener('click',()=>{ namesOpen=!namesOpen; renderNameSuggest(); });
+      chips.appendChild(more);
+    }
+    box.appendChild(chips);
+  }
+
+  function toggleName(name){
+    const inputs=[...nameDiv.querySelectorAll('input')];
+    const key=name.toLowerCase();
+    const has=inputs.find(inp=>inp.value.trim().toLowerCase()===key);
+    if(has) has.value='';
+    else{
+      const empty=inputs.find(inp=>!inp.value.trim());
+      if(!empty) return; // alle velden vol
+      empty.value=name;
+    }
+    renderNameSuggest();
+  }
   updateNameInputs();
 
   function showStart(){
@@ -332,11 +389,14 @@
   async function loadLeaderboard(){
     const qs = lbExclude.map(n=>'exclude='+encodeURIComponent(n)).join('&');
     const lb = await api('GET','/leaderboard'+(qs?'?'+qs:''));
-    // Bekende namen komen uit de volledige spelerslijst, niet uit de
-    // gefilterde rijen — anders verdwijnen ze uit de suggesties.
+    // Suggesties komen uit álle potjes (dus ook actieve/afgebroken) en staan
+    // op vaakst-meespelend; het klassement-filter erop toepassen zou namen
+    // uit de invoerhulp laten verdwijnen.
+    knownNames = lb.suggestions || lb.players;
+    renderNameSuggest();
     const dl=$('#knownNames');
     dl.innerHTML='';
-    lb.players.forEach(name=>{
+    knownNames.forEach(name=>{
       const opt=document.createElement('option');
       opt.value=name;
       dl.appendChild(opt);
