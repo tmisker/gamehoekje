@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Verifieer wijzigingen aan de Spellenhoek-server of de kaartspel-pagina's (boerenbridge, klaverjas) end-to-end (server draaien, browser aansturen, SSE checken).
+description: Verifieer wijzigingen aan de Spellenhoek-server of de spelpagina's (boerenbridge, klaverjas, tafeltennis) end-to-end (server draaien, browser aansturen, SSE checken).
 ---
 
 # Spellenhoek verifiëren
@@ -10,10 +10,11 @@ description: Verifieer wijzigingen aan de Spellenhoek-server of de kaartspel-pag
 ```bash
 node test/api.test.js        # end-to-end API-suite boerenbridge, spawnt zelf de server
 node test/klaverjas.test.js  # idem voor klaverjas
+node test/tafeltennis.test.js # idem voor het tafeltennistoernooi
 ```
 
-Draai ze allebei bij elke wijziging in `server/`: `shared.js` wordt door beide
-spellen gebruikt.
+Draai ze alle drie bij elke wijziging in `server/`: `shared.js` wordt door
+alle spellen gebruikt.
 
 Voor handmatig prikken: `PORT=3100 DATA_DIR=/tmp/bb-data node server/server.js`
 en dan `curl localhost:3100/api/boerenbridge/current` of
@@ -40,6 +41,15 @@ slagen → volgende ronde. Interessante probes: slagen die niet optellen tot het
 kaartenaantal (foutmelding), server killen + herstarten (retry-banner op de
 invoerpagina), tweede pagina die hetzelfde spel hervat en eerder indient
 (409 → refetch + melding op de eerste).
+
+Tafeltennis: open `games/tafeltennis/` (telefoon) en `games/tafeltennis/display/`
+(scorebord). Flow: namen + toernooivorm kiezen (`[data-key="format"] [data-val=…]`)
+→ starten → `.now-card` aantikken → per game `input[data-side]` vullen of
+`[data-win]` tikken (de volgende `.game-row` verschijnt vanzelf) → het
+scorebord toont de tussenstand in `.tcard .live .cur` → `#saveBtn` →
+`.notice`. Probes: 11–10 (400 in `#formWarn .error`), dezelfde wedstrijd op
+twee telefoons (409 → `.notice.bad`), poule uitspelen (scorebord wisselt naar
+`.bracket`), eindronde uitspelen (`.podium`), undo vanuit `#winnerArea`.
 
 ## Valkuil (echt gebeurd)
 

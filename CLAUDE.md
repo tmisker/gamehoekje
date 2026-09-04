@@ -8,7 +8,7 @@ Korte, praktische uitleg over hoe deze repo werkt. Lees dit eerst.
 browser. Geen framework, geen npm-dependencies. Elke spelpagina is
 zelfstandige HTML/CSS/JS. Er is één minimale **Node-server**
 (`server/server.js`, alleen ingebouwde modules) die de site serveert én de
-spel-API's + SSE levert (boerenbridge, klaverjas); de overige spellen doen
+spel-API's + SSE levert (boerenbridge, klaverjas, tafeltennis); de overige spellen doen
 geen enkele request en werken ook als los bestand. Deploy = Docker op de thuisserver (zie README;
 de compose-service staat in de aparte `manor`-repo). GitHub Pages wordt
 **niet** meer gebruikt.
@@ -20,15 +20,18 @@ UI-teksten zijn in het **Nederlands**. Houd dat zo.
 ```
 index.html                     # homepage: overzicht met een kaartje per spel
 server/
-  server.js                    # statische site + /api/boerenbridge/* + /api/klaverjas/* + SSE
+  server.js                    # statische site + /api/{boerenbridge,klaverjas,tafeltennis}/* + SSE
   shared.js                    # gedeelde, spel-onafhankelijke helpers (klassement, httpError)
   logic.js                     # autoritatieve boerenbridge-logica (pure functies)
   klaverjas.js                 # autoritatieve klaverjas-logica (pure functies)
+  tafeltennis.js               # autoritatieve toernooilogica tafeltennis (pure functies)
 games/
   boerenbridge/index.html      # invoerpagina (telefoon) — praat met het API
   boerenbridge/display/        # live scorebord (iPad/tweede scherm) — SSE
   klaverjas/index.html         # klaverjas-invoerpagina (telefoon) — praat met het API
   klaverjas/display/           # live scorebord (iPad/tweede scherm) — SSE
+  tafeltennis/index.html       # toernooi-invoerpagina (telefoon) — praat met het API
+  tafeltennis/display/         # live scorebord: tafels, stand/kruistabel, schema — SSE
   cube-solver/index.html       # GEBOUWD bestand — NIET met de hand bewerken
   wafelwoorden/index.html      # los, zelfstandig spel (met de hand bewerkbaar)
 src/
@@ -40,6 +43,7 @@ src/
 build.js                       # bouwt src/cube-solver/* -> games/cube-solver/index.html
 test/api.test.js               # end-to-end test van server + boerenbridge-API
 test/klaverjas.test.js         # end-to-end test van het klaverjas-API
+test/tafeltennis.test.js       # end-to-end test van het tafeltennis-API
 test/solver.test.js            # cube-solver op honderden scrambles (node test/solver.test.js)
 data/                          # spelgegevens (gitignored; Docker-volume)
 README.md                      # gebruikersgerichte uitleg
@@ -53,7 +57,9 @@ Dockerfile                     # node:22-alpine, geen npm install
   (env: `PORT`, `DATA_DIR`).
 - **De server is autoritatief.** Alle spelregels (boerenbridge: rondeschema
   8→1→8, scoreformule, deler/beurtvolgorde; klaverjas: nat, roem, pit,
-  16 rondes, twee fasen) staan in `server/logic.js` resp. `server/klaverjas.js`.
+  16 rondes, twee fasen; tafeltennis: poule-indeling, game-validatie,
+  tiebreaks, schema/seeding) staan in `server/logic.js`, `server/klaverjas.js`
+  en `server/tafeltennis.js`.
   De pagina's zijn pure renderers van het "verrijkte" game-object dat elke
   mutatie-POST teruggeeft (en bij boerenbridge ook via SSE wordt gebroadcast).
   Dupliceer spelregels nooit in de clients — de klaverjaspagina rekent
@@ -70,7 +76,22 @@ Dockerfile                     # node:22-alpine, geen npm install
   volgorde.
 - **Concurrency-guard:** mutaties sturen `round` mee; klopt die niet met
   `currentRound`/`phase` op de server → 409, en de client refetcht. Geen
-  client-side reconciliatie.
+  client-side reconciliatie. Bij tafeltennis is de wedstrijd zelf de guard
+  (uitslag al ingevoerd / spelers nog onbekend → 409) en stuurt `undo` de
+  `revision` (= aantal ingevoerde uitslagen) mee.
+- **Tafeltennis (4T) in het kort:** `createGame` maakt álle wedstrijden vooraf
+  aan (`game.matches`, in speelvolgorde): de poule via de cirkelmethode
+  (`pouleSchedule`), een knock-outschema via `buildBracket` met standaard
+  seeding (`seedOrder`: 1–8, 4–5, 2–7, 3–6) en `NOBODY` (-1) voor lege plekken.
+  Eindronde-wedstrijden kennen hun bronnen (`from: [{match, take}]`);
+  `propagate` vult plekken door en beslist vrije rondes (byes) automatisch, ook
+  terug na undo. Uitslagen mogen in elke volgorde (`POST .../result` met
+  `matchId`); `game.history` is de invoervolgorde, undo = LIFO. `settle` bouwt
+  de eindronde zodra de poule uit is en sluit/heropent het toernooi. Undo van
+  een poulewedstrijd bij poule+eindronde gooit de (dan nog ongespeelde)
+  eindronde weg. De stand (`standings`) rangschikt recursief: winst → onderling
+  (winst, game-, puntensaldo) → saldo over de hele poule → gedeelde plek.
+  `.../draft` is de live tussenstand van één wedstrijd (niet-autoritatief).
 - **Boerenbridge kent concept-invoer ("draft"):** de invoerpagina POST elke
   aangetikte keuze naar `.../draft` (`{round, phase, values}` met `null` voor
   "nog niet gekozen"). Dat is niet-autoritatief — het telt nergens in mee —
@@ -133,13 +154,13 @@ en als die `null` geeft → `solveCube`.
 
 ## Testen (doe dit, er is geen CI)
 
-**Server:** `node test/api.test.js` (boerenbridge) en
-`node test/klaverjas.test.js` — beide spawnen de echte server met een
-tijdelijke datamap en testen spelverloop, de scoreformule (tegen een
+**Server:** `node test/api.test.js` (boerenbridge), `node test/klaverjas.test.js`
+en `node test/tafeltennis.test.js` — alle drie spawnen de echte server met een
+tijdelijke datamap en testen spelverloop, de scoreformule/stand (tegen een
 onafhankelijke herimplementatie in de test zelf), 409-guards, undo,
-klassement, path-traversal en persistentie; de boerenbridge-suite doet ook
-SSE. Draai **allebei** na elke wijziging in `server/` — `shared.js` wordt
-door beide spellen gebruikt.
+klassement, SSE en persistentie; de boerenbridge-suite doet ook
+path-traversal. Draai **alle drie** na elke wijziging in `server/` —
+`shared.js` wordt door alle spellen gebruikt.
 
 `solver.js` en `kociemba.js` draaien ook in **Node** (ze exporteren via
 `module.exports`). Test solver-logica direct:
@@ -174,6 +195,12 @@ test de solver-integratie maar niet de worker zelf.
 - **Nat mag zonder telling:** `points: null` (via `nat: true`) betekent "nat
   verklaard". Dat kan omdat bij nat de puntenverdeling voor de score niet
   uitmaakt — de tegenpartij krijgt sowieso 162 + alle roem.
+- **Tafeltennis-poule met oneven aantal:** de cirkelmethode werkt met een lege
+  plek (`NOBODY`); paren met die plek worden overgeslagen, dus rondes hebben
+  dan `floor(n/2)` wedstrijden en er zijn `n` rondes i.p.v. `n-1`.
+- **Wie "nu aan tafel" is** (`upNow`) is greedy: de eerste speelbare wedstrijden
+  in schema-volgorde waarvan geen speler al bezig is, één per tafel. Dat wijkt
+  bewust af van de strikte rondevolgorde zodra een tafel eerder klaar is.
 - **Slice-coördinaat:** voor de opgeloste kubus is `getSlice` = **494** (niet 0),
   want de comb-index van posities {8,9,10,11} is de hoogste. De pruning-BFS start
   daarom op `SLICE_SOLVED`, en de fase-1 goal checkt `slice === SLICE_SOLVED`.
