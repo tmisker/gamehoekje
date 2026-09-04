@@ -13,6 +13,7 @@ offline als losse pagina's.
 | 🧇 **Wafelwoorden** | `games/wafelwoorden/` | Sleep de letters op hun plek en los de woordwafel op. |
 | 🃏 **Boerenbridge** | `games/boerenbridge/` | Score bijhouden met twee apparaten: invoer op je telefoon, live scorebord op een tweede scherm. Met klassement over alle potjes. |
 | 🂡 **Klaverjas** | `games/klaverjas/` | Een boompje van 16 rondes met twee teams: troef, punten, roem, nat en pit. Met live scorebord op een tweede scherm en klassement. |
+| 🏓 **Tafeltennis** | `games/tafeltennis/` | Toernooitracker (4T): poule, poule + eindronde of knock-out, uitslagen per game met deuce-controle, live scorebord met stand, kruistabel en schema, en een klassement over toernooien heen. |
 
 Elk spel is een zelfstandige pagina onder `games/<naam>/index.html` met een
 link terug naar de homepage.
@@ -24,12 +25,13 @@ node server/server.js
 ```
 
 De server (Node ≥ 18, geen npm-dependencies) serveert de hele site op
-`http://localhost:3000` en biedt de spel-API's onder `/api/boerenbridge/` en
-`/api/klaverjas/`, elk met een eigen SSE-kanaal voor het scorebord. Configuratie via omgevingsvariabelen:
+`http://localhost:3000` en biedt de spel-API's onder `/api/boerenbridge/`,
+`/api/klaverjas/` en `/api/tafeltennis/`, elk met een eigen SSE-kanaal voor het
+scorebord. Configuratie via omgevingsvariabelen:
 
 - `PORT` – poort (standaard `3000`)
-- `DATA_DIR` – map voor de databestanden `boerenbridge.json` en
-  `klaverjas.json` (standaard `./data`)
+- `DATA_DIR` – map voor de databestanden `boerenbridge.json`,
+  `klaverjas.json` en `tafeltennis.json` (standaard `./data`)
 
 ## Boerenbridge met twee apparaten
 
@@ -94,6 +96,48 @@ af en telt het mee voor het klassement. Een ronde verkeerd ingevoerd? Met
 nadat het potje al is afgelopen. Net als bij boerenbridge kun je onder
 🏆 Klassement spelers aantikken om potjes waarin zij meededen weg te laten.
 
+## Tafeltennistoernooi met twee apparaten
+
+1. Open `games/tafeltennis/` op de telefoon van de toernooileider. Vul de
+   spelers in (3–16; bekende namen staan als tikbare suggesties klaar) en kies
+   de toernooivorm:
+   - **Poule** – iedereen tegen iedereen, de eindstand bepaalt de winnaar.
+   - **Poule + eindronde** – na de poule gaan de beste 2, 4, 8 of 16 spelers
+     naar een knock-outschema (1 tegen 4, 2 tegen 3, …), met optionele
+     troostfinale om plek 3.
+   - **Knock-out** – meteen een afvalschema; de invoervolgorde is de seeding
+     en bij een aantal dat geen macht van twee is, krijgen de hoogste seeds
+     een vrije ronde.
+   Verder: best of 1/3/5/7, games tot 11 of 21 punten, invoer per game (punten)
+   of alleen gewonnen games, en het aantal tafels (1–4).
+2. Open `games/tafeltennis/display/` op een tweede scherm. Dat toont wie er nu
+   aan welke tafel speelt en wie hierna komt, de poulestand met kruistabel
+   (of de laatste uitslagen bij meer dan acht spelers), in de eindronde het
+   schema, en na afloop het podium. Zonder toernooi staat er het klassement.
+
+De poule is met de cirkelmethode ingedeeld, dus per ronde speelt iedereen
+hooguit één keer. Uitslagen mag je in elke volgorde invoeren: tik een
+wedstrijd aan onder *Nu aan tafel* of in de lijst. Bij invoer per game
+verschijnt de volgende game vanzelf; met de knop **11 ▲** geef je een kant de
+game (de andere kant vul je dan met de verliezende score aan). Terwijl je
+typt gaat de tussenstand live naar het scorebord.
+
+De server bewaakt de regels: een game win je met minstens 11 (of 21) punten
+en twee verschil (boven de 11 dus precies twee, 12–10, 13–11, …), de
+wedstrijd is uit zodra iemand de helft-plus-één van de best-of heeft, en
+daarna volgen geen games meer. In de stand telt eerst het aantal gewonnen
+wedstrijden; wie gelijk staat wordt onderling vergeleken (winst, dan game- en
+puntensaldo in die onderlinge duels), daarna op game- en puntensaldo over de
+hele poule. Wat dan nog gelijk is, deelt de plek (gemarkeerd met *); voor de
+seeding van de eindronde geldt dan de invoervolgorde.
+
+Met **← Laatste uitslag terugnemen** loop je de invoer stap voor stap terug,
+ook over de fasegrens heen: neem je de laatste poulewedstrijd terug, dan
+verdwijnt de (nog ongespeelde) eindronde en wordt die opnieuw ingedeeld zodra
+de poule weer uit is. Het klassement telt per speler toernooien, titels,
+podiumplaatsen en het winstpercentage over alle wedstrijden; ook hier kun je
+spelers uitsluiten.
+
 ## Docker
 
 ```
@@ -115,7 +159,8 @@ spellenhoek:
 ```
 
 Achter een reverse proxy: zet response-buffering uit voor
-`/api/boerenbridge/events` en `/api/klaverjas/events` (SSE); de server stuurt
+`/api/boerenbridge/events`, `/api/klaverjas/events` en
+`/api/tafeltennis/events` (SSE); de server stuurt
 daarvoor zelf al `X-Accel-Buffering: no` en een heartbeat elke 25 s.
 
 ## Testen
@@ -123,6 +168,7 @@ daarvoor zelf al `X-Accel-Buffering: no` en een heartbeat elke 25 s.
 ```
 node test/api.test.js
 node test/klaverjas.test.js
+node test/tafeltennis.test.js
 node test/solver.test.js
 ```
 
@@ -134,6 +180,12 @@ path-traversal-bescherming en persistentie over een herstart.
 nat, roem en pit (opnieuw tegen een onafhankelijke herimplementatie), de twee
 fasen per ronde, validatie, undo, het klassement per speler, SSE en de
 gescheiden opslag naast boerenbridge.
+`tafeltennis.test.js` speelt poules van 3–7 spelers uit in willekeurige
+volgorde en vergelijkt stand en eindstand met een onafhankelijke
+herimplementatie van de tiebreak-regels, en test verder de game-validatie
+(deuce, best-of), seeding en doorschuiven in de eindronde, vrije rondes,
+undo over de fasegrens, de live tussenstand, het klassement, SSE en
+persistentie.
 `solver.test.js` lost honderden willekeurige scrambles op met beide
 oplossers en verifieert elke oplossing (aantallen instelbaar via
 `N_KOCIEMBA` / `N_LBL`).
@@ -147,11 +199,14 @@ server/
   shared.js                    # gedeelde helpers (klassement, foutobjecten)
   logic.js                     # autoritatieve boerenbridge-logica
   klaverjas.js                 # autoritatieve klaverjas-logica
+  tafeltennis.js               # autoritatieve toernooilogica (tafeltennis)
 games/
   boerenbridge/index.html      # invoerpagina (telefoon)
   boerenbridge/display/        # live scorebord (tweede scherm)
   klaverjas/index.html         # klaverjas-invoerpagina (telefoon)
   klaverjas/display/           # live scorebord (tweede scherm)
+  tafeltennis/index.html       # toernooi-invoerpagina (telefoon)
+  tafeltennis/display/         # live scorebord: tafels, stand, schema
   cube-solver/index.html       # zelfstandige (gebouwde) solver-pagina
   wafelwoorden/index.html      # woordspel
 src/
@@ -160,6 +215,7 @@ src/
 build.js                       # bouwt de cube-solver naar games/cube-solver/
 test/api.test.js               # end-to-end API-test (boerenbridge)
 test/klaverjas.test.js         # end-to-end API-test (klaverjas)
+test/tafeltennis.test.js       # end-to-end API-test (tafeltennis)
 data/                          # spelgegevens (niet in git; Docker-volume)
 ```
 

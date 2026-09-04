@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f0f12">
+  <title>Tafeltennis – Scorebord</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    :root{
+      --bg:#0f0f12;--card:#1b1b20;--card2:#232329;--line:#2e2e36;
+      --text:#f4f4f6;--muted:#9a9aa3;--accent:#4caf50;--accent-dim:rgba(76,175,80,.15);
+      --red:#e53935;--red-dim:rgba(229,57,53,.12);--gold:#ffd600;
+    }
+    html,body{height:100%}
+    body{
+      background:var(--bg);color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+      display:flex;flex-direction:column;padding:20px;gap:14px;overflow:hidden;
+    }
+    #connDot{
+      position:fixed;top:12px;right:12px;width:10px;height:10px;border-radius:50%;
+      background:var(--red);z-index:10;transition:background .3s;
+    }
+    #connDot.ok{background:var(--accent)}
+
+    .topbar{
+      display:flex;align-items:center;justify-content:space-between;gap:20px;
+      background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 22px;
+    }
+    .topbar .title{font-size:1.5rem;font-weight:800}
+    .topbar .title small{color:var(--muted);font-weight:400;font-size:1rem;margin-left:10px}
+    .topbar .phase{font-size:1.2rem;font-weight:700;text-align:right}
+    .topbar .phase small{display:block;color:var(--muted);font-size:.9rem;font-weight:400}
+
+    /* aan tafel */
+    .tables{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+    .tcard{
+      background:linear-gradient(180deg,var(--accent-dim),var(--card));border:1px solid var(--accent);
+      border-radius:16px;padding:12px 16px;display:flex;flex-direction:column;gap:6px;min-width:0;
+    }
+    .tcard .lbl{color:var(--accent);font-size:.75rem;font-weight:700;letter-spacing:.6px;text-transform:uppercase}
+    .tcard .lbl span{color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;margin-left:8px}
+    .tcard .vs{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center}
+    .tcard .vs .n{font-size:1.5rem;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .tcard .vs .n:last-child{text-align:right}
+    .tcard .vs .n.lead{color:var(--accent)}
+    .tcard .vs .gw{font-size:1.8rem;font-weight:800;color:var(--muted);white-space:nowrap}
+    .tcard .live{display:flex;align-items:baseline;justify-content:center;gap:14px;margin-top:2px}
+    .tcard .live .cur{font-size:2.6rem;font-weight:800;line-height:1}
+    .tcard .live .prev{color:var(--muted);font-size:1rem}
+    .tcard .idle{color:var(--muted);font-size:.95rem;text-align:center}
+    .next{color:var(--muted);font-size:1rem}
+    .next b{color:var(--text);font-weight:600}
+    .next .pend{font-style:italic}
+
+    /* hoofdvlak */
+    .main{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .main.single{grid-template-columns:1fr}
+    .panel{
+      background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;
+      overflow:auto;min-width:0;
+    }
+    .panel h2{font-size:1rem;color:var(--muted);margin-bottom:10px;display:flex;justify-content:space-between}
+    .panel h2 small{font-weight:400}
+    table{width:100%;border-collapse:collapse;font-size:1.05rem;white-space:nowrap}
+    th,td{padding:7px 9px;text-align:center;border-bottom:1px solid var(--line)}
+    th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--card);z-index:1}
+    th.l,td.l{text-align:left}
+    td.rank{color:var(--muted);font-weight:700}
+    tr.q td{background:var(--accent-dim)}
+    td.win{color:var(--accent);font-weight:700}
+    td.loss{color:var(--red)}
+    td.self{background:var(--card2)}
+    td.open{color:var(--line)}
+    .legend{color:var(--muted);font-size:.85rem;margin-top:10px}
+    .empty{color:var(--muted);text-align:center;padding:14px 0}
+    .results{list-style:none;display:flex;flex-direction:column;gap:6px}
+    .results li{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;background:var(--card2);border-radius:10px;font-size:1.05rem}
+    .results li .w{font-weight:700;color:var(--accent)}
+    .results li .sc{font-weight:700;white-space:nowrap}
+    .results li .sc small{color:var(--muted);font-weight:400;margin-left:6px}
+
+    /* schema */
+    .bracket{display:flex;gap:18px;align-items:stretch;min-height:min(100%,520px)}
+    .col{flex:1;display:flex;flex-direction:column;gap:10px;min-width:0}
+    .col h3{color:var(--muted);font-size:.85rem;text-transform:uppercase;letter-spacing:.6px;text-align:center;flex:none;margin-bottom:4px}
+    .col .boxes{flex:1;display:flex;flex-direction:column;justify-content:space-evenly;gap:10px}
+    .box{
+      background:var(--card2);border:1px solid var(--line);border-radius:12px;overflow:hidden;
+      display:flex;flex-direction:column;
+    }
+    .box.now{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-dim)}
+    .box.bronze{border-style:dashed}
+    .box .cap{color:var(--muted);font-size:.72rem;padding:4px 10px 0;text-transform:uppercase;letter-spacing:.5px}
+    .box .row{display:flex;justify-content:space-between;gap:8px;padding:9px 12px;font-size:1.15rem;font-weight:600}
+    .box .row+.row{border-top:1px solid var(--line)}
+    .box .row .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .box .row .n.pend{color:var(--muted);font-style:italic;font-size:.9rem}
+    .box .row .s{font-weight:800;color:var(--muted)}
+    .box .row.w .n,.box .row.w .s{color:var(--accent);font-weight:800}
+
+    /* winnaar / idle */
+    .center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;text-align:center;overflow:auto}
+    .winner-banner{padding:30px 50px;background:var(--card);border:3px solid var(--gold);border-radius:24px;max-width:720px;width:100%}
+    .winner-banner .trophy{font-size:4.5rem}
+    .winner-banner .name{font-size:2.4rem;font-weight:800;color:var(--gold);margin-top:8px}
+    .podium{display:flex;justify-content:center;align-items:flex-end;gap:12px;margin-top:22px}
+    .podium .p{background:var(--card2);border-radius:12px 12px 0 0;padding:12px 16px 10px;min-width:140px}
+    .podium .p .m{font-size:2rem}
+    .podium .p .nm{font-weight:700;font-size:1.15rem;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px}
+    .podium .p1{height:150px}.podium .p2{height:120px}.podium .p3{height:100px}
+    .ranklist{color:var(--muted);font-size:1.1rem;margin-top:16px;line-height:1.7}
+    .ranklist b{color:var(--text)}
+    .idle-title{font-size:1.6rem;font-weight:700}
+    .idle-sub{color:var(--muted);font-size:1.05rem}
+    .lb-panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;max-width:760px;width:100%;overflow-x:auto}
+    .lb-panel h2{font-size:1.2rem;margin-bottom:12px;text-align:center}
+
+    @media(max-width:800px){
+      body{padding:12px;gap:10px;overflow:auto}
+      .main{grid-template-columns:1fr}
+      .topbar{flex-direction:column;gap:4px;text-align:center}
+      .topbar .phase{text-align:center}
+      .tcard .vs .n{font-size:1.15rem}
+      .bracket{flex-direction:column}
+    }
+  </style>
+</head>
+<body>
+  <div id="connDot" title="Verbinding met de server"></div>
+  <div id="app" style="display:contents"></div>
+
+<script>
+(function(){
+  const API = '../../../api/tafeltennis';
+  const app = document.getElementById('app');
+  const dot = document.getElementById('connDot');
+  let lastEventAt = 0;
+  let source = null;
+
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const slotText=s=>s.name?esc(s.name):'<span class="pend">'+esc(s.pending)+'</span>';
+
+  function render(snapshot){
+    const g = snapshot.game;
+    if(!g){ renderIdle(snapshot.leaderboard); return; }
+    if(g.status==='finished'){ renderWinner(g); return; }
+    renderActive(g);
+  }
+
+  function formatName(g){
+    const s=g.settings;
+    let name=g.formatInfo.name;
+    if(s.format==='poule-ko') name+=' ('+s.koSize+')';
+    return name+' · best of '+s.bestOf+' tot '+s.pointsPerGame;
+  }
+
+  function renderActive(g){
+    const byId=id=>g.matches.find(m=>m.id===id);
+    const phaseName = g.phase==='ko' ? (g.settings.format==='ko'?'Knock-out':'Eindronde') : 'Poule';
+    let html='<div class="topbar"><div class="title">🏓 Tafeltennis<small>'+esc(formatName(g))+'</small></div>'
+      +'<div class="phase">'+phaseName+'<small>'+g.progress.done+' van '+g.progress.total+' wedstrijden</small></div></div>';
+
+    // aan tafel
+    html+='<div class="tables">';
+    if(!g.upNow.length) html+='<div class="tcard"><div class="idle">Even wachten op lopende wedstrijden…</div></div>';
+    g.upNow.forEach((id,i)=>{
+      const m=byId(id);
+      const [a,b]=m.slots;
+      // Live tussenstand (concept van de invoerpagina): volle rijen zijn
+      // gespeelde games, een half ingevulde rij is de lopende game.
+      const gw=[0,0], done=[];
+      let cur=null;
+      if(g.draft && g.draft.matchId===id){
+        g.draft.games.forEach(gm=>{
+          const full = gm[0]!==null && gm[1]!==null;
+          if(full){ done.push(gm[0]+'-'+gm[1]); if(gm[0]!==gm[1]) gw[gm[0]>gm[1]?0:1]++; }
+          else if(gm[0]!==null || gm[1]!==null) cur=gm;
+        });
+      }
+      html+='<div class="tcard"><div class="lbl">Tafel '+(i+1)+'<span>'+esc(stageLabel(m))+'</span></div>'
+        +'<div class="vs"><span class="n'+(gw[0]>gw[1]?' lead':'')+'">'+esc(a.name)+'</span><span class="gw">'+gw[0]+' – '+gw[1]+'</span><span class="n'+(gw[1]>gw[0]?' lead':'')+'">'+esc(b.name)+'</span></div>';
+      if(cur||done.length) html+='<div class="live">'
+        +(cur?'<span class="cur">'+(cur[0]===null?0:cur[0])+' : '+(cur[1]===null?0:cur[1])+'</span>':'')
+        +(done.length?'<span class="prev">'+done.join(' · ')+'</span>':'')+'</div>';
+      html+='</div>';
+    });
+    html+='</div>';
+    if(g.upNext.length){
+      html+='<div class="next">Hierna: '+g.upNext.map(id=>{ const m=byId(id); return '<b>'+slotText(m.slots[0])+' – '+slotText(m.slots[1])+'</b>'; }).join(' &nbsp;·&nbsp; ')+'</div>';
+    }
+
+    // hoofdvlak
+    if(g.phase==='ko'){
+      html+='<div class="main single"><div class="panel">'+bracketHtml(g,byId)+'</div></div>';
+    }else{
+      const n=g.players.length;
+      html+='<div class="main"><div class="panel">'+standingsHtml(g)+'</div>'
+        +'<div class="panel">'+(n<=8?crossTableHtml(g):resultsHtml(g))+'</div></div>';
+    }
+    app.innerHTML=html;
+  }
+
+  function stageLabel(m){ return m.stage==='poule' ? 'Poule · '+m.label.toLowerCase() : m.label; }
+
+  function standingsHtml(g){
+    const s=g.settings;
+    const q = s.format==='poule-ko' ? s.koSize : 0;
+    let html='<h2>Stand'+(q?'<small>bovenste '+q+' naar de eindronde</small>':'')+'</h2>'
+      +'<table><thead><tr><th>#</th><th class="l">Speler</th><th>G</th><th>W</th><th>V</th><th>Games</th>'+(s.detail==='points'?'<th>Punten</th>':'')+'</tr></thead><tbody>';
+    g.standings.forEach((r,i)=>{
+      html+='<tr'+(q&&i<q?' class="q"':'')+'><td class="rank">'+r.rank+(r.tied?'*':'')+'</td><td class="l">'+esc(r.name)+'</td>'
+        +'<td>'+r.played+'</td><td>'+r.won+'</td><td>'+r.lost+'</td><td>'+r.gamesWon+'–'+r.gamesLost+'</td>'
+        +(s.detail==='points'?'<td>'+r.pointsFor+'–'+r.pointsAgainst+'</td>':'')+'</tr>';
+    });
+    html+='</tbody></table>';
+    if(g.standings.some(r=>r.tied)) html+='<div class="legend">* gedeelde plek</div>';
+    return html;
+  }
+
+  // Kruistabel: rij i tegen kolom j, gewonnen games vanuit de rijspeler gezien.
+  function crossTableHtml(g){
+    const n=g.players.length;
+    const cell={};
+    g.matches.filter(m=>m.stage==='poule').forEach(m=>{ cell[m.players[0]+'-'+m.players[1]]=m; cell[m.players[1]+'-'+m.players[0]]=m; });
+    let html='<h2>Onderling</h2><table><thead><tr><th class="l"></th>'
+      +g.players.map(p=>'<th title="'+esc(p)+'">'+esc(p.slice(0,3))+'</th>').join('')+'</tr></thead><tbody>';
+    for(let i=0;i<n;i++){
+      html+='<tr><td class="l"><b>'+esc(g.players[i])+'</b></td>';
+      for(let j=0;j<n;j++){
+        if(i===j){ html+='<td class="self"></td>'; continue; }
+        const m=cell[i+'-'+j];
+        if(!m||!m.decided){ html+='<td class="open">·</td>'; continue; }
+        const mine = m.players[0]===i ? m.gamesWon[0] : m.gamesWon[1];
+        const theirs = m.players[0]===i ? m.gamesWon[1] : m.gamesWon[0];
+        html+='<td class="'+(m.winner===i?'win':'loss')+'">'+mine+'–'+theirs+'</td>';
+      }
+      html+='</tr>';
+    }
+    return html+'</tbody></table>';
+  }
+
+  function resultsHtml(g){
+    const byId=id=>g.matches.find(m=>m.id===id);
+    const recent=g.history.slice(-10).reverse().map(byId).filter(Boolean);
+    let html='<h2>Laatste uitslagen</h2>';
+    if(!recent.length) return html+'<p class="empty">Nog geen uitslagen.</p>';
+    html+='<ul class="results">'+recent.map(m=>{
+      const names=m.slots.map(s=>m.winner===s.player?'<span class="w">'+esc(s.name)+'</span>':esc(s.name)).join(' – ');
+      return '<li><span>'+names+'</span><span class="sc">'+m.gamesWon[0]+'–'+m.gamesWon[1]
+        +(m.games?'<small>'+m.games.map(x=>x[0]+'-'+x[1]).join(', ')+'</small>':'')+'</span></li>';
+    }).join('')+'</ul>';
+    return html;
+  }
+
+  function bracketHtml(g,byId){
+    const now=new Set(g.upNow);
+    let html='<div class="bracket">';
+    g.koRounds.forEach(r=>{
+      html+='<div class="col"><h3>'+esc(r.name)+'</h3><div class="boxes">';
+      r.matches.forEach(id=>{
+        const m=byId(id);
+        html+='<div class="box'+(now.has(id)?' now':'')+(m.bronze?' bronze':'')+'">'
+          +(m.bronze?'<div class="cap">Troostfinale</div>':'')
+          +m.slots.map((s,k)=>{
+            const won = m.decided && s.player!==null && s.player>=0 && m.winner===s.player;
+            const score = !m.decided ? '' : m.bye ? (won?'✓':'') : m.gamesWon[k];
+            return '<div class="row'+(won?' w':'')+'"><span class="n'+(s.name?'':' pend')+'">'+(s.name?esc(s.name):esc(s.pending))+'</span><span class="s">'+score+'</span></div>';
+          }).join('')
+          +'</div>';
+      });
+      html+='</div></div>';
+    });
+    return html+'</div>';
+  }
+
+  function renderWinner(g){
+    const top=r=>g.ranking.filter(x=>x.rank===r).map(x=>esc(x.name)).join(' & ');
+    const winners=g.ranking.filter(x=>x.rank===1).map(x=>esc(x.name));
+    let html='<div class="center"><div class="winner-banner"><div class="trophy">🏆</div>'
+      +'<div class="name">'+(winners.length>1?'Gedeelde winst: '+winners.join(' en '):winners[0]+' wint het toernooi!')+'</div>';
+    const p2=top(2), p3=top(3);
+    html+='<div class="podium">'
+      +(p2?'<div class="p p2"><div class="m">🥈</div><div class="nm">'+p2+'</div></div>':'')
+      +'<div class="p p1"><div class="m">🥇</div><div class="nm">'+winners.join(' & ')+'</div></div>'
+      +(p3?'<div class="p p3"><div class="m">🥉</div><div class="nm">'+p3+'</div></div>':'')
+      +'</div>';
+    const rest=g.ranking.filter(x=>x.rank>3);
+    if(rest.length) html+='<div class="ranklist">'+rest.map(x=>x.rank+'. <b>'+esc(x.name)+'</b>').join(' &nbsp;·&nbsp; ')+'</div>';
+    html+='</div></div>';
+    app.innerHTML=html;
+  }
+
+  function renderIdle(leaderboard){
+    let lb='';
+    if(leaderboard&&leaderboard.length){
+      lb='<div class="lb-panel"><h2>🏆 Klassement</h2><table>'
+        +'<thead><tr><th>#</th><th class="l">Speler</th><th>Toernooien</th><th>Gewonnen</th><th>Podium</th><th>Wedstrijden</th><th>Winst</th></tr></thead><tbody>';
+      leaderboard.forEach((e,i)=>{
+        lb+='<tr><td class="rank">'+(i+1)+'</td><td class="l">'+esc(e.name)+'</td><td>'+e.tournaments+'</td><td>'+e.titles+'</td><td>'+e.podiums+'</td><td>'+e.matchesWon+' / '+e.matchesPlayed+'</td><td>'+e.winPct+'%</td></tr>';
+      });
+      lb+='</tbody></table></div>';
+    }
+    app.innerHTML='<div class="center">'
+      +'<div><div class="idle-title">🏓 Tafeltennis</div>'
+      +'<div class="idle-sub">Geen toernooi bezig — start er een op je telefoon</div></div>'
+      +lb+'</div>';
+  }
+
+  // ---- SSE + herstel ----
+  function connect(){
+    if(source) source.close();
+    source = new EventSource(API+'/events');
+    source.addEventListener('state',e=>{
+      lastEventAt=Date.now();
+      dot.classList.add('ok');
+      try{ render(JSON.parse(e.data)); }catch(err){ console.error(err); }
+    });
+    source.addEventListener('ping',()=>{ lastEventAt=Date.now(); dot.classList.add('ok'); });
+    source.onopen=()=>{ lastEventAt=Date.now(); dot.classList.add('ok'); };
+    source.onerror=()=>{ dot.classList.remove('ok'); };
+  }
+
+  async function refetch(){
+    try{
+      const res=await fetch(API+'/current');
+      if(res.ok){
+        render(await res.json());
+        lastEventAt=Date.now();
+        dot.classList.add('ok');
+      }
+    }catch(e){ dot.classList.remove('ok'); }
+  }
+
+  // Watchdog: iPad-Safari laat SSE soms stil doodgaan — na 90 s zonder events opnieuw.
+  setInterval(()=>{
+    if(Date.now()-lastEventAt>90000){ connect(); refetch(); }
+  },15000);
+
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible'){ connect(); refetch(); }
+  });
+
+  connect();
+})();
+</script>
+</body>
+</html>
