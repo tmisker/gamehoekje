@@ -100,6 +100,18 @@ Dockerfile                     # node:22-alpine, geen npm install
   (predictions/actuals/undo/abandon) wist de draft. Het display kiest op basis
   van `phase` + `draft` tussen vier schermen: voorspellen (draft-invoer
   loopt), spelen, tussenstand, eindstand.
+- **De tussenstand komt van de server.** `enrich` levert naast `totals` ook
+  `cumulative` (`[ronde][speler]` = stand t/m die ronde; `getTotals` is de
+  laatste rij), `positions` (plek in de stand, gelijke totalen delen een plek
+  en de volgende plek slaat over) en `projection` (alleen in de slagen-fase
+  mét draft: `{deltas, totals, positions}` — de stand als de concept-invoer
+  klopt). Beide pagina's renderen die velden alleen; `scoreRound` mag niet
+  in een client terechtkomen. De invoerpagina pakt de projectie uit het
+  antwoord op de draft-POST en werkt daarmee alléén `#projLine` bij — niet
+  het formulier, want dan zou de invoer onder je vingers opnieuw opbouwen.
+  De verloopgrafiek op het display wordt ná het invoegen getekend
+  (`drawTrend`), op de gemeten pixelmaat van zijn paneel; daarom ook een
+  resize-listener.
 - **SSE** (`/api/<spel>/events`): bij connect en na elke mutatie gaat
   de **volledige snapshot** over de lijn (nooit deltas), plus een
   `ping`-event elke 25 s. `server.requestTimeout = 0` staat bewust aan —
