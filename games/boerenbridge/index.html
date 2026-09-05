@@ -10,7 +10,7 @@
     :root{
       --bg:#0f0f12;--card:#1b1b20;--card2:#232329;--line:#2e2e36;
       --text:#f4f4f6;--muted:#9a9aa3;--accent:#4caf50;--accent-dim:rgba(76,175,80,.15);
-      --red:#e53935;--red-dim:rgba(229,57,53,.12);--gold:#ffd600;
+      --red:#e53935;--red-dim:rgba(229,57,53,.12);--gold:#ffd600;--orange:#ff9800;
     }
     html{height:100%}
     body{
@@ -121,8 +121,9 @@
     .projline .lbl{display:block;font-size:.75rem;letter-spacing:.02em;opacity:.85}
     .projline .p{white-space:nowrap;margin:0 .1em}
     .projline b{color:var(--text)}
-    .projline .pos{color:var(--accent);font-weight:700}
-    .projline .neg{color:var(--red);font-weight:700}
+    .projline .k-exact{color:var(--accent);font-weight:700}
+    .projline .k-over{color:var(--orange);font-weight:700}
+    .projline .k-under{color:var(--red);font-weight:700}
     .warn{color:var(--gold);font-size:.82rem;text-align:center;margin-top:4px}
     .error{color:var(--red);font-size:.82rem;text-align:center;margin-top:4px}
     .conn-banner{
@@ -142,8 +143,11 @@
     th,td{padding:6px 8px;text-align:center;border-bottom:1px solid var(--line)}
     th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--card)}
     th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card);z-index:1}
-    td.pos .d{color:var(--accent);font-weight:700}
-    td.neg .d{color:var(--red)}
+    /* k-exact = voorspelling gehaald (bonus), k-over = pluspunten zonder bonus,
+       k-under = minpunten */
+    td.k-exact .d{color:var(--accent);font-weight:700}
+    td.k-over .d{color:var(--orange);font-weight:700}
+    td.k-under .d{color:var(--red)}
     td .d{display:block;line-height:1.2}
     td .c{display:block;font-size:.78em;font-weight:600;color:var(--muted);line-height:1.2}
     tr.current-round{background:var(--accent-dim)}
@@ -606,7 +610,7 @@
       +order.map(i=>{
         const d=pr.deltas[i];
         return '<span class="p"><b>'+esc(game.players[i])+'</b> '+pr.totals[i]
-          +(d!=null?' <span class="'+(d>0?'pos':d<0?'neg':'')+'">'+(d>0?'+':'')+d+'</span>':'')
+          +(d!=null?' <span'+kcls(pr.kinds[i])+'>'+(d>0?'+':'')+d+'</span>':'')
           +'</span>';
       }).join(' · ');
   }
@@ -725,8 +729,7 @@
       const cls=r===played-1?' class="current-round"':'';
       bodyHtml+='<tr'+cls+'><td>'+SUITS_LOCAL[rd.suitIdx]+' '+rd.cards+'</td>';
       game.roundScores[r].forEach((s,i)=>{
-        const c=s>0?'pos':s<0?'neg':'';
-        bodyHtml+='<td class="'+c+'"><span class="d">'+(s>0?'+':'')+s+'</span>'
+        bodyHtml+='<td'+kcls(game.roundKinds[r][i])+'><span class="d">'+(s>0?'+':'')+s+'</span>'
           +'<span class="c">'+game.cumulative[r][i]+'</span></td>';
       });
       bodyHtml+='</tr>';
@@ -774,6 +777,8 @@
   });
 
   function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+  // De server classificeert elke score ('exact' | 'over' | 'under'); wij kleuren alleen.
+  function kcls(k){return k?' class="k-'+k+'"':''}
 
   showStart();
 })();

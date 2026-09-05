@@ -104,14 +104,22 @@ Dockerfile                     # node:22-alpine, geen npm install
   `cumulative` (`[ronde][speler]` = stand t/m die ronde; `getTotals` is de
   laatste rij), `positions` (plek in de stand, gelijke totalen delen een plek
   en de volgende plek slaat over) en `projection` (alleen in de slagen-fase
-  mét draft: `{deltas, totals, positions}` — de stand als de concept-invoer
-  klopt). Beide pagina's renderen die velden alleen; `scoreRound` mag niet
-  in een client terechtkomen. De invoerpagina pakt de projectie uit het
-  antwoord op de draft-POST en werkt daarmee alléén `#projLine` bij — niet
-  het formulier, want dan zou de invoer onder je vingers opnieuw opbouwen.
-  De verloopgrafiek op het display wordt ná het invoegen getekend
-  (`drawTrend`), op de gemeten pixelmaat van zijn paneel; daarom ook een
-  resize-listener.
+  mét draft: `{deltas, kinds, totals, positions}` — de stand als de
+  concept-invoer klopt). Beide pagina's renderen die velden alleen;
+  `scoreRound` mag niet in een client terechtkomen. De invoerpagina pakt de
+  projectie uit het antwoord op de draft-POST en werkt daarmee alléén
+  `#projLine` bij — niet het formulier, want dan zou de invoer onder je
+  vingers opnieuw opbouwen. De verloopgrafiek op het display wordt ná het
+  invoegen getekend (`drawTrend`), op de gemeten pixelmaat van zijn paneel;
+  daarom ook een resize-listener.
+- **De kleur van een rondescore komt ook van de server.** `enrich` levert
+  `roundKinds` (per gespeelde ronde per speler) en, voor de lopende
+  slagen-invoer, `projection.kinds`: `'exact'` = voorspelling gehaald, dus
+  pluspunten mét de bonus van 5 (groen), `'over'` = te veel geraapt,
+  pluspunten zónder bonus (oranje), `'under'` = minpunten (rood). De pagina's
+  plakken er alleen een `.k-<kind>`-class op. Leid dit nooit af uit de score
+  zelf: +6 kan zowel mét bonus (1 gevraagd, 1 gehaald) als zonder (6 gehaald
+  op minder gevraagd).
 - **SSE** (`/api/<spel>/events`): bij connect en na elke mutatie gaat
   de **volledige snapshot** over de lijn (nooit deltas), plus een
   `ping`-event elke 25 s. `server.requestTimeout = 0` staat bewust aan —

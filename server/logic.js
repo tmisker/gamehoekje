@@ -23,6 +23,15 @@ function scoreRound(pred, act) {
   return act;
 }
 
+// Hoe een rondescore tot stand kwam — puur voor de weergave (kleur):
+// 'exact' = precies voorspeld (pluspunten mét de bonus van 5),
+// 'over'  = te veel geraapt (pluspunten zónder bonus),
+// 'under' = te weinig geraapt (minpunten).
+function scoreKind(pred, act) {
+  if (act === pred) return 'exact';
+  return act > pred ? 'over' : 'under';
+}
+
 function dealerIdx(nPlayers, round) {
   return (nPlayers - 1 + round) % nPlayers;
 }
@@ -186,17 +195,31 @@ function positions(totals) {
 }
 
 // Live tussenstand tijdens het spelen: de stand zoals die wordt als de
-// concept-invoer van de slagen zo blijft staan. Niet-autoritatief (de draft
-// telt nergens in mee), maar wél hier berekend — de scoreformule is een
-// spelregel en hoort niet in de clients.
+// concept-invoer van de slagen zo blijft staan, met per speler de score van de
+// ronde (`deltas`) en hoe die tot stand komt (`kinds`, zie scoreKind).
+// Niet-autoritatief (de draft telt nergens in mee), maar wél hier berekend —
+// de scoreformule is een spelregel en hoort niet in de clients.
 function projection(game, totals) {
   if (game.status !== 'active' || game.phase !== 'actual') return null;
   const preds = game.predictions[game.currentRound];
   const draft = game.draft && game.draft.phase === 'actual' ? game.draft.values : null;
   if (!preds || !draft) return null;
   const deltas = preds.map((p, i) => (draft[i] == null ? null : scoreRound(p, draft[i])));
+  const kinds = preds.map((p, i) => (draft[i] == null ? null : scoreKind(p, draft[i])));
   const projected = totals.map((t, i) => t + (deltas[i] || 0));
-  return { deltas, totals: projected, positions: positions(projected) };
+  return { deltas, kinds, totals: projected, positions: positions(projected) };
+}
+
+// Per gespeelde ronde per speler hoe de score tot stand kwam (zie scoreKind).
+// De clients kleuren hierop, zodat de scoreregels op de server blijven.
+function getRoundKinds(game) {
+  return game.roundScores.map((row, r) => {
+    const preds = game.predictions[r] || [];
+    const acts = game.actuals[r] || [];
+    return row.map((_, i) => (
+      Number.isInteger(preds[i]) && Number.isInteger(acts[i]) ? scoreKind(preds[i], acts[i]) : null
+    ));
+  });
 }
 
 // Verrijkte view voor API/SSE: spel + afgeleide velden (niet persistent).
@@ -211,6 +234,7 @@ function enrich(game) {
     cumulative,
     positions: positions(totals),
     projection: projection(game, totals),
+    roundKinds: getRoundKinds(game),
     dealerIdx: dealerIdx(n, roundIdx),
     playerOrder: playerOrder(n, roundIdx),
     roundInfo: {
@@ -257,9 +281,9 @@ function leaderboardView(games, exclude) {
 
 module.exports = {
   SUITS, SUIT_NAMES, SUIT_COLORS,
-  buildRounds, scoreRound, dealerIdx, playerOrder,
+  buildRounds, scoreRound, scoreKind, dealerIdx, playerOrder,
   createGame, applyPredictions, applyDraft, applyActuals, undo, abandon,
-  getTotals, cumulativeTotals, positions, projection, enrich, gameSummary,
+  getTotals, cumulativeTotals, positions, projection, getRoundKinds, enrich, gameSummary,
   leaderboard, leaderboardView,
   finishedGames: shared.finishedGames,
   leaderboardPlayers: shared.leaderboardPlayers,

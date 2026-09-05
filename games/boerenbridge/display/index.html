@@ -10,7 +10,7 @@
     :root{
       --bg:#0f0f12;--card:#1b1b20;--card2:#232329;--line:#2e2e36;
       --text:#f4f4f6;--muted:#9a9aa3;--accent:#4caf50;--accent-dim:rgba(76,175,80,.15);
-      --red:#e53935;--gold:#ffd600;
+      --red:#e53935;--gold:#ffd600;--orange:#ff9800;
     }
     html,body{height:100%}
     body{
@@ -60,14 +60,18 @@
     .pcard .tot{font-size:2.6rem;font-weight:800;line-height:1.1}
     .pcard .tot .unknown{color:var(--muted)}
     .pcard .stat{color:var(--muted);font-size:.95rem;min-height:1.3em}
-    .pcard .stat .pos{color:var(--accent);font-weight:700}
-    .pcard .stat .neg{color:var(--red);font-weight:700}
+    /* k-exact = voorspelling gehaald (bonus), k-over = pluspunten zonder bonus,
+       k-under = minpunten */
+    .pcard .stat .k-exact{color:var(--accent);font-weight:700}
+    .pcard .stat .k-over{color:var(--orange);font-weight:700}
+    .pcard .stat .k-under{color:var(--red);font-weight:700}
     .pcard .dealerdot{color:var(--gold);font-size:.85rem}
     /* tweede regel: de doorlopende tussenstand, op élk scherm zichtbaar */
     .pcard .sub{color:var(--muted);font-size:.95rem;min-height:1.3em}
     .pcard .sub b{color:var(--text);font-weight:800}
-    .pcard .sub .pos{color:var(--accent);font-weight:800}
-    .pcard .sub .neg{color:var(--red);font-weight:800}
+    .pcard .sub .k-exact{color:var(--accent);font-weight:800}
+    .pcard .sub .k-over{color:var(--orange);font-weight:800}
+    .pcard .sub .k-under{color:var(--red);font-weight:800}
     .pcard .sub .arrow{opacity:.6;margin:0 .15em}
 
     /* groot "samen gevraagd"-blok (voorspel- en speelscherm) */
@@ -112,8 +116,9 @@
     th,td{padding:8px 10px;text-align:center;border-bottom:1px solid var(--line)}
     th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--card);z-index:1}
     th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card)}
-    td.pos .d{color:var(--accent);font-weight:700}
-    td.neg .d{color:var(--red)}
+    td.k-exact .d{color:var(--accent);font-weight:700}
+    td.k-over .d{color:var(--orange);font-weight:700}
+    td.k-under .d{color:var(--red)}
     td .d{display:block;line-height:1.15}
     td .c{display:block;font-size:.8em;font-weight:600;color:var(--muted);line-height:1.15}
     tr.current-round{background:var(--accent-dim)}
@@ -165,12 +170,13 @@
   let source = null;
 
   function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+  // De server classificeert elke score ('exact' | 'over' | 'under'); wij kleuren alleen.
+  function kcls(k){return k?' class="k-'+k+'"':''}
   const SUITS=['♣','♥','♦','♠','Sans'];
   // Vaste spelerkleuren: dezelfde kleur bij de naam op de kaart en in de grafiek.
   const PCOLORS=['#4caf50','#42a5f5','#ffb300','#e53935','#ab47bc','#26c6da'];
   const ORD=['1e','2e','3e','4e','5e','6e'];
   const sign=v=>(v>0?'+':'')+v;
-  const cls=v=>v>0?'pos':v<0?'neg':'';
 
   // ---- renderen ----
   // Vier schermen: voorspellen (draft-invoer loopt) → spelen (voorspellingen
@@ -228,7 +234,7 @@
     const pr=g.projection, d=pr?pr.deltas[i]:null;
     if(d==null) return '<b>'+g.totals[i]+'</b> pt';
     return '<b>'+g.totals[i]+'</b><span class="arrow">→</span>'
-      +'<span class="'+(cls(d)||'')+'">'+pr.totals[i]+'</span> pt';
+      +'<span'+kcls(pr.kinds[i])+'>'+pr.totals[i]+'</span> pt';
   }
 
   function askbarHtml(g,total,cards,delta){
@@ -279,7 +285,7 @@
           lab:'gevraagd',
           main: preds[i],
           stat: got!=null
-            ? 'gehaald: <span class="'+(got===preds[i]?'pos':'neg')+'">'+got+'</span>'
+            ? 'gehaald: <span'+kcls(g.projection?g.projection.kinds[i]:null)+'>'+got+'</span>'
             : 'gehaald: <span class="unknown">–</span>',
           sub: standSub(g,i),
         };
@@ -292,7 +298,7 @@
   function lastRoundStat(g,i){
     if(!g.roundScores.length) return 'nog geen ronde gespeeld';
     const last=g.roundScores[g.roundScores.length-1][i];
-    return 'vorige ronde: <span class="'+cls(last)+'">'+sign(last)+'</span>';
+    return 'vorige ronde: <span'+kcls(g.roundKinds[g.roundKinds.length-1][i])+'>'+sign(last)+'</span>';
   }
 
   // Scherm 3: tussenstand — na de telling, tot de eerste nieuwe voorspelling.
@@ -334,7 +340,7 @@
       const rowCls=r===g.roundScores.length-1?' class="current-round"':'';
       html+='<tr'+rowCls+'><td>'+SUITS[rd.suitIdx]+' '+rd.cards+'</td>';
       g.roundScores[r].forEach((s,i)=>{
-        html+='<td class="'+cls(s)+'"><span class="d">'+sign(s)+'</span>'
+        html+='<td'+kcls(g.roundKinds[r][i])+'><span class="d">'+sign(s)+'</span>'
           +'<span class="c">'+g.cumulative[r][i]+'</span></td>';
       });
       html+='</tr>';

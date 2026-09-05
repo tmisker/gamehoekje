@@ -32,6 +32,12 @@ function expectedScore(pred, act) {
   return act === pred ? act + 5 : act < pred ? -(pred - act) : act;
 }
 
+// Idem voor de kleurclassificatie: exact = mét bonus, over = pluspunten zonder
+// bonus, under = minpunten.
+function expectedKind(pred, act) {
+  return act === pred ? 'exact' : act > pred ? 'over' : 'under';
+}
+
 // Lopende tussenstand per ronde — onafhankelijk nagerekend.
 function expectedCumulative(roundScores, n) {
   const run = new Array(n).fill(0);
@@ -112,6 +118,8 @@ async function playGame(names, pick) {
     for (let i = 0; i < n; i++) {
       assert.equal(game.roundScores[r][i], expectedScore(preds[i], acts[i]),
         'score r' + r + ' speler ' + i);
+      assert.equal(game.roundKinds[r][i], expectedKind(preds[i], acts[i]),
+        'kind r' + r + ' speler ' + i);
     }
     // Doorlopende tussenstand: cumulatief, totalen en plek in de stand
     const cum = expectedCumulative(game.roundScores, n);
@@ -184,6 +192,7 @@ async function main() {
     assert.equal(r.status, 200);
     assert.equal(r.body.currentRound, 1);
     assert.deepEqual(r.body.roundScores[0], [7, 8, 8]);
+    assert.deepEqual(r.body.roundKinds[0], ['exact', 'exact', 'exact'], 'alles exact voorspeld');
     // verouderde ronde → 409
     r = await api('POST', '/api/boerenbridge/games/' + id + '/actuals', { round: 0, actuals: [2, 3, 3] });
     assert.equal(r.status, 409);
@@ -197,6 +206,8 @@ async function main() {
     r = await api('POST', '/api/boerenbridge/games/' + id + '/actuals', { round: 0, actuals: [8, 0, 0] });
     assert.equal(r.status, 200);
     assert.deepEqual(r.body.roundScores[0], [8, -3, -3]);
+    // P1 vroeg 2 en haalde 8: pluspunten zónder bonus → 'over' (oranje op het bord)
+    assert.deepEqual(r.body.roundKinds[0], ['over', 'under', 'under']);
     // undo in predict-fase → terug naar vorige actual; nog één undo → predictions weg
     r = await api('POST', '/api/boerenbridge/games/' + id + '/undo', {});
     assert.equal(r.body.phase, 'actual');
@@ -242,11 +253,19 @@ async function main() {
     r = await api('POST', '/api/boerenbridge/games/' + id + '/predictions', { round: 0, predictions: [2, 3, 3] });
     assert.equal(r.body.phase, 'actual');
     assert.equal(r.body.draft, null, 'predictions wist de draft');
+    assert.equal(r.body.projection, null, 'geen slagen-draft → geen projectie');
     // draft in de slagen-fase; undo wist hem ook
     r = await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'actual', values: [1, null, null] });
     assert.deepEqual(r.body.draft, { phase: 'actual', values: [1, null, null] });
+    // gevraagd [2,3,3]: 1 gehaald is (nog) te weinig, de rest is nog niet ingevoerd
+    assert.deepEqual(r.body.projection.kinds, ['under', null, null]);
+    r = await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'actual', values: [5, 3, null] });
+    assert.deepEqual(r.body.projection.kinds, ['over', 'exact', null], 'over = pluspunten zonder bonus');
+    let snap = (await api('GET', '/api/boerenbridge/current')).body;
+    assert.deepEqual(snap.game.projection.kinds, ['over', 'exact', null], 'de kinds zitten in de snapshot');
     r = await api('POST', '/api/boerenbridge/games/' + id + '/undo', {});
     assert.equal(r.body.draft, null, 'undo wist de draft');
+    assert.equal(r.body.projection, null, 'undo wist ook de projectie');
     await api('POST', '/api/boerenbridge/games/' + id + '/abandon', {});
     console.log('OK draft-invoer (live meekijken)');
   }
@@ -272,6 +291,8 @@ async function main() {
     r = await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'actual', values: [2, 4, 2] });
     pr = r.body.projection;
     assert.deepEqual(pr.deltas, [7, 4, -1]);
+    // gevraagd [2,3,3]: Ann exact, Bo te veel (pluspunten zonder bonus), Cor te weinig
+    assert.deepEqual(pr.kinds, ['exact', 'over', 'under']);
     assert.deepEqual(pr.totals, [7, 4, -1]);
     assert.deepEqual(pr.positions, [1, 2, 3]);
     const cur = (await api('GET', '/api/boerenbridge/current')).body;
