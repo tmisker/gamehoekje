@@ -40,7 +40,10 @@ scorebord. Configuratie via omgevingsvariabelen:
    Aantallen tik je aan op knoppen (0 t/m het aantal kaarten). Bij de
    werkelijke slagen grijst de pagina onmogelijke aantallen uit: samen nooit
    meer dan het aantal kaarten, en de laatste speler kan alleen nog het
-   exacte restant kiezen. Nogmaals tikken wist een keuze weer.
+   exacte restant kiezen. Nogmaals tikken wist een keuze weer. Onder de
+   slagen-invoer staat de tussenstand zoals die wordt als de ingetikte
+   slagen kloppen; het scoreblok eronder toont per ronde de punten van die
+   ronde én de stand op dat moment, met de plek in de stand onder het totaal.
 2. Open `games/boerenbridge/display/` op een tweede apparaat (bijv. een iPad
    op tafel) — dit scorebord volgt het spel live via Server-Sent Events.
    Zonder actief spel toont het scherm het klassement. Tijdens een potje
@@ -49,7 +52,13 @@ scorebord. Configuratie via omgevingsvariabelen:
    ("samen gevraagd"); tijdens het kaarten blijven ieders voorspelling en dat
    totaal groot in beeld (mét of er te veel of te weinig gevraagd is); na de
    telling komt de tussenstand met het scoreblok; en na de laatste ronde de
-   eindstand.
+   eindstand. De tussenstand loopt door alle weergaven mee: elke spelerkaart
+   toont zijn plek in de stand en zijn puntentotaal, tijdens het invoeren van
+   de slagen met een pijl naar waar dat totaal op uitkomt. Naast het
+   "samen gevraagd"-blok en naast het scoreblok staat een verloopgrafiek met
+   één lijn per speler; loopt er slagen-invoer, dan wordt die lijn gestippeld
+   doorgetrokken naar de verwachte stand. Op smalle schermen (< 900 px)
+   vervalt de grafiek en blijven de cijfers.
 3. Onder 🏆 Klassement op de telefoon kun je spelers aantikken om potjes
    waarin zij meededen weg te laten — handig als er af en toe kinderen
    meespelen. Je keuze blijft op dat toestel bewaard; het display toont

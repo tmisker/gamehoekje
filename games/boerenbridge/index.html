@@ -113,6 +113,16 @@
     .numbtn.predmark{box-shadow:inset 0 0 0 2px var(--gold)}
     .sumline{color:var(--muted);font-size:.9rem;text-align:center;margin:2px 0 4px}
     .sumline b{color:var(--text)}
+    /* live tussenstand onder de slagen-invoer (door de server berekend) */
+    .projline{
+      color:var(--muted);font-size:.85rem;text-align:center;line-height:1.6;
+      margin:6px 0 2px;
+    }
+    .projline .lbl{display:block;font-size:.75rem;letter-spacing:.02em;opacity:.85}
+    .projline .p{white-space:nowrap;margin:0 .1em}
+    .projline b{color:var(--text)}
+    .projline .pos{color:var(--accent);font-weight:700}
+    .projline .neg{color:var(--red);font-weight:700}
     .warn{color:var(--gold);font-size:.82rem;text-align:center;margin-top:4px}
     .error{color:var(--red);font-size:.82rem;text-align:center;margin-top:4px}
     .conn-banner{
@@ -132,10 +142,14 @@
     th,td{padding:6px 8px;text-align:center;border-bottom:1px solid var(--line)}
     th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--card)}
     th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card);z-index:1}
-    td.pos{color:var(--accent);font-weight:700}
-    td.neg{color:var(--red)}
+    td.pos .d{color:var(--accent);font-weight:700}
+    td.neg .d{color:var(--red)}
+    td .d{display:block;line-height:1.2}
+    td .c{display:block;font-size:.78em;font-weight:600;color:var(--muted);line-height:1.2}
     tr.current-round{background:var(--accent-dim)}
     tfoot td{font-weight:700;font-size:.95rem;border-top:2px solid var(--line)}
+    tfoot td .c{font-size:.75em;color:var(--muted);font-weight:600}
+    tfoot td.top .d{color:var(--gold)}
 
     /* Finished */
     .winner-banner{
@@ -509,7 +523,14 @@
     // serialiseer: snelle tikken mogen elkaar niet inhalen; fouten zijn
     // niet-blokkerend (de echte bevestiging vangt alles alsnog af)
     draftChain=draftChain.then(async()=>{
-      try{ await api('POST','/games/'+id+'/draft',payload); }
+      try{
+        const res=await api('POST','/games/'+id+'/draft',payload);
+        // De server stuurt de tussenstand mee (spelregels horen daar, niet
+        // hier); alleen tonen als we nog in dezelfde ronde/fase zitten.
+        if(game&&game.id===id&&game.currentRound===payload.round&&game.phase===payload.phase){
+          showProjection(res.projection);
+        }
+      }
       catch(err){
         // 409 door een eigen bevestiging die de draft inhaalde → stil negeren;
         // alleen refetchen als we lokaal nog in dezelfde ronde/fase zitten.
@@ -572,6 +593,22 @@
       });
     });
     refreshNumRows(sec,isActual);
+  }
+
+  // Live tussenstand: waar de stand op uitkomt als de ingetikte slagen zo
+  // blijven staan. game.projection komt van de server; wij renderen alleen.
+  function showProjection(pr){
+    const box=document.getElementById('projLine');
+    if(!box) return;
+    if(!pr){ box.innerHTML=''; return; }
+    const order=game.players.map((p,i)=>i).sort((a,b)=>pr.totals[b]-pr.totals[a]);
+    box.innerHTML='<span class="lbl">Tussenstand als dit klopt</span>'
+      +order.map(i=>{
+        const d=pr.deltas[i];
+        return '<span class="p"><b>'+esc(game.players[i])+'</b> '+pr.totals[i]
+          +(d!=null?' <span class="'+(d>0?'pos':d<0?'neg':'')+'">'+(d>0?'+':'')+d+'</span>':'')
+          +'</span>';
+      }).join(' · ');
   }
 
   function selTotal(){ return sel.reduce((a,v)=>a+(v||0),0); }
@@ -638,6 +675,7 @@
     sec.innerHTML='<h3>Werkelijke slagen</h3>'
       +numRows(true)
       +'<div class="sumline" id="actSum"></div>'
+      +'<div class="projline" id="projLine"></div>'
       +'<div id="actWarn">'+(notice?'<span class="warn">'+esc(notice)+'</span>':'')+'</div>'
       +'<div class="btn-row">'
       +'<button class="btn-small" id="actBack">← Terug</button>'
@@ -651,6 +689,7 @@
       okBtn.disabled=missing>0||total!==cards;
     }
     updateState();
+    showProjection(game.projection); // al ingevoerde concept-slagen meteen tonen
     wireNumRows(sec,true,()=>{
       document.getElementById('actWarn').innerHTML='';
       updateState();
@@ -677,25 +716,32 @@
     game.players.forEach(p=>{headHtml+='<th>'+esc(p)+'</th>';});
     $('#scoreHead').innerHTML=headHtml+'</tr>';
 
+    // Per ronde de punten van die ronde (groot) én de stand op dat moment
+    // (game.cumulative van de server) — zo blijft de tussenstand zichtbaar.
     let bodyHtml='';
     const played=game.roundScores.length;
     for(let r=0;r<played;r++){
       const rd=game.rounds[r];
       const cls=r===played-1?' class="current-round"':'';
       bodyHtml+='<tr'+cls+'><td>'+SUITS_LOCAL[rd.suitIdx]+' '+rd.cards+'</td>';
-      game.roundScores[r].forEach(s=>{
+      game.roundScores[r].forEach((s,i)=>{
         const c=s>0?'pos':s<0?'neg':'';
-        bodyHtml+='<td class="'+c+'">'+(s>0?'+':'')+s+'</td>';
+        bodyHtml+='<td class="'+c+'"><span class="d">'+(s>0?'+':'')+s+'</span>'
+          +'<span class="c">'+game.cumulative[r][i]+'</span></td>';
       });
       bodyHtml+='</tr>';
     }
     $('#scoreBody').innerHTML=bodyHtml;
 
     let footHtml='<tr><td>Totaal</td>';
-    game.totals.forEach(t=>{footHtml+='<td>'+t+'</td>';});
+    game.totals.forEach((t,i)=>{
+      footHtml+='<td class="'+(played&&game.positions[i]===1?'top':'')+'"><span class="d">'+t+'</span>'
+        +'<span class="c">'+(played?ORD_LOCAL[game.positions[i]-1]:'')+'</span></td>';
+    });
     $('#scoreFoot').innerHTML=footHtml+'</tr>';
   }
   const SUITS_LOCAL=['♣','♥','♦','♠','Sans'];
+  const ORD_LOCAL=['1e','2e','3e','4e','5e','6e'];
 
   function showWinner(){
     const names=game.winnerIdxs.map(i=>esc(game.players[i])).join(' & ');

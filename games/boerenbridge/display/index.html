@@ -50,6 +50,12 @@
     .pcard.chosen{border-color:var(--accent)}
     .pcard .crown{position:absolute;top:-14px;left:50%;transform:translateX(-50%);font-size:1.3rem}
     .pcard .nm{font-size:1.15rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .pcard .nm .dot{
+      display:inline-block;width:.6em;height:.6em;border-radius:50%;
+      background:var(--pc,var(--muted));margin-right:.35em;
+    }
+    .pcard .rank{position:absolute;top:9px;left:11px;color:var(--muted);font-size:.9rem;font-weight:800}
+    .pcard.leader .rank{color:var(--gold)}
     .pcard .lab{color:var(--muted);font-size:.85rem}
     .pcard .tot{font-size:2.6rem;font-weight:800;line-height:1.1}
     .pcard .tot .unknown{color:var(--muted)}
@@ -57,9 +63,19 @@
     .pcard .stat .pos{color:var(--accent);font-weight:700}
     .pcard .stat .neg{color:var(--red);font-weight:700}
     .pcard .dealerdot{color:var(--gold);font-size:.85rem}
+    /* tweede regel: de doorlopende tussenstand, op élk scherm zichtbaar */
+    .pcard .sub{color:var(--muted);font-size:.95rem;min-height:1.3em}
+    .pcard .sub b{color:var(--text);font-weight:800}
+    .pcard .sub .pos{color:var(--accent);font-weight:800}
+    .pcard .sub .neg{color:var(--red);font-weight:800}
+    .pcard .sub .arrow{opacity:.6;margin:0 .15em}
 
     /* groot "samen gevraagd"-blok (voorspel- en speelscherm) */
     .fillcenter{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center}
+    .fillcenter>.livewrap{flex:1;min-height:0}
+    .livewrap{display:flex;gap:14px;align-items:stretch;min-height:0}
+    .livewrap>.askbar{flex:0 0 34%;display:flex;flex-direction:column;justify-content:center}
+    .livewrap>.askbar:only-child{flex:1 1 auto}
     .askbar{
       background:var(--card);border:1px solid var(--line);border-radius:20px;
       padding:28px 24px;text-align:center;
@@ -73,6 +89,20 @@
     .askbar .delta.even{color:var(--accent)}
     .askbar .delta.wait{color:var(--muted);font-weight:600}
 
+    /* verloop van de stand (SVG, meeschalend) */
+    .boardwrap{flex:1;min-height:0;display:flex;gap:14px}
+    .boardwrap>.scoreboard{flex:1.3 1 0}
+    .boardwrap>.scoreboard:only-child{flex:1 1 auto}
+    .trend{
+      flex:1 1 0;min-width:0;background:var(--card);border:1px solid var(--line);
+      border-radius:20px;padding:12px 14px 8px;display:flex;flex-direction:column;
+    }
+    .trend h3{color:var(--muted);font-size:.95rem;font-weight:600;text-align:center;margin-bottom:4px}
+    .trend .canvas{flex:1;min-height:0;min-width:0}
+    .trend svg{display:block}
+    /* Smal scherm: de grafiek kost te veel hoogte — dan alleen de cijfers. */
+    @media(max-width:900px){.trend{display:none}.livewrap>.askbar{flex:1 1 auto}}
+
     /* scoretabel */
     .scoreboard{
       flex:1;min-height:0;background:var(--card);border:1px solid var(--line);
@@ -82,10 +112,14 @@
     th,td{padding:8px 10px;text-align:center;border-bottom:1px solid var(--line)}
     th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--card);z-index:1}
     th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card)}
-    td.pos{color:var(--accent);font-weight:700}
-    td.neg{color:var(--red)}
+    td.pos .d{color:var(--accent);font-weight:700}
+    td.neg .d{color:var(--red)}
+    td .d{display:block;line-height:1.15}
+    td .c{display:block;font-size:.8em;font-weight:600;color:var(--muted);line-height:1.15}
     tr.current-round{background:var(--accent-dim)}
     tfoot td{font-weight:800;font-size:1.1rem;border-top:2px solid var(--line)}
+    tfoot td .c{font-size:.72em;color:var(--muted)}
+    tfoot td.top .d{color:var(--gold)}
 
     /* winnaar / idle */
     .center{
@@ -132,12 +166,19 @@
 
   function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
   const SUITS=['♣','♥','♦','♠','Sans'];
+  // Vaste spelerkleuren: dezelfde kleur bij de naam op de kaart en in de grafiek.
+  const PCOLORS=['#4caf50','#42a5f5','#ffb300','#e53935','#ab47bc','#26c6da'];
+  const ORD=['1e','2e','3e','4e','5e','6e'];
+  const sign=v=>(v>0?'+':'')+v;
+  const cls=v=>v>0?'pos':v<0?'neg':'';
 
   // ---- renderen ----
   // Vier schermen: voorspellen (draft-invoer loopt) → spelen (voorspellingen
   // bevestigd) → tussenstand (ronde geteld, nog geen nieuwe invoer) → eindstand.
+  let lastGame=null;
   function render(snapshot){
     const g = snapshot.game;
+    lastGame=g;
     app.style.display='contents';
     if(!g){ renderIdle(snapshot.leaderboard); return; }
     if(g.status==='finished'){ renderWinner(g); return; }
@@ -162,28 +203,40 @@
       +'</div>';
   }
 
-  // cell(i) → {main, stat, lab?, cls?, crown?}
+  // cell(i) → {main, stat, sub?, lab?, cls?, crown?}
   function pcardsHtml(g, cell){
+    const ranked=g.roundScores.length>0; // vóór ronde 1 staat iedereen op 0
     let html='<div class="players" style="grid-template-columns:repeat('+g.players.length+',1fr)">';
     g.players.forEach((p,i)=>{
       const c=cell(i);
-      html+='<div class="pcard'+(c.cls||'')+'">'
+      html+='<div class="pcard'+(c.cls||'')+'" style="--pc:'+PCOLORS[i%PCOLORS.length]+'">'
         +(c.crown?'<span class="crown">👑</span>':'')
-        +'<span class="nm">'+esc(p)+(i===g.dealerIdx?' <span class="dealerdot">●</span>':'')+'</span>'
+        +(ranked?'<span class="rank">'+ORD[(g.positions[i]||1)-1]+'</span>':'')
+        +'<span class="nm"><i class="dot"></i>'+esc(p)+(i===g.dealerIdx?' <span class="dealerdot">●</span>':'')+'</span>'
         +(c.lab?'<span class="lab">'+c.lab+'</span>':'')
         +'<span class="tot">'+c.main+'</span>'
         +'<span class="stat">'+c.stat+'</span>'
+        +'<span class="sub">'+(c.sub||'')+'</span>'
         +'</div>';
     });
     return html+'</div>';
   }
 
-  function askbarHtml(total,cards,delta){
-    return '<div class="fillcenter"><div class="askbar">'
+  // Tweede regel op de kaart: altijd de stand van dat moment. Loopt er
+  // slagen-invoer, dan erachter waar die stand op uitkomt (server-projectie).
+  function standSub(g,i){
+    const pr=g.projection, d=pr?pr.deltas[i]:null;
+    if(d==null) return '<b>'+g.totals[i]+'</b> pt';
+    return '<b>'+g.totals[i]+'</b><span class="arrow">→</span>'
+      +'<span class="'+(cls(d)||'')+'">'+pr.totals[i]+'</span> pt';
+  }
+
+  function askbarHtml(g,total,cards,delta){
+    return '<div class="fillcenter"><div class="livewrap"><div class="askbar">'
       +'<div class="lbl">Samen gevraagd</div>'
       +'<div class="num">'+total+'<span class="of"> van '+cards+'</span></div>'
       +'<div class="delta '+delta.cls+'">'+delta.txt+'</div>'
-      +'</div></div>';
+      +'</div>'+trendHtml(g)+'</div></div>';
   }
 
   function deltaInfo(total,cards){
@@ -203,11 +256,14 @@
       : deltaInfo(total,cards);
     app.innerHTML=topbarHtml(g,'Voorspellen')
       +pcardsHtml(g,i=>({
+        lab:'vraagt',
         main: vals[i]!=null?vals[i]:'<span class="unknown">?</span>',
-        stat: 'totaal: '+g.totals[i]+' pt',
+        stat: lastRoundStat(g,i),
+        sub: standSub(g,i),
         cls: vals[i]!=null?' chosen':'',
       }))
-      +askbarHtml(total,cards,delta);
+      +askbarHtml(g,total,cards,delta);
+    drawTrend(g);
   }
 
   // Scherm 2: tijdens het kaarten — ieders voorspelling + samen gevraagd,
@@ -224,10 +280,19 @@
           main: preds[i],
           stat: got!=null
             ? 'gehaald: <span class="'+(got===preds[i]?'pos':'neg')+'">'+got+'</span>'
-            : 'totaal: '+g.totals[i]+' pt',
+            : 'gehaald: <span class="unknown">–</span>',
+          sub: standSub(g,i),
         };
       })
-      +askbarHtml(total,cards,deltaInfo(total,cards));
+      +askbarHtml(g,total,cards,deltaInfo(total,cards));
+    drawTrend(g);
+  }
+
+  // Score van de vorige ronde — op elk scherm dezelfde formulering.
+  function lastRoundStat(g,i){
+    if(!g.roundScores.length) return 'nog geen ronde gespeeld';
+    const last=g.roundScores[g.roundScores.length-1][i];
+    return 'vorige ronde: <span class="'+cls(last)+'">'+sign(last)+'</span>';
   }
 
   // Scherm 3: tussenstand — na de telling, tot de eerste nieuwe voorspelling.
@@ -237,38 +302,146 @@
     let html=topbarHtml(g,'Voorspellen')
       +pcardsHtml(g,i=>{
         const isLeader=hasScores&&g.totals[i]===leaderMax;
-        let stat;
-        if(g.currentRound>0){
-          const last=g.roundScores[g.currentRound-1][i];
-          stat='Vorige ronde: <span class="'+(last>0?'pos':last<0?'neg':'')+'">'+(last>0?'+':'')+last+'</span>';
-        }else{
-          stat='wacht op voorspellingen…';
-        }
-        return {main:g.totals[i], stat, cls:isLeader?' leader':'', crown:isLeader};
+        return {
+          main:g.totals[i],
+          stat:hasScores?lastRoundStat(g,i):'wacht op voorspellingen…',
+          sub:hasScores?(isLeader?'aan kop':(leaderMax-g.totals[i])+' achter'):'',
+          cls:isLeader?' leader':'',
+          crown:isLeader,
+        };
       });
-    html+='<div class="scoreboard"><table>'+scoreTableHtml(g)+'</table></div>';
+    html+='<div class="boardwrap"><div class="scoreboard"><table>'+scoreTableHtml(g)+'</table></div>'
+      +trendHtml(g)+'</div>';
     app.innerHTML=html;
+    drawTrend(g);
     // nieuwste ronde in beeld houden
     const sb=app.querySelector('.scoreboard');
     if(sb) sb.scrollTop=sb.scrollHeight;
   }
 
+  // Elke cel: de puntenwijziging van die ronde (groot) met daaronder de stand
+  // op dat moment (g.cumulative van de server) — de tussenstand blijft dus in
+  // beeld, niet alleen de plus of min.
   function scoreTableHtml(g){
     let html='<thead><tr><th>Ronde</th>';
-    g.players.forEach(p=>{html+='<th>'+esc(p)+'</th>';});
+    g.players.forEach((p,i)=>{
+      html+='<th><i class="dot" style="display:inline-block;width:.6em;height:.6em;border-radius:50%;'
+        +'margin-right:.35em;background:'+PCOLORS[i%PCOLORS.length]+'"></i>'+esc(p)+'</th>';
+    });
     html+='</tr></thead><tbody>';
     for(let r=0;r<g.roundScores.length;r++){
       const rd=g.rounds[r];
-      const cls=r===g.roundScores.length-1?' class="current-round"':'';
-      html+='<tr'+cls+'><td>'+SUITS[rd.suitIdx]+' '+rd.cards+'</td>';
-      g.roundScores[r].forEach(s=>{
-        html+='<td class="'+(s>0?'pos':s<0?'neg':'')+'">'+(s>0?'+':'')+s+'</td>';
+      const rowCls=r===g.roundScores.length-1?' class="current-round"':'';
+      html+='<tr'+rowCls+'><td>'+SUITS[rd.suitIdx]+' '+rd.cards+'</td>';
+      g.roundScores[r].forEach((s,i)=>{
+        html+='<td class="'+cls(s)+'"><span class="d">'+sign(s)+'</span>'
+          +'<span class="c">'+g.cumulative[r][i]+'</span></td>';
       });
       html+='</tr>';
     }
     html+='</tbody><tfoot><tr><td>Totaal</td>';
-    g.totals.forEach(t=>{html+='<td>'+t+'</td>';});
+    g.totals.forEach((t,i)=>{
+      const top=g.roundScores.length&&g.positions[i]===1;
+      html+='<td class="'+(top?'top':'')+'"><span class="d">'+t+'</span>'
+        +'<span class="c">'+(g.roundScores.length?ORD[g.positions[i]-1]:'')+'</span></td>';
+    });
     return html+'</tr></tfoot>';
+  }
+
+  // ---- verloopgrafiek ----
+  // Eén lijn per speler over de gespeelde rondes (0 = start). Loopt er
+  // slagen-invoer, dan wordt de lijn gestippeld doorgetrokken naar de
+  // projectie die de server meestuurt.
+  // De SVG wordt pas ná het invoegen getekend: dan is de beschikbare ruimte
+  // bekend en kan hij die exact vullen (geen letterboxing, geen vervorming).
+  function trendHtml(g){
+    if(!(g.cumulative||[]).length) return ''; // vóór ronde 1 valt er niets te tekenen
+    return '<div class="trend"><h3>Verloop van de stand'
+      +(liveProjection(g)?' · stippellijn = als dit klopt':'')+'</h3><div class="canvas"></div></div>';
+  }
+
+  function liveProjection(g){
+    return g.projection&&g.projection.deltas.some(d=>d!=null)?g.projection:null;
+  }
+
+  // Hulplijnen op ronde waarden: 1, 2, 5, 10, 20, 50, …
+  function niceStep(range){
+    const raw=(range||1)/4;
+    const mag=Math.pow(10,Math.floor(Math.log10(raw)));
+    const n=raw/mag;
+    return (n<=1?1:n<=2?2:n<=5?5:10)*mag;
+  }
+
+  function drawTrend(g){
+    const box=app.querySelector('.trend .canvas');
+    if(!box||!g||!(g.cumulative||[]).length) return;
+    const W=Math.round(box.clientWidth), H=Math.round(box.clientHeight);
+    if(W<120||H<80) return;
+    box.innerHTML=trendSvg(g,W,H);
+  }
+
+  function trendSvg(g,W,H){
+    const cum=g.cumulative, pr=liveProjection(g);
+    const series=g.players.map((_,i)=>[0].concat(cum.map(row=>row[i])));
+    const endVals=g.players.map((_,i)=>pr?pr.totals[i]:series[i][series[i].length-1]);
+    const labels=g.players.map((p,i)=>p+' '+endVals[i]);
+    const F=Math.max(11,Math.min(17,Math.round(H/24)));      // schaalt mee met het paneel
+    const ML=Math.round(F*2.8);
+    const MR=Math.min(Math.round(W*0.42), Math.round(labels.reduce((a,l)=>Math.max(a,l.length),0)*F*0.62)+22);
+    const MT=Math.round(F*0.9), MB=Math.round(F*2.1);
+    const steps=cum.length+(pr?1:0);
+    const vals=series.reduce((a,ser)=>a.concat(ser),[]).concat(pr?pr.totals:[]);
+    let lo=Math.min(0,...vals), hi=Math.max(0,...vals);
+    if(hi-lo<1) hi=lo+1;
+    const pad=(hi-lo)*0.1; lo-=pad; hi+=pad;
+    const X=k=>ML+(W-ML-MR)*(k/steps);
+    const Y=v=>MT+(H-MT-MB)*(1-(v-lo)/(hi-lo));
+    const n=v=>Math.round(v*10)/10;
+
+    let svg='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'">';
+    const step=niceStep(hi-lo);
+    for(let v=Math.ceil(lo/step)*step;v<=hi;v+=step){
+      const zero=Math.abs(v)<1e-9, y=n(Y(v));
+      svg+='<line x1="'+ML+'" y1="'+y+'" x2="'+n(W-MR)+'" y2="'+y+'" stroke="'+(zero?'#4a4a55':'#2e2e36')+'" '
+        +'stroke-width="'+(zero?2:1)+'"'+(zero?'':' stroke-dasharray="4 6"')+'/>'
+        +'<text x="'+(ML-8)+'" y="'+n(y+F*0.35)+'" fill="#9a9aa3" font-size="'+F+'" text-anchor="end">'
+        +Math.round(v)+'</text>';
+    }
+    // rondenummers; bij weinig ruimte om de ronde
+    const every=(W-ML-MR)/steps<F*2?2:1;
+    for(let k=1;k<=cum.length;k++){
+      if(k%every&&k!==cum.length) continue;
+      svg+='<text x="'+n(X(k))+'" y="'+n(H-MB+F*1.3)+'" fill="#9a9aa3" font-size="'+F+'" '
+        +'text-anchor="middle">'+k+'</text>';
+    }
+    if(pr){
+      svg+='<text x="'+n(X(steps))+'" y="'+n(H-MB+F*1.3)+'" fill="#6f6f78" font-size="'+F+'" '
+        +'text-anchor="middle">nu</text>';
+    }
+    g.players.forEach((p,i)=>{
+      const col=PCOLORS[i%PCOLORS.length];
+      const pts=series[i].map((v,k)=>n(X(k))+','+n(Y(v))).join(' ');
+      const lastY=n(Y(series[i][series[i].length-1]));
+      svg+='<polyline fill="none" stroke="'+col+'" stroke-width="3" stroke-linejoin="round" '
+        +'stroke-linecap="round" points="'+pts+'"/>'
+        +'<circle cx="'+n(X(cum.length))+'" cy="'+lastY+'" r="4.5" fill="'+col+'"/>';
+      if(pr){
+        svg+='<line x1="'+n(X(cum.length))+'" y1="'+lastY+'" x2="'+n(X(steps))+'" y2="'+n(Y(pr.totals[i]))+'" '
+          +'stroke="'+col+'" stroke-width="2.5" stroke-dasharray="6 5" opacity=".85"/>'
+          +'<circle cx="'+n(X(steps))+'" cy="'+n(Y(pr.totals[i]))+'" r="4.5" fill="none" stroke="'+col+'" stroke-width="2.5"/>';
+      }
+    });
+    // naamlabels rechts, uit elkaar geduwd zodat ze niet overlappen
+    const labs=g.players.map((p,i)=>({i,y:Y(endVals[i])})).sort((a,b)=>a.y-b.y);
+    const GAP=F*1.35;
+    for(let k=1;k<labs.length;k++) if(labs[k].y-labs[k-1].y<GAP) labs[k].y=labs[k-1].y+GAP;
+    const over=labs.length?labs[labs.length-1].y-(H-MB):0;
+    if(over>0) labs.forEach(l=>{l.y-=over;});
+    labs.forEach(l=>{
+      svg+='<text x="'+n(W-MR+10)+'" y="'+n(l.y+F*0.35)+'" fill="'+PCOLORS[l.i%PCOLORS.length]+'" '
+        +'font-size="'+n(F*1.05)+'" font-weight="700">'+esc(labels[l.i])+'</text>';
+    });
+    return svg+'</svg>';
   }
 
   function renderWinner(g){
@@ -299,6 +472,14 @@
       +'<div class="idle-sub">Geen actief spel — start een spel op je telefoon</div></div>'
       +lb+'</div>';
   }
+
+  // Elk scherm dat een grafiek bevat, tekent hem na het invoegen; bij een
+  // andere schermgrootte opnieuw (de SVG is op de pixelmaat getekend).
+  let resizeTimer=null;
+  window.addEventListener('resize',()=>{
+    clearTimeout(resizeTimer);
+    resizeTimer=setTimeout(()=>{ if(lastGame) drawTrend(lastGame); },150);
+  });
 
   // ---- SSE + herstel ----
   function connect(){
