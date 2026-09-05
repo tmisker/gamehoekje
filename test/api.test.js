@@ -38,6 +38,21 @@ function expectedKind(pred, act) {
   return act === pred ? 'exact' : act > pred ? 'over' : 'under';
 }
 
+// Lopende tussenstand per ronde — onafhankelijk nagerekend.
+function expectedCumulative(roundScores, n) {
+  const run = new Array(n).fill(0);
+  return roundScores.map(row => {
+    row.forEach((s, i) => { run[i] += s; });
+    return run.slice();
+  });
+}
+
+// Plek in de stand, anders geformuleerd dan de server: hoeveel spelers staan
+// er hoger? Gelijke totalen delen daardoor vanzelf een plek.
+function expectedPositions(totals) {
+  return totals.map(t => totals.filter(o => o > t).length + 1);
+}
+
 let serverProc = null;
 
 async function startServer() {
@@ -106,6 +121,11 @@ async function playGame(names, pick) {
       assert.equal(game.roundKinds[r][i], expectedKind(preds[i], acts[i]),
         'kind r' + r + ' speler ' + i);
     }
+    // Doorlopende tussenstand: cumulatief, totalen en plek in de stand
+    const cum = expectedCumulative(game.roundScores, n);
+    assert.deepEqual(game.cumulative, cum, 'cumulative r' + r);
+    assert.deepEqual(game.totals, cum[cum.length - 1], 'totals = laatste cumulatieve rij r' + r);
+    assert.deepEqual(game.positions, expectedPositions(game.totals), 'positions r' + r);
   }
   return game;
 }
@@ -233,21 +253,82 @@ async function main() {
     r = await api('POST', '/api/boerenbridge/games/' + id + '/predictions', { round: 0, predictions: [2, 3, 3] });
     assert.equal(r.body.phase, 'actual');
     assert.equal(r.body.draft, null, 'predictions wist de draft');
-    assert.equal(r.body.draftKinds, null, 'geen slagen-draft → geen draftKinds');
+    assert.equal(r.body.projection, null, 'geen slagen-draft → geen projectie');
     // draft in de slagen-fase; undo wist hem ook
     r = await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'actual', values: [1, null, null] });
     assert.deepEqual(r.body.draft, { phase: 'actual', values: [1, null, null] });
     // gevraagd [2,3,3]: 1 gehaald is (nog) te weinig, de rest is nog niet ingevoerd
-    assert.deepEqual(r.body.draftKinds, ['under', null, null]);
+    assert.deepEqual(r.body.projection.kinds, ['under', null, null]);
     r = await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'actual', values: [5, 3, null] });
-    assert.deepEqual(r.body.draftKinds, ['over', 'exact', null], 'over = pluspunten zonder bonus');
+    assert.deepEqual(r.body.projection.kinds, ['over', 'exact', null], 'over = pluspunten zonder bonus');
     let snap = (await api('GET', '/api/boerenbridge/current')).body;
-    assert.deepEqual(snap.game.draftKinds, ['over', 'exact', null], 'draftKinds zit in de snapshot');
+    assert.deepEqual(snap.game.projection.kinds, ['over', 'exact', null], 'de kinds zitten in de snapshot');
     r = await api('POST', '/api/boerenbridge/games/' + id + '/undo', {});
     assert.equal(r.body.draft, null, 'undo wist de draft');
-    assert.equal(r.body.draftKinds, null, 'undo wist ook de draftKinds');
+    assert.equal(r.body.projection, null, 'undo wist ook de projectie');
     await api('POST', '/api/boerenbridge/games/' + id + '/abandon', {});
     console.log('OK draft-invoer (live meekijken)');
+  }
+
+  // --- doorlopende tussenstand: cumulatief, plek in de stand, live projectie ---
+  {
+    const created = await api('POST', '/api/boerenbridge/games', { players: ['Ann', 'Bo', 'Cor'] });
+    const id = created.body.id;
+    assert.deepEqual(created.body.cumulative, [], 'nieuw spel heeft nog geen rondes');
+    assert.deepEqual(created.body.totals, [0, 0, 0]);
+    assert.deepEqual(created.body.positions, [1, 1, 1], 'alles gelijk → gedeelde eerste plek');
+    assert.equal(created.body.projection, null, 'voorspelfase heeft geen projectie');
+
+    // ronde 0 (8 kaarten): voorspellingen vast, slagen nog als concept
+    let r = await api('POST', '/api/boerenbridge/games/' + id + '/predictions', { round: 0, predictions: [2, 3, 3] });
+    assert.equal(r.body.projection, null, 'zonder concept-slagen geen projectie');
+    r = await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'actual', values: [2, null, null] });
+    let pr = r.body.projection;
+    assert.deepEqual(pr.deltas, [expectedScore(2, 2), null, null], 'alleen ingevulde spelers hebben een delta');
+    assert.deepEqual(pr.totals, [7, 0, 0], 'stand als dit klopt');
+    assert.deepEqual(pr.positions, expectedPositions(pr.totals));
+    // meer invoer → projectie schuift mee
+    r = await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'actual', values: [2, 4, 2] });
+    pr = r.body.projection;
+    assert.deepEqual(pr.deltas, [7, 4, -1]);
+    // gevraagd [2,3,3]: Ann exact, Bo te veel (pluspunten zonder bonus), Cor te weinig
+    assert.deepEqual(pr.kinds, ['exact', 'over', 'under']);
+    assert.deepEqual(pr.totals, [7, 4, -1]);
+    assert.deepEqual(pr.positions, [1, 2, 3]);
+    const cur = (await api('GET', '/api/boerenbridge/current')).body;
+    assert.deepEqual(cur.game.projection.totals, [7, 4, -1], 'projectie zit ook in de SSE-snapshot');
+
+    // bevestigen: de projectie wordt de echte stand en verdwijnt
+    r = await api('POST', '/api/boerenbridge/games/' + id + '/actuals', { round: 0, actuals: [2, 4, 2] });
+    assert.deepEqual(r.body.roundScores[0], [7, 4, -1]);
+    assert.deepEqual(r.body.cumulative, [[7, 4, -1]]);
+    assert.deepEqual(r.body.totals, [7, 4, -1]);
+    assert.deepEqual(r.body.positions, [1, 2, 3]);
+    assert.equal(r.body.projection, null, 'na bevestigen geen projectie meer');
+
+    // ronde 1 (7 kaarten) erbij: de cumulatieve rijen stapelen
+    await api('POST', '/api/boerenbridge/games/' + id + '/predictions', { round: 1, predictions: [7, 0, 0] });
+    r = await api('POST', '/api/boerenbridge/games/' + id + '/actuals', { round: 1, actuals: [3, 4, 0] });
+    assert.deepEqual(r.body.roundScores[1], [-4, 4, 5]);
+    assert.deepEqual(r.body.cumulative, [[7, 4, -1], [3, 8, 4]], 'stand per ronde');
+    assert.deepEqual(r.body.totals, [3, 8, 4]);
+    assert.deepEqual(r.body.positions, [3, 1, 2]);
+
+    // undo haalt de laatste rij er weer af
+    r = await api('POST', '/api/boerenbridge/games/' + id + '/undo', {});
+    assert.deepEqual(r.body.cumulative, [[7, 4, -1]], 'undo rolt de tussenstand terug');
+    assert.deepEqual(r.body.totals, [7, 4, -1]);
+    await api('POST', '/api/boerenbridge/games/' + id + '/abandon', {});
+
+    // gedeelde plek slaat de volgende plek(ken) over: 1, 1, 3, 3
+    const four = await api('POST', '/api/boerenbridge/games', { players: ['E1', 'E2', 'E3', 'E4'] });
+    await api('POST', '/api/boerenbridge/games/' + four.body.id + '/predictions', { round: 0, predictions: [4, 4, 0, 0] });
+    r = await api('POST', '/api/boerenbridge/games/' + four.body.id + '/actuals', { round: 0, actuals: [4, 4, 0, 0] });
+    assert.deepEqual(r.body.totals, [9, 9, 5, 5]);
+    assert.deepEqual(r.body.positions, [1, 1, 3, 3]);
+    assert.deepEqual(r.body.positions, expectedPositions(r.body.totals));
+    await api('POST', '/api/boerenbridge/games/' + four.body.id + '/abandon', {});
+    console.log('OK tussenstand (cumulatief, plekken, live projectie)');
   }
 
   // --- leaderboard-wiskunde met bekende uitkomsten ---

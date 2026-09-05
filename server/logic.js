@@ -172,10 +172,42 @@ function abandon(game) {
   game.updatedAt = new Date().toISOString();
 }
 
+// Lopende tussenstand: cumulative[r][i] = het totaal van speler i t/m ronde r.
+// Eén bron voor elke stand in dit bestand — getTotals pakt de laatste rij.
+function cumulativeTotals(game) {
+  const running = game.players.map(() => 0);
+  return game.roundScores.map(row => {
+    row.forEach((s, i) => { running[i] += s; });
+    return running.slice();
+  });
+}
+
 function getTotals(game) {
-  const totals = game.players.map(() => 0);
-  for (const row of game.roundScores) row.forEach((s, i) => { totals[i] += s; });
-  return totals;
+  const cum = cumulativeTotals(game);
+  return cum.length ? cum[cum.length - 1].slice() : game.players.map(() => 0);
+}
+
+// Plek in de stand (1 = hoogste). Gelijke totalen delen een plek en de plek(ken)
+// daarna slaan over: 1, 2, 2, 4.
+function positions(totals) {
+  const sorted = totals.slice().sort((a, b) => b - a);
+  return totals.map(t => sorted.indexOf(t) + 1);
+}
+
+// Live tussenstand tijdens het spelen: de stand zoals die wordt als de
+// concept-invoer van de slagen zo blijft staan, met per speler de score van de
+// ronde (`deltas`) en hoe die tot stand komt (`kinds`, zie scoreKind).
+// Niet-autoritatief (de draft telt nergens in mee), maar wél hier berekend —
+// de scoreformule is een spelregel en hoort niet in de clients.
+function projection(game, totals) {
+  if (game.status !== 'active' || game.phase !== 'actual') return null;
+  const preds = game.predictions[game.currentRound];
+  const draft = game.draft && game.draft.phase === 'actual' ? game.draft.values : null;
+  if (!preds || !draft) return null;
+  const deltas = preds.map((p, i) => (draft[i] == null ? null : scoreRound(p, draft[i])));
+  const kinds = preds.map((p, i) => (draft[i] == null ? null : scoreKind(p, draft[i])));
+  const projected = totals.map((t, i) => t + (deltas[i] || 0));
+  return { deltas, kinds, totals: projected, positions: positions(projected) };
 }
 
 // Per gespeelde ronde per speler hoe de score tot stand kwam (zie scoreKind).
@@ -190,28 +222,19 @@ function getRoundKinds(game) {
   });
 }
 
-// Dezelfde classificatie voor de lopende slagen-invoer (concept), zodat het
-// scorebord live kan tonen wie op bonus / pluspunten / minpunten staat.
-// null per speler = nog niets ingevoerd; null in het geheel = geen slagen-draft.
-function getDraftKinds(game) {
-  const d = game.draft;
-  if (!d || d.phase !== 'actual') return null;
-  const preds = game.predictions[game.currentRound];
-  if (!Array.isArray(preds)) return null;
-  return d.values.map((v, i) => (
-    Number.isInteger(v) && Number.isInteger(preds[i]) ? scoreKind(preds[i], v) : null
-  ));
-}
-
 // Verrijkte view voor API/SSE: spel + afgeleide velden (niet persistent).
 function enrich(game) {
   const n = game.players.length;
   const roundIdx = Math.min(game.currentRound, game.rounds.length - 1);
   const r = game.rounds[roundIdx];
+  const cumulative = cumulativeTotals(game);
+  const totals = cumulative.length ? cumulative[cumulative.length - 1].slice() : game.players.map(() => 0);
   return Object.assign({}, game, {
-    totals: getTotals(game),
+    totals,
+    cumulative,
+    positions: positions(totals),
+    projection: projection(game, totals),
     roundKinds: getRoundKinds(game),
-    draftKinds: getDraftKinds(game),
     dealerIdx: dealerIdx(n, roundIdx),
     playerOrder: playerOrder(n, roundIdx),
     roundInfo: {
@@ -260,7 +283,7 @@ module.exports = {
   SUITS, SUIT_NAMES, SUIT_COLORS,
   buildRounds, scoreRound, scoreKind, dealerIdx, playerOrder,
   createGame, applyPredictions, applyDraft, applyActuals, undo, abandon,
-  getTotals, getRoundKinds, getDraftKinds, enrich, gameSummary,
+  getTotals, cumulativeTotals, positions, projection, getRoundKinds, enrich, gameSummary,
   leaderboard, leaderboardView,
   finishedGames: shared.finishedGames,
   leaderboardPlayers: shared.leaderboardPlayers,
