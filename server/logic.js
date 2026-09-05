@@ -23,6 +23,15 @@ function scoreRound(pred, act) {
   return act;
 }
 
+// Hoe een rondescore tot stand kwam — puur voor de weergave (kleur):
+// 'exact' = precies voorspeld (pluspunten mét de bonus van 5),
+// 'over'  = te veel geraapt (pluspunten zónder bonus),
+// 'under' = te weinig geraapt (minpunten).
+function scoreKind(pred, act) {
+  if (act === pred) return 'exact';
+  return act > pred ? 'over' : 'under';
+}
+
 function dealerIdx(nPlayers, round) {
   return (nPlayers - 1 + round) % nPlayers;
 }
@@ -169,6 +178,31 @@ function getTotals(game) {
   return totals;
 }
 
+// Per gespeelde ronde per speler hoe de score tot stand kwam (zie scoreKind).
+// De clients kleuren hierop, zodat de scoreregels op de server blijven.
+function getRoundKinds(game) {
+  return game.roundScores.map((row, r) => {
+    const preds = game.predictions[r] || [];
+    const acts = game.actuals[r] || [];
+    return row.map((_, i) => (
+      Number.isInteger(preds[i]) && Number.isInteger(acts[i]) ? scoreKind(preds[i], acts[i]) : null
+    ));
+  });
+}
+
+// Dezelfde classificatie voor de lopende slagen-invoer (concept), zodat het
+// scorebord live kan tonen wie op bonus / pluspunten / minpunten staat.
+// null per speler = nog niets ingevoerd; null in het geheel = geen slagen-draft.
+function getDraftKinds(game) {
+  const d = game.draft;
+  if (!d || d.phase !== 'actual') return null;
+  const preds = game.predictions[game.currentRound];
+  if (!Array.isArray(preds)) return null;
+  return d.values.map((v, i) => (
+    Number.isInteger(v) && Number.isInteger(preds[i]) ? scoreKind(preds[i], v) : null
+  ));
+}
+
 // Verrijkte view voor API/SSE: spel + afgeleide velden (niet persistent).
 function enrich(game) {
   const n = game.players.length;
@@ -176,6 +210,8 @@ function enrich(game) {
   const r = game.rounds[roundIdx];
   return Object.assign({}, game, {
     totals: getTotals(game),
+    roundKinds: getRoundKinds(game),
+    draftKinds: getDraftKinds(game),
     dealerIdx: dealerIdx(n, roundIdx),
     playerOrder: playerOrder(n, roundIdx),
     roundInfo: {
@@ -222,9 +258,9 @@ function leaderboardView(games, exclude) {
 
 module.exports = {
   SUITS, SUIT_NAMES, SUIT_COLORS,
-  buildRounds, scoreRound, dealerIdx, playerOrder,
+  buildRounds, scoreRound, scoreKind, dealerIdx, playerOrder,
   createGame, applyPredictions, applyDraft, applyActuals, undo, abandon,
-  getTotals, enrich, gameSummary,
+  getTotals, getRoundKinds, getDraftKinds, enrich, gameSummary,
   leaderboard, leaderboardView,
   finishedGames: shared.finishedGames,
   leaderboardPlayers: shared.leaderboardPlayers,

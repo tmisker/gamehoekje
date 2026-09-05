@@ -10,7 +10,7 @@
     :root{
       --bg:#0f0f12;--card:#1b1b20;--card2:#232329;--line:#2e2e36;
       --text:#f4f4f6;--muted:#9a9aa3;--accent:#4caf50;--accent-dim:rgba(76,175,80,.15);
-      --red:#e53935;--red-dim:rgba(229,57,53,.12);--gold:#ffd600;
+      --red:#e53935;--red-dim:rgba(229,57,53,.12);--gold:#ffd600;--orange:#ff9800;
     }
     html{height:100%}
     body{
@@ -132,8 +132,11 @@
     th,td{padding:6px 8px;text-align:center;border-bottom:1px solid var(--line)}
     th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--card)}
     th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card);z-index:1}
-    td.pos{color:var(--accent);font-weight:700}
-    td.neg{color:var(--red)}
+    /* k-exact = voorspelling gehaald (bonus), k-over = pluspunten zonder bonus,
+       k-under = minpunten */
+    td.k-exact{color:var(--accent);font-weight:700}
+    td.k-over{color:var(--orange);font-weight:700}
+    td.k-under{color:var(--red)}
     tr.current-round{background:var(--accent-dim)}
     tfoot td{font-weight:700;font-size:.95rem;border-top:2px solid var(--line)}
 
@@ -683,9 +686,10 @@
       const rd=game.rounds[r];
       const cls=r===played-1?' class="current-round"':'';
       bodyHtml+='<tr'+cls+'><td>'+SUITS_LOCAL[rd.suitIdx]+' '+rd.cards+'</td>';
-      game.roundScores[r].forEach(s=>{
-        const c=s>0?'pos':s<0?'neg':'';
-        bodyHtml+='<td class="'+c+'">'+(s>0?'+':'')+s+'</td>';
+      // De server classificeert elke score ('exact' | 'over' | 'under'); wij kleuren alleen.
+      game.roundScores[r].forEach((s,i)=>{
+        const k=game.roundKinds[r][i];
+        bodyHtml+='<td'+(k?' class="k-'+k+'"':'')+'>'+(s>0?'+':'')+s+'</td>';
       });
       bodyHtml+='</tr>';
     }

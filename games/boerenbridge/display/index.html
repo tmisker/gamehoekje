@@ -10,7 +10,7 @@
     :root{
       --bg:#0f0f12;--card:#1b1b20;--card2:#232329;--line:#2e2e36;
       --text:#f4f4f6;--muted:#9a9aa3;--accent:#4caf50;--accent-dim:rgba(76,175,80,.15);
-      --red:#e53935;--gold:#ffd600;
+      --red:#e53935;--gold:#ffd600;--orange:#ff9800;
     }
     html,body{height:100%}
     body{
@@ -54,8 +54,11 @@
     .pcard .tot{font-size:2.6rem;font-weight:800;line-height:1.1}
     .pcard .tot .unknown{color:var(--muted)}
     .pcard .stat{color:var(--muted);font-size:.95rem;min-height:1.3em}
-    .pcard .stat .pos{color:var(--accent);font-weight:700}
-    .pcard .stat .neg{color:var(--red);font-weight:700}
+    /* k-exact = voorspelling gehaald (bonus), k-over = pluspunten zonder bonus,
+       k-under = minpunten */
+    .pcard .stat .k-exact{color:var(--accent);font-weight:700}
+    .pcard .stat .k-over{color:var(--orange);font-weight:700}
+    .pcard .stat .k-under{color:var(--red);font-weight:700}
     .pcard .dealerdot{color:var(--gold);font-size:.85rem}
 
     /* groot "samen gevraagd"-blok (voorspel- en speelscherm) */
@@ -82,8 +85,9 @@
     th,td{padding:8px 10px;text-align:center;border-bottom:1px solid var(--line)}
     th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--card);z-index:1}
     th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card)}
-    td.pos{color:var(--accent);font-weight:700}
-    td.neg{color:var(--red)}
+    td.k-exact{color:var(--accent);font-weight:700}
+    td.k-over{color:var(--orange);font-weight:700}
+    td.k-under{color:var(--red)}
     tr.current-round{background:var(--accent-dim)}
     tfoot td{font-weight:800;font-size:1.1rem;border-top:2px solid var(--line)}
 
@@ -131,6 +135,8 @@
   let source = null;
 
   function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+  // De server classificeert elke score ('exact' | 'over' | 'under'); wij kleuren alleen.
+  function kcls(k){return k?' class="k-'+k+'"':''}
   const SUITS=['♣','♥','♦','♠','Sans'];
 
   // ---- renderen ----
@@ -219,11 +225,12 @@
     app.innerHTML=topbarHtml(g,'Spelen')
       +pcardsHtml(g,i=>{
         const got=draft?draft.values[i]:null;
+        const kind=draft&&g.draftKinds?g.draftKinds[i]:null;
         return {
           lab:'gevraagd',
           main: preds[i],
           stat: got!=null
-            ? 'gehaald: <span class="'+(got===preds[i]?'pos':'neg')+'">'+got+'</span>'
+            ? 'gehaald: <span'+kcls(kind)+'>'+got+'</span>'
             : 'totaal: '+g.totals[i]+' pt',
         };
       })
@@ -240,7 +247,8 @@
         let stat;
         if(g.currentRound>0){
           const last=g.roundScores[g.currentRound-1][i];
-          stat='Vorige ronde: <span class="'+(last>0?'pos':last<0?'neg':'')+'">'+(last>0?'+':'')+last+'</span>';
+          const kind=g.roundKinds[g.currentRound-1][i];
+          stat='Vorige ronde: <span'+kcls(kind)+'>'+(last>0?'+':'')+last+'</span>';
         }else{
           stat='wacht op voorspellingen…';
         }
@@ -261,8 +269,8 @@
       const rd=g.rounds[r];
       const cls=r===g.roundScores.length-1?' class="current-round"':'';
       html+='<tr'+cls+'><td>'+SUITS[rd.suitIdx]+' '+rd.cards+'</td>';
-      g.roundScores[r].forEach(s=>{
-        html+='<td class="'+(s>0?'pos':s<0?'neg':'')+'">'+(s>0?'+':'')+s+'</td>';
+      g.roundScores[r].forEach((s,i)=>{
+        html+='<td'+kcls(g.roundKinds[r][i])+'>'+(s>0?'+':'')+s+'</td>';
       });
       html+='</tr>';
     }
