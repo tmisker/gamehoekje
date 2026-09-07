@@ -40,7 +40,9 @@
     .topbar .dealer{color:var(--gold);font-size:1.2rem;font-weight:700;text-align:right}
 
     /* spelerskaarten */
-    .players{display:grid;gap:12px}
+    /* Kaartbreedte gecapt en gecentreerd: bij twee of drie spelers zou een
+       kaart anders de halve breedte van een iPad pakken. */
+    .players{display:grid;gap:12px;margin-inline:auto;width:100%}
     .pcard{
       background:var(--card);border:1px solid var(--line);border-radius:16px;
       padding:24px 10px 14px;text-align:center;display:flex;flex-direction:column;gap:4px;
@@ -217,7 +219,8 @@
   // cell(i) → {main, stat, sub?, lab?, cls?, crown?}
   function pcardsHtml(g, cell){
     const ranked=g.roundScores.length>0; // vóór ronde 1 staat iedereen op 0
-    let html='<div class="players" style="grid-template-columns:repeat('+g.players.length+',minmax(0,1fr))">';
+    const n=g.players.length, cap=n*340+(n-1)*12;
+    let html='<div class="players" style="grid-template-columns:repeat('+n+',minmax(0,1fr));max-width:'+cap+'px">';
     g.players.forEach((p,i)=>{
       const c=cell(i);
       html+='<div class="pcard'+(c.cls||'')+'">'
