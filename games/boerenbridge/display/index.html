@@ -551,22 +551,25 @@
 
   // Eén weetje tegelijk, elke 9 seconden een volgende. Alleen op het
   // idle-scherm; elke andere render zet de timer weer stil.
-  let factTimer=null;
+  // De plek in de rij overleeft een nieuwe idle-render (een afgebroken potje,
+  // een verlopen winnaarscherm); alleen een andere lijst begint opnieuw.
+  let factTimer=null, factIdx=0, factKey='';
   function startFactRotation(facts){
     clearInterval(factTimer);
     factTimer=null;
     const box=document.getElementById('tableFact');
     if(!box||!facts||!facts.length) return;
-    let i=Math.floor(Math.random()*facts.length);
+    const key=facts.map(f=>f.text).join('|');
+    if(key!==factKey){ factKey=key; factIdx=Math.floor(Math.random()*facts.length); }
     const show=()=>{
-      const f=facts[i%facts.length];
+      const f=facts[factIdx%facts.length];
       box.innerHTML='<span class="ic">'+f.icon+'</span><span>'+esc(f.text)+'</span>';
     };
     show();
     if(facts.length<2) return;
     factTimer=setInterval(()=>{
       box.classList.add('fade');
-      setTimeout(()=>{ i++; show(); box.classList.remove('fade'); },400);
+      setTimeout(()=>{ factIdx++; show(); box.classList.remove('fade'); },400);
     },9000);
   }
 

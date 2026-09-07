@@ -678,6 +678,9 @@
       okBtn.disabled=missing>0;
     }
     updateState();
+    // Ook na een herlaad of terugkeer uit de slaapstand: de server stuurt de
+    // reactie bij het spel mee, dus die hoort er meteen te staan.
+    showDraftFact(game.draftFact);
     wireNumRows(sec,false,()=>{
       const w=document.getElementById('predWarn');
       delete w.dataset.warned;

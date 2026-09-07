@@ -198,6 +198,18 @@ function main() {
     console.log('OK hoogtepunten (comeback, kantelpunt, van start tot finish)');
   }
 
+  // --- weetjes voor het idle-scherm ---
+  {
+    const facts = logic.tableFacts(GAMES);
+    assert.ok(facts.length >= 5, 'records en notities samen: ' + facts.length);
+    assert.ok(facts.every(f => f.icon && f.text), 'elk weetje heeft een icoon en tekst');
+    assert.ok(facts.some(f => f.text.startsWith('Hoogste eindscore: Ann — ' + WIN_TOTAL)), 'records: ' + facts.map(f => f.text));
+    assert.ok(facts.some(f => /koploper na de 1-kaartronde/.test(f.text)), 'notities zitten erbij');
+    assert.deepEqual(logic.tableFacts([]), [], 'zonder historie niets te melden');
+    assert.deepEqual(logic.tableFacts([logic.createGame(NAMES)]), [], 'een lopend potje telt niet mee');
+    console.log('OK weetjes voor het idle-scherm');
+  }
+
   // --- weetjes uit de historie ---
   {
     const game = logic.createGame(NAMES);

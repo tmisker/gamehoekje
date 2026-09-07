@@ -49,7 +49,7 @@ function leadersAfter(cum, r) {
 // statistiekpagina nodig hebben komt hieruit.
 function collect(finished, rules) {
   const players = new Map();
-  const byCards = new Map();   // kaartaantal -> {rounds, exact, askDiff, games}
+  const byCards = new Map();   // kaartaantal -> {rounds (spelersrondes), exact, askDiff, dealt}
   const bySuit = new Map();    // troefindex -> {rounds, exact}
   const pairs = new Map();     // "a|b" -> {a, b, games, winsA, winsB, shared}
   const weekdays = new Array(7).fill(0);
@@ -157,11 +157,13 @@ function collect(finished, rules) {
     // Per ronde-type: hoeveel van de tafel zat goed, en vroeg de tafel te veel?
     for (let r = 0; r < played; r++) {
       const cards = game.rounds[r].cards;
-      const c = bucket(byCards, cards, () => ({ cards, rounds: 0, exact: 0, askDiff: 0, games: 0 }));
+      // `rounds` telt spelersrondes (noemer voor het percentage), `dealt` telt
+      // hoe vaak dit kaartaantal aan tafel lag (noemer voor "samen gevraagd").
+      const c = bucket(byCards, cards, () => ({ cards, rounds: 0, exact: 0, askDiff: 0, dealt: 0 }));
       c.rounds += n;
       c.exact += kinds[r].filter(k => k === 'exact').length;
       c.askDiff += game.predictions[r].reduce((a, b) => a + b, 0) - cards;
-      c.games++;
+      c.dealt++;
       const s = bucket(bySuit, game.rounds[r].suitIdx, () => ({ rounds: 0, exact: 0 }));
       s.rounds += n;
       s.exact += kinds[r].filter(k => k === 'exact').length;
@@ -250,7 +252,7 @@ function cardRows(hist) {
     .sort((a, b) => a.cards - b.cards)
     .map(c => ({
       cards: c.cards, rounds: c.rounds, exactPct: pct(c.exact, c.rounds),
-      askDiff: c.games ? round1(c.askDiff / c.games) : 0,
+      askDiff: c.dealt ? round1(c.askDiff / c.dealt) : 0,
     }));
 }
 
@@ -362,5 +364,5 @@ function statsView(games, exclude, rules) {
 
 module.exports = {
   collect, statsView, playerRows, cardRows, suitRows, pairRows, recordRows, tableNotes,
-  favouriteAsk, formatDuration, stdev, pct, num, leadersAfter, WEEKDAYS,
+  favouriteAsk, formatDuration, cardsTxt, joinNames, stdev, pct, num, leadersAfter, WEEKDAYS,
 };

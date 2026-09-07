@@ -268,28 +268,9 @@ function enrich(game, games) {
 // Tekst voor de schermen, berekend uit de gespeelde rondes van het potje zelf
 // (geen historie). De server kiest en formuleert; de clients tonen alleen.
 
-function joinNames(names) {
-  if (names.length <= 1) return names.join('');
-  return names.slice(0, -1).join(', ') + ' en ' + names[names.length - 1];
-}
-
-function cardsTxt(cards) {
-  return cards + (cards === 1 ? ' kaart' : ' kaarten');
-}
-
-function formatDuration(ms) {
-  const min = Math.round(ms / 60000);
-  const h = Math.floor(min / 60), m = min % 60;
-  if (!h) return m + ' min';
-  return h + ' uur' + (m ? ' ' + m + ' min' : '');
-}
-
-// Wie na ronde r (index in cumulative) aan kop staat; gelijke totalen delen de kop.
-function leadersAfter(cum, r) {
-  const row = cum[r];
-  const max = Math.max(...row);
-  return row.map((t, i) => (t === max ? i : -1)).filter(i => i >= 0);
-}
+// Formuleer- en telhulpjes: één plek, gedeeld met de statistiek.
+// leadersAfter(cum, r) = wie er na ronde r aan kop staan (gelijk = samen).
+const { joinNames, cardsTxt, formatDuration, leadersAfter } = bbStats;
 
 // Hoe vaak de kop van eigenaar wisselde: pas als niemand van de vorige
 // koplopers nog bovenaan staat — een gedeelde kop is nog geen wissel.
@@ -450,7 +431,9 @@ function historyOf(games) {
   if (!count) return null;
   const key = count + '@' + last;
   if (historyCache.key !== key) {
-    historyCache = { key, value: bbStats.collect(games.filter(g => g.status === 'finished'), RULES) };
+    const value = bbStats.collect(games.filter(g => g.status === 'finished'), RULES);
+    value.cardRows = bbStats.cardRows(value);   // vaste tabel; hoort bij deze historie
+    historyCache = { key, value };
   }
   return historyCache.value;
 }
@@ -522,18 +505,21 @@ function historyCandidates(game, hist) {
     .filter(Boolean);
   if (holders.length) {
     const rec = holders.reduce((a, b) => (b.score > a.score ? b : a));
-    let paced = false;
+    // Wie ligt er op koers om daaroverheen te gaan? De hoogste prognose telt —
+    // niet wie toevallig het eerst aan tafel zit.
+    let pace = null;
     if (played >= 8) {
       P.forEach((name, i) => {
         const projected = Math.round((totals[i] / played) * game.rounds.length);
-        if (projected > rec.score && !paced) {
-          paced = true;
-          add(3, '🏅', name + ' ligt op koers voor ongeveer ' + projected
-            + ' punten; het record aan deze tafel is ' + rec.score + ' (' + P[rec.i] + ').');
-        }
+        if (projected > rec.score && (!pace || projected > pace.projected)) pace = { name, projected };
       });
     }
-    if (!paced) add(1, '🏅', 'Het record aan deze tafel is ' + rec.score + ' (' + P[rec.i] + ').');
+    if (pace) {
+      add(3, '🏅', pace.name + ' ligt op koers voor ongeveer ' + pace.projected
+        + ' punten; het record aan deze tafel is ' + rec.score + ' (' + P[rec.i] + ').');
+    } else {
+      add(1, '🏅', 'Het record aan deze tafel is ' + rec.score + ' (' + P[rec.i] + ').');
+    }
   }
 
   // Onderling: wie wint er vaker als deze twee allebei meedoen?
@@ -558,7 +544,7 @@ function historyCandidates(game, hist) {
   }
 
   // Is dit ronde-type het lastigst of juist het makkelijkst?
-  const rows = bbStats.cardRows(hist).filter(c => c.rounds >= 12);
+  const rows = (hist.cardRows || bbStats.cardRows(hist)).filter(c => c.rounds >= 12);
   if (rows.length >= 3) {
     const here = rows.find(c => c.cards === cards);
     if (here) {
@@ -819,16 +805,16 @@ function buildRows(finished) {
   // Per speler, over alle rondes: trefzekerheid ('exact'), te veel gevraagd
   // ('under'), te weinig gevraagd ('over'), nulletjes en de langste reeks
   // precies-goed binnen één potje.
+  const emptyExtra = () => ({
+    rounds: 0, exact: 0, over: 0, under: 0, zerosAsked: 0, zerosMade: 0, bestStreak: 0,
+  });
   const extra = new Map();
   for (const game of finished) {
     const kinds = getRoundKinds(game);
     game.players.forEach((name, i) => {
       const key = shared.nameKey(name);
       let e = extra.get(key);
-      if (!e) {
-        e = { rounds: 0, exact: 0, over: 0, under: 0, zerosAsked: 0, zerosMade: 0, bestStreak: 0 };
-        extra.set(key, e);
-      }
+      if (!e) { e = emptyExtra(); extra.set(key, e); }
       let streak = 0;
       for (let r = 0; r < game.roundScores.length; r++) {
         const k = kinds[r][i];
@@ -845,7 +831,7 @@ function buildRows(finished) {
     });
   }
   return rows.map(row => {
-    const e = extra.get(shared.nameKey(row.name));
+    const e = extra.get(shared.nameKey(row.name)) || emptyExtra();
     return Object.assign(row, e, { exactPct: e.rounds ? Math.round((100 * e.exact) / e.rounds) : 0 });
   });
 }

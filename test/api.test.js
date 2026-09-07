@@ -565,6 +565,22 @@ async function main() {
     console.log('OK current-snapshot prioriteit');
   }
 
+  // --- tafelweetjes: alleen als er geen potje op het scherm staat ---
+  {
+    const created = await api('POST', '/api/boerenbridge/games', { players: ['T1', 'T2', 'T3'] });
+    let cur = (await api('GET', '/api/boerenbridge/current')).body;
+    assert.ok(cur.game, 'er loopt een potje');
+    assert.equal(cur.tableFacts, undefined, 'tijdens het spelen blijft de snapshot licht');
+    await api('POST', '/api/boerenbridge/games/' + created.body.id + '/abandon', {});
+    // Er is net van alles afgerond, dus nu staat er een winnaarscherm: ook dan
+    // is er een potje in beeld en horen de weetjes er niet bij te zitten.
+    cur = (await api('GET', '/api/boerenbridge/current')).body;
+    assert.equal(cur.game.status, 'finished', 'winnaarscherm na het afbreken');
+    assert.equal(cur.tableFacts, undefined, 'winnaarscherm is ook een potje in beeld');
+    // Wat er op het idle-scherm komt te staan, staat in test/stats.test.js.
+    console.log('OK tafelweetjes niet in de snapshot zolang er een potje staat');
+  }
+
   // --- SSE: event komt binnen na mutatie ---
   {
     const events = [];
