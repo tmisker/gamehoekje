@@ -148,6 +148,37 @@ async function main() {
     console.log('OK volledig spel + scores + winnaar');
   }
 
+  // --- potje met z'n tweeën: zelfde rondeschema, deler wisselt elke ronde ---
+  {
+    const created = await api('POST', '/api/boerenbridge/games', { players: ['Tim', 'Eva'] });
+    assert.equal(created.status, 201, 'create 2p: ' + JSON.stringify(created.body));
+    const id = created.body.id;
+    assert.equal(created.body.rounds.length, 15, '2 spelers spelen hetzelfde rondeschema 8-1-8');
+    // Deler wisselt om en om; wie uitkomt is de ander.
+    assert.equal(created.body.dealerIdx, 1, 'ronde 1: Eva deelt');
+    assert.deepEqual(created.body.playerOrder, [0, 1], 'ronde 1: Tim komt uit');
+    await api('POST', '/api/boerenbridge/games/' + id + '/predictions', { round: 0, predictions: [5, 3] });
+    let r = await api('POST', '/api/boerenbridge/games/' + id + '/actuals', { round: 0, actuals: [5, 3] });
+    assert.equal(r.status, 200, 'ronde 0 met 2 spelers: ' + JSON.stringify(r.body));
+    assert.deepEqual(r.body.roundScores[0], [10, 8], 'beiden exact → slagen + 5');
+    assert.equal(r.body.dealerIdx, 0, 'ronde 2: Tim deelt');
+    assert.deepEqual(r.body.playerOrder, [1, 0], 'ronde 2: Eva komt uit');
+    // Slagen moeten ook met z'n tweeën optellen tot het aantal kaarten.
+    await api('POST', '/api/boerenbridge/games/' + id + '/predictions', { round: 1, predictions: [3, 4] });
+    r = await api('POST', '/api/boerenbridge/games/' + id + '/actuals', { round: 1, actuals: [3, 3] });
+    assert.equal(r.status, 400, '6 van 7 slagen → 400');
+    await api('POST', '/api/boerenbridge/games/' + id + '/abandon', {});
+
+    const game = await playGame(['Tim', 'Eva'], (r2, cards, n) => ({
+      preds: Array.from({ length: n }, () => Math.floor(Math.random() * (cards + 1))),
+      acts: randomActuals(n, cards),
+    }));
+    assert.equal(game.status, 'finished');
+    assert.equal(game.players.length, 2);
+    assert.ok(game.winnerIdxs.length >= 1 && game.winnerIdxs.length <= 2);
+    console.log("OK volledig potje met z'n tweeen");
+  }
+
   // --- gelijkspel: iedereen voorspelt 0, één speler haalt alles → construeer tie ---
   {
     // Anna en Bo raden altijd exact hetzelfde en halen dezelfde scores → gedeelde winst.
@@ -170,8 +201,10 @@ async function main() {
   {
     const created = await api('POST', '/api/boerenbridge/games', { players: ['P1', 'P2', 'P3'] });
     const id = created.body.id;
-    // ongeldig aantal spelers
-    assert.equal((await api('POST', '/api/boerenbridge/games', { players: ['a', 'b'] })).status, 400);
+    // ongeldig aantal spelers (2 t/m 6 mag)
+    assert.equal((await api('POST', '/api/boerenbridge/games', { players: ['a'] })).status, 400);
+    assert.equal((await api('POST', '/api/boerenbridge/games',
+      { players: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] })).status, 400);
     assert.equal((await api('POST', '/api/boerenbridge/games', { players: ['a', '', 'c'] })).status, 400);
     // dubbele namen (ook met andere schrijfwijze) → 400
     assert.equal((await api('POST', '/api/boerenbridge/games', { players: ['Anna', 'anna', 'Cas'] })).status, 400);
