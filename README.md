@@ -58,11 +58,19 @@ scorebord. Configuratie via omgevingsvariabelen:
    "samen gevraagd"-blok en naast het scoreblok staat een verloopgrafiek met
    één lijn per speler; loopt er slagen-invoer, dan wordt die lijn gestippeld
    doorgetrokken naar de verwachte stand. Op smalle schermen (< 900 px)
-   vervalt de grafiek en blijven de cijfers.
+   vervalt de grafiek en blijven de cijfers. Tussen de rondes staat er een
+   weetje over het potje ("Anne zit al 4 rondes op rij precies goed",
+   "Tim is niet meer in te halen", "Halverwege!"); dat blijft de hele ronde
+   staan. Op de eindstand staan de hoogtepunten van de avond: comeback,
+   wie het langst aan kop stond, wie het vaakst goed zat, de beste ronde, de
+   zwaarste klap en de nulletjes-koning.
 3. Onder 🏆 Klassement op de telefoon kun je spelers aantikken om potjes
    waarin zij meededen weg te laten — handig als er af en toe kinderen
    meespelen. Je keuze blijft op dat toestel bewaard; het display toont
-   altijd het volledige klassement.
+   altijd het volledige klassement. Naast potjes, winst en gemiddelde staat
+   per speler hoe vaak hij precies goed zat, hoeveel nulletjes hij haalde en
+   zijn langste reeks; daaronder de eretitels (Scherpschutter,
+   Nulletjes-koning, Langste reeks, Optimist, Pessimist).
 
 Er is bewust geen authenticatie of koppelcode: dit is bedoeld voor een
 vertrouwd thuisnetwerk. Zet het niet zonder extra maatregelen (reverse proxy

@@ -63,17 +63,20 @@ const WINNER_WINDOW = 10 * 60 * 1000;
 // < 10 min geleden eindigde (winnaarscherm), anders idle + klassement.
 function snapshotOf(store, mod) {
   const byUpdated = (a, b) => (a.updatedAt < b.updatedAt ? 1 : -1);
+  const leaderboard = mod.leaderboard(store.games);
+  const snap = { game: null, leaderboard };
+  // Eretitels (alleen spellen die ze kennen) — voor het idle-scherm.
+  if (mod.awards) snap.awards = mod.awards(leaderboard);
   const active = store.games.filter(g => g.status === 'active').sort(byUpdated);
   if (active.length) {
-    return { game: mod.enrich(active[0]), leaderboard: mod.leaderboard(store.games) };
+    snap.game = mod.enrich(active[0]);
+    return snap;
   }
   const justFinished = store.games
     .filter(g => g.status === 'finished' && Date.now() - Date.parse(g.finishedAt) < WINNER_WINDOW)
     .sort(byUpdated);
-  return {
-    game: justFinished.length ? mod.enrich(justFinished[0]) : null,
-    leaderboard: mod.leaderboard(store.games),
-  };
+  if (justFinished.length) snap.game = mod.enrich(justFinished[0]);
+  return snap;
 }
 
 // ---------- SSE ----------

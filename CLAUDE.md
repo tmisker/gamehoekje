@@ -121,6 +121,18 @@ Dockerfile                     # node:22-alpine, geen npm install
   plakken er alleen een `.k-<kind>`-class op. Leid dit nooit af uit de score
   zelf: +6 kan zowel mét bonus (1 gevraagd, 1 gehaald) als zonder (6 gehaald
   op minder gevraagd).
+- **Weetjes, hoogtepunten en eretitels komen ook van de server.** `enrich`
+  levert `fact` (lopend potje: één weetje voor de komende ronde,
+  `{icon, text}` of `null`) en `highlights` (afgerond potje: lijst
+  `{icon, text}`), allebei uit de rondes van het potje zelf. Het weetje is
+  per ronde vastgepind: de keuze hangt af van `game.id` + `currentRound` en
+  niet van de draft, anders zou de tekst bij elke aangetikte voorspelling
+  verspringen. Kandidaten hebben een gewicht (`factCandidates`); "niet meer
+  in te halen" wint altijd. Het klassement krijgt per rij `exactPct`,
+  `over`/`under` (te weinig/te veel gevraagd), `zerosAsked`/`zerosMade`
+  en `bestStreak`; `leaderboardView` en de SSE-snapshot leveren `awards`
+  (eretitels, `winners` = iedereen met de topwaarde). De pagina's tonen dit
+  alleen. Ideeën voor meer: `docs/ideeen-statistieken.md`.
 - **SSE** (`/api/<spel>/events`): bij connect en na elke mutatie gaat
   de **volledige snapshot** over de lijn (nooit deltas), plus een
   `ping`-event elke 25 s. `server.requestTimeout = 0` staat bewust aan —

@@ -1,9 +1,31 @@
 # Ideeën: statistieken en weetjes voor boerenbridge
 
-Parkeerplaats voor wat er uit de gespeelde potjes te halen valt. Nog niets
-hiervan is gebouwd; het klassement toont nu alleen potjes, winst, gemiddelde
-en beste score. Bedoeld om later op terug te komen — kies een selectie en bouw
-die uit in `server/logic.js` naast `leaderboard` (de pagina's tonen alleen).
+Parkeerplaats voor wat er uit de gespeelde potjes te halen valt. Bedoeld om
+later op terug te komen — kies een selectie en bouw die uit in
+`server/logic.js` naast `leaderboard` (de pagina's tonen alleen).
+
+## Stand van zaken (september 2026)
+
+Gebouwd, allemaal in `server/logic.js`:
+
+- **Klassement**: trefzekerheid (`exactPct`), te veel/te weinig gevraagd,
+  nulletjes, langste reeks; plus **eretitels** (`awards`): Scherpschutter,
+  Nulletjes-koning, Langste reeks, Optimist, Pessimist. Telefoon: extra
+  kolommen + eretitels onder de tabel; display: kolom "Precies" + eretitels
+  op het idle-scherm.
+- **Eindscherm** (`highlights`): comeback (vanaf 5 punten), langst aan kop,
+  kopwisselingen, vaakst goed/mis, beste ronde, zwaarste klap (vanaf −3),
+  nulletjes-koning, duur (5 min–6 uur).
+- **Weetjes soort 1** (`fact`): reeksen, gedeelde kop, achtervolger binnen
+  bereik, niet meer in te halen, hele avond aan kop, kopwisselingen,
+  halverwege, vorige ronde, uitschieters, tafel-percentage, nulletjes,
+  spiegelronde. Vastgepind per ronde, getoond op tussen-, voorspel- en
+  speelscherm van het display.
+
+Nog niet: soort 2 en 3 (historie, reactie op een voorspelling), de rest van de
+klassement-ideeën hieronder, en het taalmodel.
+
+## Welke data er is
 
 ## Welke data er is
 

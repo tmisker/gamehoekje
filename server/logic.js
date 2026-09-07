@@ -235,6 +235,8 @@ function enrich(game) {
     positions: positions(totals),
     projection: projection(game, totals),
     roundKinds: getRoundKinds(game),
+    fact: pickFact(game),          // weetje voor de komende ronde (lopend potje)
+    highlights: highlights(game),  // hoogtepunten (afgerond potje)
     dealerIdx: dealerIdx(n, roundIdx),
     playerOrder: playerOrder(n, roundIdx),
     roundInfo: {
@@ -244,6 +246,291 @@ function enrich(game) {
       suitColor: SUIT_COLORS[r.suitIdx],
     },
   });
+}
+
+// ---- Weetjes (lopend potje) en hoogtepunten (afgerond potje) ----
+// Tekst voor de schermen, berekend uit de gespeelde rondes van het potje zelf
+// (geen historie). De server kiest en formuleert; de clients tonen alleen.
+
+function joinNames(names) {
+  if (names.length <= 1) return names.join('');
+  return names.slice(0, -1).join(', ') + ' en ' + names[names.length - 1];
+}
+
+function cardsTxt(cards) {
+  return cards + (cards === 1 ? ' kaart' : ' kaarten');
+}
+
+function formatDuration(ms) {
+  const min = Math.round(ms / 60000);
+  const h = Math.floor(min / 60), m = min % 60;
+  if (!h) return m + ' min';
+  return h + ' uur' + (m ? ' ' + m + ' min' : '');
+}
+
+// Wie na ronde r (index in cumulative) aan kop staat; gelijke totalen delen de kop.
+function leadersAfter(cum, r) {
+  const row = cum[r];
+  const max = Math.max(...row);
+  return row.map((t, i) => (t === max ? i : -1)).filter(i => i >= 0);
+}
+
+// Hoe vaak de kop van eigenaar wisselde: pas als niemand van de vorige
+// koplopers nog bovenaan staat — een gedeelde kop is nog geen wissel.
+function leadChanges(cum) {
+  let changes = 0;
+  for (let r = 1; r < cum.length; r++) {
+    const prev = leadersAfter(cum, r - 1), now = leadersAfter(cum, r);
+    if (!now.some(i => prev.includes(i))) changes++;
+  }
+  return changes;
+}
+
+// Nulletjes per speler: hoe vaak 0 gevraagd en hoe vaak dat ook gehaald.
+function zeroStats(game) {
+  const zeros = game.players.map(() => ({ asked: 0, made: 0 }));
+  game.roundScores.forEach((_, r) => game.players.forEach((_, i) => {
+    if (game.predictions[r][i] !== 0) return;
+    zeros[i].asked++;
+    if (game.actuals[r][i] === 0) zeros[i].made++;
+  }));
+  return zeros;
+}
+
+// Kandidaat-weetjes voor de komende ronde, elk met een gewicht: nieuws
+// (reeks, onbereikbare kop, halverwege) weegt zwaarder dan achtergrond.
+function factCandidates(game) {
+  const out = [];
+  const played = game.roundScores.length;
+  if (game.status !== 'active' || !played) return out;
+  const P = game.players, n = P.length;
+  const cum = cumulativeTotals(game);
+  const totals = cum[played - 1];
+  const kinds = getRoundKinds(game);
+  const next = game.rounds[game.currentRound];
+  const remaining = game.rounds.slice(game.currentRound);
+  const add = (weight, icon, text) => out.push({ weight, icon, text });
+  const last = played - 1;
+
+  // Reeksen: rondes op rij precies goed, of juist mis.
+  P.forEach((name, i) => {
+    let hit = 0;
+    for (let r = last; r >= 0 && kinds[r][i] === 'exact'; r--) hit++;
+    if (hit >= 3) add(4 + Math.min(hit, 4), '🔥', name + ' zit al ' + hit + ' rondes op rij precies goed.');
+    let miss = 0;
+    for (let r = last; r >= 0 && kinds[r][i] !== 'exact'; r--) miss++;
+    if (miss >= 3) add(3, '🙈', name + ' zat er de laatste ' + miss + ' rondes naast.');
+  });
+
+  // De stand: gedeelde kop, de achtervolger, een onbereikbare kop.
+  const leaders = leadersAfter(cum, last);
+  const leaderNames = joinNames(leaders.map(i => P[i]));
+  const others = P.map((_, i) => i).filter(i => !leaders.includes(i));
+  const second = others.length ? Math.max(...others.map(i => totals[i])) : null;
+  const chasers = others.filter(i => totals[i] === second).map(i => P[i]);
+  const gap = second == null ? 0 : totals[leaders[0]] - second;
+  if (leaders.length > 1) {
+    add(5, '🤝', leaderNames + ' staan precies gelijk aan kop.');
+  } else {
+    const exactPts = next.cards + 5;
+    if (played >= 5 && gap <= exactPts) {
+      add(4, '🎯', joinNames(chasers) + (chasers.length > 1 ? ' staan ' : ' staat ') + gap
+        + ' achter op ' + leaderNames + '. Precies voorspellen levert ' + exactPts + ' punten op.');
+    }
+    // Zelfs als de koploper elke ronde alles verliest en de rest alles pakt.
+    const maxSwing = remaining.reduce((a, r) => a + 2 * r.cards + 5, 0);
+    if (gap > maxSwing) add(10, '🏆', leaderNames + ' is niet meer in te halen.');
+    const always = cum.every((_, r) => {
+      const l = leadersAfter(cum, r);
+      return l.length === 1 && l[0] === leaders[0];
+    });
+    if (played >= 5 && always) add(3, '👑', leaderNames + ' staat al de hele avond aan kop.');
+  }
+  const changes = leadChanges(cum);
+  if (changes >= 2) add(2 + Math.min(changes, 4), '🔁', 'De kop is vanavond al ' + changes + ' keer gewisseld.');
+
+  // Halverwege: na de 1-kaartronde.
+  const half = game.rounds.findIndex(r => r.cards === 1);
+  if (half >= 0 && played === half + 1) {
+    add(8, '⏱️', 'Halverwege! ' + leaderNames + (leaders.length > 1
+      ? ' staan gelijk aan kop.'
+      : ' staat aan kop, ' + gap + ' punten voor op ' + joinNames(chasers) + '.'));
+  }
+
+  // Vorige ronde: hoeveel zaten er goed, en vroeg de tafel te veel of te weinig?
+  const hits = kinds[last].filter(k => k === 'exact').length;
+  const asked = game.predictions[last].reduce((a, b) => a + b, 0);
+  const cardsLast = game.rounds[last].cards;
+  const askedTxt = asked === cardsLast ? 'de tafel vroeg precies rond'
+    : asked > cardsLast ? 'de tafel vroeg ' + (asked - cardsLast) + ' te veel'
+      : 'de tafel vroeg ' + (cardsLast - asked) + ' te weinig';
+  if (hits === n) add(5, '💯', 'Vorige ronde zat iedereen precies goed!');
+  else if (hits === 0) add(4, '🙈', 'Vorige ronde zat niemand goed; ' + askedTxt + '.');
+  else add(1, '📋', 'Vorige ronde ' + (hits === 1 ? 'zat ' : 'zaten ') + hits + ' van de ' + n + ' goed; ' + askedTxt + '.');
+
+  // Uitschieters van de vorige ronde, als het de grootste van de avond zijn.
+  if (played >= 3) {
+    const row = game.roundScores[last];
+    const all = game.roundScores.flat();
+    const maxLast = Math.max(...row);
+    if (maxLast === Math.max(...all) && maxLast >= 8) {
+      const who = P.filter((_, i) => row[i] === maxLast);
+      add(3, '🚀', joinNames(who) + (who.length > 1 ? ' pakten' : ' pakte') + ' vorige ronde '
+        + maxLast + ' punten, de beste ronde van de avond.');
+    }
+    const minLast = Math.min(...row);
+    if (minLast === Math.min(...all) && minLast <= -4) {
+      const who = P.filter((_, i) => row[i] === minLast);
+      add(3, '💥', joinNames(who) + (who.length > 1 ? ' leverden' : ' leverde') + ' vorige ronde '
+        + (-minLast) + ' punten in, de zwaarste klap van de avond.');
+    }
+  }
+
+  // De tafel vanavond.
+  if (played >= 4) {
+    const all = kinds.flat();
+    const pct = Math.round(100 * all.filter(k => k === 'exact').length / all.length);
+    add(1, '📊', 'Vanavond zit ' + pct + '% van de voorspellingen precies goed.');
+  }
+  const zeros = zeroStats(game);
+  const zerosAsked = zeros.reduce((a, z) => a + z.asked, 0);
+  const zerosMade = zeros.reduce((a, z) => a + z.made, 0);
+  if (zerosAsked >= 4) add(2, '0️⃣', 'Vanavond al ' + zerosAsked + ' keer nul gevraagd, ' + zerosMade + ' keer gehaald.');
+  const mostZeros = Math.max(...zeros.map(z => z.made));
+  if (mostZeros >= 3) {
+    const who = P.filter((_, i) => zeros[i].made === mostZeros);
+    add(2, '0️⃣', joinNames(who) + (who.length > 1 ? ' haalden' : ' haalde') + ' vanavond al ' + mostZeros + ' nulletjes.');
+  }
+
+  // Spiegelronde: dezelfde kaarten eerder vanavond.
+  const mirror = game.rounds.findIndex((r, i) => i < game.currentRound && r.cards === next.cards);
+  if (mirror >= 0) {
+    const good = P.filter((_, i) => kinds[mirror][i] === 'exact');
+    const pre = 'Eerder vanavond met ' + cardsTxt(next.cards);
+    add(2, '🪞', good.length === 0 ? pre + ' zat niemand goed.'
+      : good.length === n ? pre + ' zat iedereen goed.'
+        : good.length === 1 ? pre + ' zat alleen ' + good[0] + ' goed.'
+          : pre + ' zaten ' + joinNames(good) + ' goed.');
+  }
+  return out;
+}
+
+function hashStr(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0;
+  return h;
+}
+
+// Eén weetje per ronde, vastgepind: de keuze hangt alleen af van de gespeelde
+// rondes en het potje-id, niet van de concept-invoer — anders zou de tekst
+// bij elke aangetikte voorspelling verspringen. Uit de zwaarste kandidaten
+// (gewicht ≥ top − 1) kiest een hash, zodat niet elke ronde hetzelfde soort
+// weetje bovenkomt.
+function pickFact(game) {
+  const c = factCandidates(game);
+  if (!c.length) return null;
+  c.sort((a, b) => b.weight - a.weight);
+  const pool = c.filter(f => f.weight >= c[0].weight - 1);
+  const f = pool[hashStr(game.id + ':' + game.currentRound) % pool.length];
+  return { icon: f.icon, text: f.text };
+}
+
+// Hoogtepunten van een afgerond potje, voor het eindscherm.
+function highlights(game) {
+  if (game.status !== 'finished') return [];
+  const out = [];
+  const P = game.players;
+  const cum = cumulativeTotals(game), played = cum.length;
+  const kinds = getRoundKinds(game);
+  const add = (icon, text) => out.push({ icon, text });
+
+  // Comeback van de winnaar: grootste achterstand onderweg (vanaf 5 punten,
+  // anders is het geen comeback maar gewoon spelverloop).
+  let back = { deficit: 4, round: -1, who: -1 };
+  for (const w of game.winnerIdxs) {
+    for (let r = 0; r < played - 1; r++) {
+      const d = Math.max(...cum[r]) - cum[r][w];
+      if (d > back.deficit) back = { deficit: d, round: r, who: w };
+    }
+  }
+  if (back.who >= 0) {
+    add('📈', P[back.who] + ' kwam terug van ' + back.deficit + ' punten achterstand (na ronde ' + (back.round + 1) + ').');
+  }
+
+  // Langst aan kop, en hoe vaak de kop wisselde.
+  const led = P.map((_, i) => cum.filter(row => row[i] === Math.max(...row)).length);
+  const most = Math.max(...led);
+  const kings = P.filter((_, i) => led[i] === most);
+  const stood = kings.length > 1 ? ' stonden ' : ' stond ';
+  add('👑', joinNames(kings) + stood + (most === played
+    ? 'van begin tot eind aan kop.'
+    : most + ' van de ' + played + ' rondes aan kop.'));
+  const changes = leadChanges(cum);
+  if (changes) add('🔁', 'De kop wisselde ' + changes + ' keer van eigenaar.');
+
+  // Trefzekerheid.
+  const hits = P.map((_, i) => kinds.filter(row => row[i] === 'exact').length);
+  const hi = Math.max(...hits), lo = Math.min(...hits);
+  const sharp = P.filter((_, i) => hits[i] === hi);
+  add('🎯', sharp.length === P.length
+    ? 'Iedereen zat ' + hi + ' van de ' + played + ' rondes precies goed.'
+    : joinNames(sharp) + (sharp.length > 1 ? ' zaten' : ' zat') + ' het vaakst goed: ' + hi + ' van de ' + played + ' rondes.');
+  if (lo < hi) {
+    const blunt = P.filter((_, i) => hits[i] === lo);
+    add('🙈', joinNames(blunt) + (blunt.length > 1 ? ' zaten' : ' zat') + ' er het vaakst naast: ' + (played - lo) + ' keer.');
+  }
+
+  // Beste ronde en zwaarste klap.
+  let top = { s: -Infinity }, bottom = { s: Infinity };
+  game.roundScores.forEach((row, r) => row.forEach((s, i) => {
+    if (s > top.s) top = { s, r, i };
+    if (s < bottom.s) bottom = { s, r, i };
+  }));
+  add('🚀', 'Beste ronde: ' + P[top.i] + ' +' + top.s + ' (ronde ' + (top.r + 1) + ', ' + cardsTxt(game.rounds[top.r].cards) + ').');
+  if (bottom.s <= -3) {
+    add('💥', 'Zwaarste klap: ' + P[bottom.i] + ' ' + bottom.s + ' (ronde ' + (bottom.r + 1) + ', ' + cardsTxt(game.rounds[bottom.r].cards) + ').');
+  }
+
+  // Nulletjes-koning.
+  const zeros = zeroStats(game);
+  const mostZ = Math.max(...zeros.map(z => z.made));
+  if (mostZ >= 2) {
+    const who = P.map((_, i) => i).filter(i => zeros[i].made === mostZ);
+    add('0️⃣', 'Nulletjes-koning: ' + joinNames(who.map(i => P[i] + ' (' + zeros[i].made + ' van ' + zeros[i].asked + ')')) + '.');
+  }
+
+  // Duur — alleen bij een normale avond; een potje dat dagen openstond zegt niets.
+  const ms = Date.parse(game.finishedAt) - Date.parse(game.createdAt);
+  if (ms >= 5 * 60000 && ms <= 6 * 3600000) add('⏱️', 'Het potje duurde ' + formatDuration(ms) + '.');
+  return out;
+}
+
+// Eretitels uit de klassementsrijen; `winners` = iedereen met de topwaarde.
+// 'under' = te weinig gehaald = te veel gevraagd (optimist); 'over' andersom.
+const AWARDS = [
+  { key: 'scherpschutter', icon: '🎯', title: 'Scherpschutter', min: 1,
+    value: r => r.exactPct, detail: r => r.exactPct + '% precies' },
+  { key: 'nulletjes', icon: '0️⃣', title: 'Nulletjes-koning', min: 1,
+    value: r => r.zerosMade, detail: r => r.zerosMade + ' van ' + r.zerosAsked },
+  { key: 'reeks', icon: '🔥', title: 'Langste reeks', min: 2,
+    value: r => r.bestStreak, detail: r => r.bestStreak + ' op rij' },
+  { key: 'optimist', icon: '🚀', title: 'Optimist', min: 2,
+    value: r => r.under - r.over, detail: r => r.under + '× te veel gevraagd' },
+  { key: 'pessimist', icon: '🐢', title: 'Pessimist', min: 2,
+    value: r => r.over - r.under, detail: r => r.over + '× te weinig gevraagd' },
+];
+
+function awards(rows) {
+  const out = [];
+  for (const a of AWARDS) {
+    const top = Math.max(...rows.map(a.value));
+    if (!(top >= a.min)) continue;
+    out.push({
+      key: a.key, icon: a.icon, title: a.title,
+      winners: rows.filter(r => a.value(r) === top).map(r => ({ name: r.name, detail: a.detail(r) })),
+    });
+  }
+  return out;
 }
 
 function gameSummary(game) {
@@ -265,18 +552,52 @@ function leaderboard(games, exclude) {
 }
 
 function buildRows(finished) {
-  return shared.aggregate(finished, game => {
+  const rows = shared.aggregate(finished, game => {
     const totals = getTotals(game);
     return game.players.map((_, i) => ({
       points: totals[i],
       won: !!game.winnerIdxs && game.winnerIdxs.includes(i),
     }));
   });
+  // Per speler, over alle rondes: trefzekerheid ('exact'), te veel gevraagd
+  // ('under'), te weinig gevraagd ('over'), nulletjes en de langste reeks
+  // precies-goed binnen één potje.
+  const extra = new Map();
+  for (const game of finished) {
+    const kinds = getRoundKinds(game);
+    game.players.forEach((name, i) => {
+      const key = shared.nameKey(name);
+      let e = extra.get(key);
+      if (!e) {
+        e = { rounds: 0, exact: 0, over: 0, under: 0, zerosAsked: 0, zerosMade: 0, bestStreak: 0 };
+        extra.set(key, e);
+      }
+      let streak = 0;
+      for (let r = 0; r < game.roundScores.length; r++) {
+        const k = kinds[r][i];
+        if (!k) continue;
+        e.rounds++;
+        e[k]++;
+        streak = k === 'exact' ? streak + 1 : 0;
+        if (streak > e.bestStreak) e.bestStreak = streak;
+        if (game.predictions[r][i] === 0) {
+          e.zerosAsked++;
+          if (game.actuals[r][i] === 0) e.zerosMade++;
+        }
+      }
+    });
+  }
+  return rows.map(row => {
+    const e = extra.get(shared.nameKey(row.name));
+    return Object.assign(row, e, { exactPct: e.rounds ? Math.round((100 * e.exact) / e.rounds) : 0 });
+  });
 }
 
 // Payload voor /leaderboard: rijen + de keuzelijst + hoeveel potjes meetellen.
 function leaderboardView(games, exclude) {
-  return shared.leaderboardView(games, exclude, buildRows);
+  const view = shared.leaderboardView(games, exclude, buildRows);
+  view.awards = awards(view.leaderboard);
+  return view;
 }
 
 module.exports = {
@@ -284,7 +605,8 @@ module.exports = {
   buildRounds, scoreRound, scoreKind, dealerIdx, playerOrder,
   createGame, applyPredictions, applyDraft, applyActuals, undo, abandon,
   getTotals, cumulativeTotals, positions, projection, getRoundKinds, enrich, gameSummary,
-  leaderboard, leaderboardView,
+  leaderboard, leaderboardView, awards,
+  factCandidates, pickFact, highlights,
   finishedGames: shared.finishedGames,
   leaderboardPlayers: shared.leaderboardPlayers,
   httpError,

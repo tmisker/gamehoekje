@@ -81,6 +81,17 @@
     #nameSuggest .chip.used{background:var(--accent-dim);border-color:var(--accent);color:var(--text)}
     #nameSuggest .chip.more{color:var(--accent);border-style:dashed}
 
+    /* eretitels onder het klassement */
+    .awards{margin-top:12px;display:flex;flex-direction:column;gap:6px;font-size:.88rem;color:var(--muted)}
+    .awards b{color:var(--text)}
+    /* hoogtepunten onder de winnaar */
+    .highlights{
+      margin-top:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;
+      padding:12px 14px;display:flex;flex-direction:column;gap:8px;font-size:.92rem;
+    }
+    .highlights .hl{display:flex;gap:8px;align-items:flex-start}
+    .highlights .ic{flex:0 0 auto}
+
     /* Game */
     #game{width:100%;max-width:600px;display:none;flex-direction:column;gap:14px}
     .round-header{
@@ -467,11 +478,22 @@
       area.innerHTML='<p class="sub" style="margin:10px 0 0">'+esc(msg)+'</p>';
       return;
     }
-    let html='<table><thead><tr><th>Speler</th><th>Potjes</th><th>Gewonnen</th><th>Gem.</th><th>Beste</th></tr></thead><tbody>';
+    let html='<table><thead><tr><th>Speler</th><th>Potjes</th><th>Gew.</th><th>Gem.</th><th>Beste</th>'
+      +'<th title="Rondes precies voorspeld">Precies</th><th title="Nulletjes gehaald / gevraagd">Nul</th>'
+      +'<th title="Langste reeks precies goed in één potje">Reeks</th></tr></thead><tbody>';
     rows.forEach(e=>{
-      html+='<tr><td>'+esc(e.name)+'</td><td>'+e.gamesPlayed+'</td><td>'+e.wins+'</td><td>'+e.avgPoints+'</td><td>'+e.bestScore+'</td></tr>';
+      html+='<tr><td>'+esc(e.name)+'</td><td>'+e.gamesPlayed+'</td><td>'+e.wins+'</td><td>'+e.avgPoints+'</td><td>'+e.bestScore+'</td>'
+        +'<td>'+e.exactPct+'%</td><td>'+e.zerosMade+'/'+e.zerosAsked+'</td><td>'+e.bestStreak+'</td></tr>';
     });
-    area.innerHTML=html+'</tbody></table>';
+    area.innerHTML=html+'</tbody></table>'+awardsHtml(lb.awards);
+  }
+
+  // Eretitels: de server bepaalt wie ze krijgt, wij zetten ze op een rij.
+  function awardsHtml(awards){
+    if(!awards||!awards.length) return '';
+    return '<div class="awards">'+awards.map(a=>
+      '<div>'+a.icon+' '+esc(a.title)+': <b>'
+      +a.winners.map(w=>esc(w.name)+' ('+esc(w.detail)+')').join(', ')+'</b></div>').join('')+'</div>';
   }
 
   $('#startBtn').addEventListener('click',()=>{
@@ -753,7 +775,16 @@
     $('#winnerArea').innerHTML='<div class="winner-banner">'
       +'<div class="trophy">🏆</div>'
       +'<div class="name">'+names+(game.winnerIdxs.length>1?' winnen!':' wint!')+'</div>'
-      +'<div class="score">'+max+' punten</div></div>';
+      +'<div class="score">'+max+' punten</div></div>'
+      +highlightsHtml();
+  }
+
+  // Hoogtepunten van het potje (door de server samengesteld).
+  function highlightsHtml(){
+    const hl=game.highlights||[];
+    if(!hl.length) return '';
+    return '<div class="highlights">'+hl.map(h=>
+      '<div class="hl"><span class="ic">'+h.icon+'</span><span>'+esc(h.text)+'</span></div>').join('')+'</div>';
   }
 
   // ---- knoppen onder het spel ----

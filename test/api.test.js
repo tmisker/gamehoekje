@@ -389,6 +389,75 @@ async function main() {
     console.log('OK leaderboard-aggregatie (incl. case-insensitieve namen)');
   }
 
+  // --- weetjes (lopend potje), hoogtepunten (eindscherm) en eretitels ---
+  {
+    // Fa leidt twee rondes (alles exact). Daarna vraagt Fa alles en haalt
+    // niets, pakt Fb alles exact en vraagt én haalt Fc steeds nul.
+    const created = await api('POST', '/api/boerenbridge/games', { players: ['Fa', 'Fb', 'Fc'] });
+    const id = created.body.id;
+    assert.equal(created.body.fact, null, 'vóór ronde 1 is er geen weetje');
+    assert.deepEqual(created.body.highlights, [], 'lopend potje heeft geen hoogtepunten');
+    let game = created.body;
+    for (let r = 0; r < 15; r++) {
+      const c = game.rounds[r].cards;
+      const preds = r < 2 ? [c, 0, 0] : [c, c, 0];
+      const acts = r < 2 ? [c, 0, 0] : [0, c, 0];
+      let resp = await api('POST', '/api/boerenbridge/games/' + id + '/predictions', { round: r, predictions: preds });
+      assert.equal(resp.status, 200);
+      if (r === 5) {
+        const fact = resp.body.fact;
+        assert.ok(fact && typeof fact.icon === 'string' && fact.text.length > 0, 'weetje na 5 rondes');
+        // Concept-invoer verandert het weetje niet: het is per ronde vastgepind.
+        const d = await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: r, phase: 'actual', values: [1, null, null] });
+        assert.deepEqual(d.body.fact, fact, 'draft laat het weetje staan');
+        const cur = (await api('GET', '/api/boerenbridge/current')).body;
+        assert.deepEqual(cur.game.fact, fact, 'weetje zit in de snapshot');
+      }
+      if (r === 14) {
+        assert.match(resp.body.fact.text, /^Fb is niet meer in te halen\./, 'onbereikbare kop wint van elk ander weetje');
+      }
+      resp = await api('POST', '/api/boerenbridge/games/' + id + '/actuals', { round: r, actuals: acts });
+      assert.equal(resp.status, 200);
+      game = resp.body;
+    }
+    assert.equal(game.status, 'finished');
+    assert.equal(game.fact, null, 'afgerond potje heeft geen weetje meer');
+    const texts = game.highlights.map(h => h.text);
+    const has = re => assert.ok(texts.some(t => re.test(t)), 'hoogtepunt ' + re + ' ontbreekt in ' + JSON.stringify(texts));
+    has(/^Fb kwam terug van 15 punten achterstand \(na ronde 2\)\./);
+    has(/^Fb stond 13 van de 15 rondes aan kop\./);
+    has(/^De kop wisselde 1 keer van eigenaar\./);
+    has(/^Fb en Fc zaten het vaakst goed: 15 van de 15 rondes\./);
+    has(/^Fa zat er het vaakst naast: 13 keer\./);
+    has(/^Beste ronde: Fa \+13 \(ronde 1, 8 kaarten\)\./);
+    has(/^Zwaarste klap: Fa -8 \(ronde 15, 8 kaarten\)\./);
+    has(/^Nulletjes-koning: Fc \(15 van 15\)\./);
+    assert.ok(!texts.some(t => /duurde/.test(t)), 'een potje van een paar milliseconden heeft geen duur');
+    game.highlights.forEach(h => assert.ok(h.icon && h.text));
+
+    // Klassement-extra's en eretitels, via het filter beperkt tot dit potje.
+    const all = (await api('GET', '/api/boerenbridge/leaderboard')).body;
+    const others = all.players.filter(p => !['Fa', 'Fb', 'Fc'].includes(p));
+    const lb = (await api('GET', '/api/boerenbridge/leaderboard?exclude=' + others.map(encodeURIComponent).join(','))).body;
+    assert.equal(lb.gamesCounted, 1, 'alleen het Fa/Fb/Fc-potje telt');
+    const row = name => lb.leaderboard.find(e => e.name === name);
+    assert.deepEqual([row('Fa').exactPct, row('Fb').exactPct, row('Fc').exactPct], [13, 100, 100]);
+    assert.equal(row('Fa').rounds, 15);
+    assert.deepEqual([row('Fa').exact, row('Fa').under, row('Fa').over], [2, 13, 0], 'Fa vroeg 13× te veel');
+    assert.deepEqual([row('Fa').bestStreak, row('Fb').bestStreak], [2, 15]);
+    assert.deepEqual([row('Fc').zerosAsked, row('Fc').zerosMade], [15, 15]);
+    const award = key => lb.awards.find(a => a.key === key);
+    assert.deepEqual(award('scherpschutter').winners.map(w => w.name).sort(), ['Fb', 'Fc'], 'gedeelde titel');
+    assert.deepEqual(award('nulletjes').winners, [{ name: 'Fc', detail: '15 van 15' }]);
+    assert.deepEqual(award('reeks').winners.map(w => w.detail), ['15 op rij', '15 op rij']);
+    assert.deepEqual(award('optimist').winners, [{ name: 'Fa', detail: '13× te veel gevraagd' }]);
+    assert.equal(award('pessimist'), undefined, 'niemand vroeg structureel te weinig');
+    // Het scorebord krijgt de eretitels via de snapshot.
+    const snap = (await api('GET', '/api/boerenbridge/current')).body;
+    assert.ok(Array.isArray(snap.awards) && snap.awards.length, 'awards in de snapshot');
+    console.log('OK weetjes, hoogtepunten en eretitels');
+  }
+
   // --- klassement zonder bepaalde spelers ---
   {
     // Eén potje waarin "Kind" meedoet en wint; dat potje moet uit het
