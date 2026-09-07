@@ -47,6 +47,7 @@ test/tafeltennis.test.js       # end-to-end test van het tafeltennis-API
 test/solver.test.js            # cube-solver op honderden scrambles (node test/solver.test.js)
 data/                          # spelgegevens (gitignored; Docker-volume)
 README.md                      # gebruikersgerichte uitleg
+docs/ideeen-statistieken.md    # ideeënlijst statistieken & display-weetjes (boerenbridge), nog te bouwen
 Dockerfile                     # node:22-alpine, geen npm install
 ```
 
