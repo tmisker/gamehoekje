@@ -14,7 +14,9 @@ Gebouwd, in `server/logic.js` (één potje + de keuze van het weetje) en
   Nulletjes-koning, Langste reeks, Optimist, Pessimist. Telefoon: extra
   kolommen + eretitels onder de tabel; display: kolom "Precies" + eretitels
   op het idle-scherm.
-- **Eindscherm** (`highlights`): comeback (vanaf 5 punten), langst aan kop,
+- **Eindscherm** (`highlights`): comeback (vanaf 5 punten), het kantelpunt
+  (vanaf welke ronde de winnaar onbetwist bovenaan stond; blijft weg als de
+  comeback-regel hetzelfde moment al beschrijft), langst aan kop,
   kopwisselingen, vaakst goed/mis, beste ronde, zwaarste klap (vanaf −3),
   nulletjes-koning, duur (5 min–6 uur).
 - **Weetjes soort 1** (`fact`): reeksen, gedeelde kop, achtervolger binnen
@@ -37,9 +39,11 @@ Gebouwd, in `server/logic.js` (één potje + de keuze van het weetje) en
   wisselvalligheid, eerste vs tweede helft, per kaartaantal), records, per
   ronde-type, per troef, onderlinge standen en tafelnotities.
 
-Nog niet: het taalmodel, en van de lijst hieronder onder meer het kantelpunt
-per potje, de weekdag-/tijdstipanalyse in de UI en een spelersvergelijking naast
-elkaar.
+- **Idle-scherm**: onder het klassement wisselt elke negen seconden een record
+  of tafelnotitie (`tableFacts` in de snapshot, alleen als er geen potje loopt).
+
+Nog niet: het taalmodel, en van de lijst hieronder onder meer de
+weekdag-/tijdstipanalyse in de UI en een spelersvergelijking naast elkaar.
 
 ## Welke data er is
 

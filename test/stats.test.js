@@ -153,6 +153,51 @@ function main() {
     console.log('OK exclude-filter op de statistiek');
   }
 
+  // --- hoogtepunten van een potje ---
+  {
+    // De ronde vanaf welke iemand onbetwist bovenaan staat, los nagerekend.
+    function takeover(game) {
+      const cum = logic.cumulativeTotals(game);
+      const w = game.winnerIdxs[0];
+      for (let r = cum.length - 1; r >= 0; r--) {
+        const max = Math.max(...cum[r]);
+        const solo = cum[r][w] === max && cum[r].filter(t => t === max).length === 1;
+        if (!solo) return r + 1;
+      }
+      return 0;
+    }
+
+    // Ann bouwt in drie rondes een voorsprong op; daarna pakt Bo elke slag en
+    // haalt langzaam in. De grootste achterstand ligt dus ver van het moment
+    // dat de kop wisselt, en beide regels zijn interessant.
+    const late = play(NAMES, (r, cards) => (r < 3
+      ? { preds: [cards, 0, 0], acts: [cards, 0, 0] }
+      : { preds: [0, cards, 0], acts: [0, cards, 0] }));
+    assert.deepEqual(late.winnerIdxs, [1], 'Bo wint');
+    const texts = logic.enrich(late, [late]).highlights.map(h => h.text);
+    assert.ok(texts.some(t => /^Bo kwam terug van 21 punten achterstand \(na ronde 3\)\.$/.test(t)),
+      'comeback: ' + texts);
+    const at = takeover(late);
+    assert.ok(at > 4, 'de kop wisselt pas laat (ronde ' + (at + 1) + ')');
+    assert.ok(texts.includes('Kantelpunt: in ronde ' + (at + 1) + ' nam Bo de kop over en die ging er niet meer af.'),
+      'kantelpunt: ' + texts);
+
+    // Gaat de kop meteen na de grootste achterstand om, dan zegt de comeback
+    // hetzelfde en blijft het kantelpunt weg.
+    const quick = play(NAMES, (r, cards) => (r < 2
+      ? { preds: [cards, 0, 0], acts: [cards, 0, 0] }
+      : { preds: [cards, cards, 0], acts: [0, cards, 0] }));
+    const quickTexts = logic.enrich(quick, [quick]).highlights.map(h => h.text);
+    assert.ok(quickTexts.some(t => /^Bo kwam terug van/.test(t)));
+    assert.ok(!quickTexts.some(t => /^Kantelpunt/.test(t)), 'geen dubbele regel: ' + quickTexts);
+
+    // Wie van start tot finish leidt heeft geen comeback en geen kantelpunt.
+    const wire = logic.enrich(A, [A]).highlights.map(h => h.text);
+    assert.ok(!wire.some(t => /Kantelpunt|kwam terug/.test(t)));
+    assert.ok(wire.some(t => /^Ann stond van begin tot eind aan kop\.$/.test(t)), 'wire-to-wire: ' + wire);
+    console.log('OK hoogtepunten (comeback, kantelpunt, van start tot finish)');
+  }
+
   // --- weetjes uit de historie ---
   {
     const game = logic.createGame(NAMES);

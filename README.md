@@ -67,8 +67,10 @@ scorebord. Configuratie via omgevingsvariabelen:
    er voorspeld wordt, reageert het scherm op de zojuist aangetikte keuze
    ("Anne vraagt nul; dat lukte 30 van de 42 keer") — diezelfde regel staat ook
    onder de invoer op de telefoon. Op de eindstand staan de hoogtepunten van de
-   avond: comeback, wie het langst aan kop stond, wie het vaakst goed zat, de
-   beste ronde, de zwaarste klap en de nulletjes-koning.
+   avond: comeback, het kantelpunt, wie het langst aan kop stond, wie het
+   vaakst goed zat, de beste ronde, de zwaarste klap en de nulletjes-koning.
+   Staat er geen potje op het scherm, dan wisselt onder het klassement elke
+   negen seconden een weetje over de tafel (records, het lastigste ronde-type).
 3. Onder 🏆 Klassement op de telefoon kun je spelers aantikken om potjes
    waarin zij meededen weg te laten — handig als er af en toe kinderen
    meespelen. Je keuze blijft op dat toestel bewaard; het display toont

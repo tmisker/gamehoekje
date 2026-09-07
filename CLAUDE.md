@@ -151,6 +151,11 @@ Dockerfile                     # node:22-alpine, geen npm install
   nul; dat lukte 30 van de 52 keer"). Anders dan het weetje van de ronde mag
   dit bij elke tik wisselen — daar is het voor. Bij deze keuze wint het meest
   specifieke gewicht zonder speelruimte.
+- **Het idle-scherm krijgt `tableFacts`.** `snapshotOf` stuurt records +
+  tafelnotities alleen mee als er géén potje op het scherm staat; tijdens het
+  spelen gaat de snapshot bij elke mutatie over de lijn en blijft die zo licht
+  mogelijk. Het display roteert ze met een timer die stopt zodra er weer een
+  potje binnenkomt.
 - **`GET /api/boerenbridge/stats`** (zelfde `?exclude=`-filter als het
   klassement) levert de statistiekpagina: rijen per speler, per kaartaantal,
   per troef, onderlinge standen, records en tafelnotities. Het rekenwerk staat

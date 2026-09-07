@@ -76,6 +76,10 @@ function snapshotOf(store, mod) {
     .filter(g => g.status === 'finished' && Date.now() - Date.parse(g.finishedAt) < WINNER_WINDOW)
     .sort(byUpdated);
   if (justFinished.length) snap.game = mod.enrich(justFinished[0], store.games);
+  // Zonder potje op het scherm is er ruimte voor weetjes over de tafel. Alleen
+  // dán meesturen: tijdens het spelen gaat de snapshot bij elke mutatie over
+  // de lijn en hoeft die niet dikker te zijn dan nodig.
+  if (!snap.game && mod.tableFacts) snap.tableFacts = mod.tableFacts(store.games);
   return snap;
 }
 

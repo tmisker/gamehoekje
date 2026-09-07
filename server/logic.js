@@ -695,6 +695,25 @@ function highlights(game) {
     add('📈', P[back.who] + ' kwam terug van ' + back.deficit + ' punten achterstand (na ronde ' + (back.round + 1) + ').');
   }
 
+  // Kantelpunt: vanaf welke ronde stond de winnaar onbetwist bovenaan? Dat is
+  // de eerste ronde na de laatste waarin dat níet zo was. Bij een gedeelde
+  // winst bestaat dat moment niet (took === played) en blijft de regel weg.
+  const winner = game.winnerIdxs[0];
+  let took = 0;
+  for (let r = played - 1; r >= 0; r--) {
+    const row = cum[r], max = Math.max(...row);
+    if (row[winner] === max && row.filter(t => t === max).length === 1) continue;
+    took = r + 1;
+    break;
+  }
+  // Ligt het kantelpunt vlak na de grootste achterstand, dan vertelt de
+  // comeback-regel hierboven hetzelfde verhaal al.
+  const overlaps = back.who === winner && took <= back.round + 1;
+  if (took > 0 && took < played && !overlaps) {
+    add('🔀', 'Kantelpunt: in ronde ' + (took + 1) + ' nam ' + P[winner]
+      + ' de kop over en die ging er niet meer af.');
+  }
+
   // Langst aan kop, en hoe vaak de kop wisselde.
   const led = P.map((_, i) => cum.filter(row => row[i] === Math.max(...row)).length);
   const most = Math.max(...led);
@@ -844,6 +863,14 @@ module.exports = {
   createGame, applyPredictions, applyDraft, applyActuals, undo, abandon,
   getTotals, cumulativeTotals, positions, projection, getRoundKinds, enrich, gameSummary,
   leaderboard, leaderboardView, awards,
+  // Records + notities over de tafel; het scorebord toont ze als er geen potje loopt.
+  tableFacts: games => {
+    const hist = historyOf(games);
+    if (!hist) return [];
+    return bbStats.recordRows(hist)
+      .map(r => ({ icon: r.icon, text: r.title + ': ' + r.text }))
+      .concat(bbStats.tableNotes(hist));
+  },
   factCandidates, historyCandidates, draftCandidates, pickFact, pickDraftFact, highlights,
   statsView: (games, exclude) => bbStats.statsView(games, exclude, RULES),
   historyOf,
