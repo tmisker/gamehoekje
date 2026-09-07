@@ -43,18 +43,20 @@
     .players{display:grid;gap:12px}
     .pcard{
       background:var(--card);border:1px solid var(--line);border-radius:16px;
-      padding:14px 10px;text-align:center;display:flex;flex-direction:column;gap:4px;
+      padding:24px 10px 14px;text-align:center;display:flex;flex-direction:column;gap:4px;
       position:relative;
     }
     .pcard.leader{border-color:var(--gold)}
     .pcard.chosen{border-color:var(--accent)}
     .pcard .crown{position:absolute;top:-14px;left:50%;transform:translateX(-50%);font-size:1.3rem}
-    .pcard .nm{font-size:1.15rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .pcard .nm .dot{
-      display:inline-block;width:.6em;height:.6em;border-radius:50%;
-      background:var(--pc,var(--muted));margin-right:.35em;
+    .pcard .nm{
+      font-size:1.15rem;font-weight:700;
+      display:flex;align-items:center;justify-content:center;gap:.35em;min-width:0;
     }
-    .pcard .rank{position:absolute;top:9px;left:11px;color:var(--muted);font-size:.9rem;font-weight:800}
+    /* Alleen de naam zelf krimpt; lange namen krijgen een ellipsis in plaats
+       van de kaartkolom breder te duwen. */
+    .pcard .nm .who{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .pcard .rank{position:absolute;top:5px;left:11px;color:var(--muted);font-size:.9rem;font-weight:800}
     .pcard.leader .rank{color:var(--gold)}
     .pcard .lab{color:var(--muted);font-size:.85rem}
     .pcard .tot{font-size:2.6rem;font-weight:800;line-height:1.1}
@@ -65,7 +67,7 @@
     .pcard .stat .k-exact{color:var(--accent);font-weight:700}
     .pcard .stat .k-over{color:var(--orange);font-weight:700}
     .pcard .stat .k-under{color:var(--red);font-weight:700}
-    .pcard .dealerdot{color:var(--gold);font-size:.85rem}
+    .pcard .dealerdot{flex:0 0 auto;color:var(--gold);font-size:.85rem}
     /* tweede regel: de doorlopende tussenstand, op élk scherm zichtbaar */
     .pcard .sub{color:var(--muted);font-size:.95rem;min-height:1.3em}
     .pcard .sub b{color:var(--text);font-weight:800}
@@ -174,7 +176,10 @@
   function kcls(k){return k?' class="k-'+k+'"':''}
   const SUITS=['♣','♥','♦','♠','Sans'];
   // Vaste spelerkleuren: dezelfde kleur bij de naam op de kaart en in de grafiek.
-  const PCOLORS=['#4caf50','#42a5f5','#ffb300','#e53935','#ab47bc','#26c6da'];
+  // Lijnkleuren voor de verloopgrafiek. Alleen daar doet spelerkleur werk: op de
+  // kaarten en in de tabel staat de naam er al naast. Bewust geen groen/oranje/
+  // rood/goud uit de betekeniskleuren - kleur betekent hier 'wie', niet 'hoe'.
+  const PCOLORS=['#3987e5','#d95926','#199e70','#c98500','#d55181','#9085e9'];
   const ORD=['1e','2e','3e','4e','5e','6e'];
   const sign=v=>(v>0?'+':'')+v;
 
@@ -212,13 +217,14 @@
   // cell(i) → {main, stat, sub?, lab?, cls?, crown?}
   function pcardsHtml(g, cell){
     const ranked=g.roundScores.length>0; // vóór ronde 1 staat iedereen op 0
-    let html='<div class="players" style="grid-template-columns:repeat('+g.players.length+',1fr)">';
+    let html='<div class="players" style="grid-template-columns:repeat('+g.players.length+',minmax(0,1fr))">';
     g.players.forEach((p,i)=>{
       const c=cell(i);
-      html+='<div class="pcard'+(c.cls||'')+'" style="--pc:'+PCOLORS[i%PCOLORS.length]+'">'
+      html+='<div class="pcard'+(c.cls||'')+'">'
         +(c.crown?'<span class="crown">👑</span>':'')
         +(ranked?'<span class="rank">'+ORD[(g.positions[i]||1)-1]+'</span>':'')
-        +'<span class="nm"><i class="dot"></i>'+esc(p)+(i===g.dealerIdx?' <span class="dealerdot">●</span>':'')+'</span>'
+        +'<span class="nm"><span class="who">'+esc(p)+'</span>'
+          +(i===g.dealerIdx?'<span class="dealerdot">●</span>':'')+'</span>'
         +(c.lab?'<span class="lab">'+c.lab+'</span>':'')
         +'<span class="tot">'+c.main+'</span>'
         +'<span class="stat">'+c.stat+'</span>'
@@ -331,8 +337,7 @@
   function scoreTableHtml(g){
     let html='<thead><tr><th>Ronde</th>';
     g.players.forEach((p,i)=>{
-      html+='<th><i class="dot" style="display:inline-block;width:.6em;height:.6em;border-radius:50%;'
-        +'margin-right:.35em;background:'+PCOLORS[i%PCOLORS.length]+'"></i>'+esc(p)+'</th>';
+      html+='<th>'+esc(p)+'</th>';
     });
     html+='</tr></thead><tbody>';
     for(let r=0;r<g.roundScores.length;r++){
@@ -444,7 +449,7 @@
     const over=labs.length?labs[labs.length-1].y-(H-MB):0;
     if(over>0) labs.forEach(l=>{l.y-=over;});
     labs.forEach(l=>{
-      svg+='<text x="'+n(W-MR+10)+'" y="'+n(l.y+F*0.35)+'" fill="'+PCOLORS[l.i%PCOLORS.length]+'" '
+      svg+='<text x="'+n(W-MR+10)+'" y="'+n(l.y+F*0.35)+'" fill="var(--text)" '
         +'font-size="'+n(F*1.05)+'" font-weight="700">'+esc(labels[l.i])+'</text>';
     });
     return svg+'</svg>';
