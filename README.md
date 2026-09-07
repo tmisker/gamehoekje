@@ -61,9 +61,14 @@ scorebord. Configuratie via omgevingsvariabelen:
    vervalt de grafiek en blijven de cijfers. Tussen de rondes staat er een
    weetje over het potje ("Anne zit al 4 rondes op rij precies goed",
    "Tim is niet meer in te halen", "Halverwege!"); dat blijft de hele ronde
-   staan. Op de eindstand staan de hoogtepunten van de avond: comeback,
-   wie het langst aan kop stond, wie het vaakst goed zat, de beste ronde, de
-   zwaarste klap en de nulletjes-koning.
+   staan. Zijn er al eerdere potjes gespeeld, dan komen daar weetjes uit de
+   historie bij ("Piet vraagt bij 5 kaarten meestal 1", "het record aan deze
+   tafel is 87"); nieuws van vanavond en achtergrond wisselen elkaar af. Terwijl
+   er voorspeld wordt, reageert het scherm op de zojuist aangetikte keuze
+   ("Anne vraagt nul; dat lukte 30 van de 42 keer") — diezelfde regel staat ook
+   onder de invoer op de telefoon. Op de eindstand staan de hoogtepunten van de
+   avond: comeback, wie het langst aan kop stond, wie het vaakst goed zat, de
+   beste ronde, de zwaarste klap en de nulletjes-koning.
 3. Onder 🏆 Klassement op de telefoon kun je spelers aantikken om potjes
    waarin zij meededen weg te laten — handig als er af en toe kinderen
    meespelen. Je keuze blijft op dat toestel bewaard; het display toont
@@ -71,6 +76,13 @@ scorebord. Configuratie via omgevingsvariabelen:
    per speler hoe vaak hij precies goed zat, hoeveel nulletjes hij haalde en
    zijn langste reeks; daaronder de eretitels (Scherpschutter,
    Nulletjes-koning, Langste reeks, Optimist, Pessimist).
+4. 📊 **Statistieken** (link op de telefoon, of `games/boerenbridge/stats/`)
+   gaat dieper: per speler een profiel met de verdeling precies / te veel
+   gevraagd / te weinig gevraagd, durf, wisselvalligheid, eerste tegen tweede
+   helft en trefzekerheid per kaartaantal. Daarnaast records, welk ronde-type
+   het lastigst is, per troef, de onderlinge standen en wat opvalt aan de tafel
+   (bijvoorbeeld hoe vaak de koploper na de 1-kaartronde uiteindelijk wint).
+   Hetzelfde filter als bij het klassement, en die keuze wordt gedeeld.
 
 Er is bewust geen authenticatie of koppelcode: dit is bedoeld voor een
 vertrouwd thuisnetwerk. Zet het niet zonder extra maatregelen (reverse proxy

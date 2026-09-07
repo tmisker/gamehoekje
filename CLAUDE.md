@@ -23,11 +23,13 @@ server/
   server.js                    # statische site + /api/{boerenbridge,klaverjas,tafeltennis}/* + SSE
   shared.js                    # gedeelde, spel-onafhankelijke helpers (klassement, httpError)
   logic.js                     # autoritatieve boerenbridge-logica (pure functies)
+  bb-stats.js                  # statistiek over meerdere boerenbridge-potjes (puur)
   klaverjas.js                 # autoritatieve klaverjas-logica (pure functies)
   tafeltennis.js               # autoritatieve toernooilogica tafeltennis (pure functies)
 games/
   boerenbridge/index.html      # invoerpagina (telefoon) — praat met het API
   boerenbridge/display/        # live scorebord (iPad/tweede scherm) — SSE
+  boerenbridge/stats/          # statistiekpagina: spelersprofielen, records, tafel
   klaverjas/index.html         # klaverjas-invoerpagina (telefoon) — praat met het API
   klaverjas/display/           # live scorebord (iPad/tweede scherm) — SSE
   tafeltennis/index.html       # toernooi-invoerpagina (telefoon) — praat met het API
@@ -42,6 +44,7 @@ src/
     app.js                     #   mobiele UI-logica (Web Worker)
 build.js                       # bouwt src/cube-solver/* -> games/cube-solver/index.html
 test/api.test.js               # end-to-end test van server + boerenbridge-API
+test/stats.test.js             # boerenbridge-statistiek + weetjes (puur, zonder server)
 test/klaverjas.test.js         # end-to-end test van het klaverjas-API
 test/tafeltennis.test.js       # end-to-end test van het tafeltennis-API
 test/solver.test.js            # cube-solver op honderden scrambles (node test/solver.test.js)
@@ -133,6 +136,27 @@ Dockerfile                     # node:22-alpine, geen npm install
   en `bestStreak`; `leaderboardView` en de SSE-snapshot leveren `awards`
   (eretitels, `winners` = iedereen met de topwaarde). De pagina's tonen dit
   alleen. Ideeën voor meer: `docs/ideeen-statistieken.md`.
+- **Weetjes putten ook uit eerdere potjes.** `enrich(game, games)` krijgt de
+  hele lijst mee; `historyOf` bouwt daar de historie uit op (gecachet op
+  "hoeveel potjes zijn af + wanneer eindigde het laatste"). Naast
+  `factCandidates` (dit potje) is er `historyCandidates` (eerdere potjes:
+  trefzekerheid bij dit kaartaantal, gewoontes, nulletjes, onderlinge stand,
+  het tafelrecord). Nieuws weegt zwaarder dan achtergrond, maar zou over 15
+  rondes alles opslokken — daarom wisselen de rondes af: oneven ronde nieuws,
+  even ronde achtergrond, en alleen gewicht >= 9 (onbereikbare koploper,
+  halverwege) breekt daardoorheen.
+- **`draftFact` reageert op de laatst aangetikte voorspelling.** `applyDraft`
+  onthoudt in `game.draft.last` wiens keuze veranderde (een herhaalde POST
+  laat die staan); `draftCandidates` maakt daar een reactie bij ("Piet vraagt
+  nul; dat lukte 30 van de 52 keer"). Anders dan het weetje van de ronde mag
+  dit bij elke tik wisselen — daar is het voor. Bij deze keuze wint het meest
+  specifieke gewicht zonder speelruimte.
+- **`GET /api/boerenbridge/stats`** (zelfde `?exclude=`-filter als het
+  klassement) levert de statistiekpagina: rijen per speler, per kaartaantal,
+  per troef, onderlinge standen, records en tafelnotities. Het rekenwerk staat
+  in `server/bb-stats.js`; dat bestand kent bewust géén spelregels en krijgt
+  `{getRoundKinds, playerOrder, cumulativeTotals, suitNames}` van `logic.js`
+  mee (`RULES`), zodat de scoreformule op één plek blijft.
 - **SSE** (`/api/<spel>/events`): bij connect en na elke mutatie gaat
   de **volledige snapshot** over de lijn (nooit deltas), plus een
   `ping`-event elke 25 s. `server.requestTimeout = 0` staat bewust aan —
@@ -194,6 +218,13 @@ onafhankelijke herimplementatie in de test zelf), 409-guards, undo,
 klassement, SSE en persistentie; de boerenbridge-suite doet ook
 path-traversal. Draai **alle drie** na elke wijziging in `server/` —
 `shared.js` wordt door alle spellen gebruikt.
+
+**Statistiek:** `node test/stats.test.js` draait zónder server. Het speelt drie
+potjes met een bekende uitkomst en rekent daar de spelersrijen, de tabellen per
+kaartaantal en troef, de onderlinge standen, de records en de weetjes op na —
+inclusief de drempels (een onderlinge stand pas vanaf vier gezamenlijke potjes)
+en de afwisseling van de weetjes. Draai hem na elke wijziging in `bb-stats.js`
+of aan de weetjes in `logic.js`.
 
 `solver.js` en `kociemba.js` draaien ook in **Node** (ze exporteren via
 `module.exports`). Test solver-logica direct:

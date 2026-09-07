@@ -135,6 +135,12 @@
     .projline .k-exact{color:var(--accent);font-weight:700}
     .projline .k-over{color:var(--orange);font-weight:700}
     .projline .k-under{color:var(--red);font-weight:700}
+    /* reactie van de server op de zojuist aangetikte voorspelling */
+    .factline{
+      color:var(--muted);font-size:.85rem;text-align:center;line-height:1.5;
+      margin:6px 0 2px;min-height:1.3em;
+    }
+    .factline .ic{margin-right:5px}
     .warn{color:var(--gold);font-size:.82rem;text-align:center;margin-top:4px}
     .error{color:var(--red);font-size:.82rem;text-align:center;margin-top:4px}
     .conn-banner{
@@ -223,6 +229,7 @@
         <div class="lb-count" id="lbCount"></div>
       </details>
     </div>
+    <a class="display-link" href="stats/">📊 Statistieken bekijken</a>
     <a class="display-link" href="display/">📺 Scherm-weergave openen</a>
   </div>
 
@@ -556,6 +563,7 @@
         // hier); alleen tonen als we nog in dezelfde ronde/fase zitten.
         if(game&&game.id===id&&game.currentRound===payload.round&&game.phase===payload.phase){
           showProjection(res.projection);
+          showDraftFact(res.draftFact);
         }
       }
       catch(err){
@@ -638,6 +646,14 @@
       }).join(' · ');
   }
 
+  // Weetje bij de laatst aangetikte voorspelling; ook dit komt kant-en-klaar
+  // van de server (die kent de historie, wij niet).
+  function showDraftFact(f){
+    const box=document.getElementById('draftFact');
+    if(!box) return;
+    box.innerHTML=f?'<span class="ic">'+f.icon+'</span>'+esc(f.text):'';
+  }
+
   function selTotal(){ return sel.reduce((a,v)=>a+(v||0),0); }
   function selMissing(){ return sel.filter(v=>v==null).length; }
 
@@ -648,6 +664,7 @@
     sec.innerHTML='<h3>Hoeveel slagen raad je? (max '+cards+')</h3>'
       +numRows(false)
       +'<div class="sumline" id="predSum"></div>'
+      +'<div class="factline" id="draftFact"></div>'
       +'<div id="predWarn">'+(notice?'<span class="warn">'+esc(notice)+'</span>':'')+'</div>'
       +'<div class="btn-row">'
       +(game.currentRound>0?'<button class="btn-small" id="predUndo">← Terug</button>':'')
@@ -665,6 +682,7 @@
       const w=document.getElementById('predWarn');
       delete w.dataset.warned;
       w.innerHTML='';
+      if(selMissing()===game.players.length) showDraftFact(null);
       updateState();
     });
 

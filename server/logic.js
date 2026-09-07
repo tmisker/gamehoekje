@@ -3,6 +3,7 @@
 'use strict';
 
 const shared = require('./shared.js');
+const bbStats = require('./bb-stats.js');
 const { httpError } = shared;
 
 const SUITS = ['♣', '♥', '♦', '♠', 'Sans'];
@@ -113,7 +114,20 @@ function applyDraft(game, round, phase, values) {
       throw httpError(400, 'Vul geldige aantallen in (0–' + r.cards + ')');
     }
   }
-  game.draft = values.some(v => v !== null) ? { phase, values } : null;
+  // `last` = de speler wiens keuze zojuist veranderde; daar reageert het
+  // weetje op het voorspelscherm op (zie draftCandidates).
+  const before = game.draft && game.draft.phase === phase ? game.draft : null;
+  const prev = before ? before.values : null;
+  let last = null;
+  for (let i = 0; i < values.length; i++) {
+    if (values[i] !== null && (!prev || prev[i] !== values[i])) last = i;
+  }
+  // Verandert er niets (een herhaalde POST), dan blijft de vorige keuze staan —
+  // anders zou het weetje op het scorebord zomaar verdwijnen.
+  if (last === null && before && Number.isInteger(before.last) && values[before.last] !== null) {
+    last = before.last;
+  }
+  game.draft = values.some(v => v !== null) ? { phase, values, last } : null;
   game.updatedAt = new Date().toISOString();
 }
 
@@ -223,20 +237,22 @@ function getRoundKinds(game) {
 }
 
 // Verrijkte view voor API/SSE: spel + afgeleide velden (niet persistent).
-function enrich(game) {
+function enrich(game, games) {
   const n = game.players.length;
   const roundIdx = Math.min(game.currentRound, game.rounds.length - 1);
   const r = game.rounds[roundIdx];
   const cumulative = cumulativeTotals(game);
   const totals = cumulative.length ? cumulative[cumulative.length - 1].slice() : game.players.map(() => 0);
+  const hist = historyOf(games);
   return Object.assign({}, game, {
     totals,
     cumulative,
     positions: positions(totals),
     projection: projection(game, totals),
     roundKinds: getRoundKinds(game),
-    fact: pickFact(game),          // weetje voor de komende ronde (lopend potje)
-    highlights: highlights(game),  // hoogtepunten (afgerond potje)
+    fact: pickFact(game, hist),            // weetje voor de komende ronde (lopend potje)
+    draftFact: pickDraftFact(game, hist),  // reactie op de laatst aangetikte voorspelling
+    highlights: highlights(game),          // hoogtepunten (afgerond potje)
     dealerIdx: dealerIdx(n, roundIdx),
     playerOrder: playerOrder(n, roundIdx),
     roundInfo: {
@@ -352,7 +368,7 @@ function factCandidates(game) {
   // Halverwege: na de 1-kaartronde.
   const half = game.rounds.findIndex(r => r.cards === 1);
   if (half >= 0 && played === half + 1) {
-    add(8, '⏱️', 'Halverwege! ' + leaderNames + (leaders.length > 1
+    add(9, '⏱️', 'Halverwege! ' + leaderNames + (leaders.length > 1
       ? ' staan gelijk aan kop.'
       : ' staat aan kop, ' + gap + ' punten voor op ' + joinNames(chasers) + '.'));
   }
@@ -415,6 +431,199 @@ function factCandidates(game) {
   return out;
 }
 
+// De spelregels die bb-stats nodig heeft om te kunnen tellen; daar staat
+// bewust geen scoreformule of kleurclassificatie in.
+const RULES = { getRoundKinds, playerOrder, cumulativeTotals, suitNames: SUIT_NAMES };
+
+// Historie = alles uit eerdere afgeronde potjes. Wordt bij élke mutatie
+// opgevraagd (ook bij een draft-POST), dus gecachet op wat er verandert als er
+// een potje bij komt: hoeveel er af zijn en wanneer het laatste eindigde.
+let historyCache = { key: null, value: null };
+function historyOf(games) {
+  if (!Array.isArray(games)) return null;
+  let count = 0, last = '';
+  for (const g of games) {
+    if (g.status !== 'finished') continue;
+    count++;
+    if (g.finishedAt > last) last = g.finishedAt;
+  }
+  if (!count) return null;
+  const key = count + '@' + last;
+  if (historyCache.key !== key) {
+    historyCache = { key, value: bbStats.collect(games.filter(g => g.status === 'finished'), RULES) };
+  }
+  return historyCache.value;
+}
+
+const ORDINAL = ['1e', '2e', '3e', '4e', '5e', '6e', '7e', '8e', '9e', '10e'];
+const ordinal = k => ORDINAL[k - 1] || k + 'e';
+
+// Weetjes uit eerdere potjes. Bewust lichter gewogen dan het nieuws van
+// vanavond (reeksen, kopwisselingen): achtergrond verliest van wat er nú
+// gebeurt. Overal een minimum aantal waarnemingen, en bij weinig data een
+// telling ("4 van de 9") in plaats van een percentage.
+function historyCandidates(game, hist) {
+  const out = [];
+  if (!hist || game.status !== 'active') return out;
+  const add = (weight, icon, text) => out.push({ weight, icon, text });
+  const P = game.players, n = P.length;
+  const played = game.roundScores.length;
+  const cum = cumulativeTotals(game);
+  const totals = played ? cum[played - 1] : P.map(() => 0);
+  const cards = game.rounds[game.currentRound].cards;
+  const order = playerOrder(n, game.currentRound);
+  const mine = P.map(name => hist.players.get(shared.nameKey(name)) || null);
+
+  mine.forEach((p, i) => {
+    if (!p) return;
+    const pc = p.byCards.get(cards);
+    if (pc && pc.rounds >= 5) {
+      if (!pc.exact) {
+        add(3, '🧊', P[i] + ' zat bij ' + cardsTxt(cards) + ' nog nooit precies goed ('
+          + pc.rounds + ' keer geprobeerd).');
+      } else {
+        add(2, '📈', P[i] + ' zit bij ' + cardsTxt(cards) + ' ' + pc.exact + ' van de '
+          + pc.rounds + ' keer goed.');
+      }
+    }
+    const fav = bbStats.favouriteAsk(pc);
+    if (fav) add(2, '🔮', P[i] + ' vraagt bij ' + cardsTxt(cards) + ' meestal ' + fav.value + '.');
+    if (p.zerosAsked >= 10) {
+      add(1, '0️⃣', P[i] + ' vroeg al ' + p.zerosAsked + ' keer nul en haalde het '
+        + p.zerosMade + ' keer.');
+    }
+    // De deler voorspelt als laatste — voor sommigen scheelt dat.
+    if (order[n - 1] === i && p.late.rounds >= 10 && p.early.rounds >= 10) {
+      const late = bbStats.pct(p.late.exact, p.late.rounds);
+      const early = bbStats.pct(p.early.exact, p.early.rounds);
+      if (late - early >= 12) {
+        add(2, '🎩', P[i] + ' voorspelt nu als laatste; dat gaat beter (' + late
+          + '% tegen ' + early + '%).');
+      } else if (early - late >= 12) {
+        add(2, '🎩', P[i] + ' voorspelt nu als laatste; juist dan gaat het vaker mis ('
+          + late + '% tegen ' + early + '%).');
+      }
+    }
+    // Ligt deze avond boven of onder het eigen gemiddelde op dit punt?
+    if (played >= 4) {
+      const cb = p.cumByRound[played - 1];
+      if (cb && cb.count >= 3) {
+        const diff = totals[i] - Math.round(cb.sum / cb.count);
+        if (Math.abs(diff) >= 8) {
+          add(2, diff > 0 ? '⬆️' : '⬇️', P[i] + ' staat ' + Math.abs(diff) + ' punten '
+            + (diff > 0 ? 'boven' : 'onder') + ' het eigen gemiddelde na ' + played + ' rondes.');
+        }
+      }
+    }
+  });
+
+  // Het record aan deze tafel, en wie daar vanavond op koers ligt.
+  const holders = mine.map((p, i) => (p && p.bestScore > -Infinity ? { i, score: p.bestScore } : null))
+    .filter(Boolean);
+  if (holders.length) {
+    const rec = holders.reduce((a, b) => (b.score > a.score ? b : a));
+    let paced = false;
+    if (played >= 8) {
+      P.forEach((name, i) => {
+        const projected = Math.round((totals[i] / played) * game.rounds.length);
+        if (projected > rec.score && !paced) {
+          paced = true;
+          add(3, '🏅', name + ' ligt op koers voor ongeveer ' + projected
+            + ' punten; het record aan deze tafel is ' + rec.score + ' (' + P[rec.i] + ').');
+        }
+      });
+    }
+    if (!paced) add(1, '🏅', 'Het record aan deze tafel is ' + rec.score + ' (' + P[rec.i] + ').');
+  }
+
+  // Onderling: wie wint er vaker als deze twee allebei meedoen?
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const key = [shared.nameKey(P[i]), shared.nameKey(P[j])].sort().join('|');
+      const e = hist.pairs.get(key);
+      if (!e || e.games < 4) continue;
+      const win = e.winsA >= e.winsB ? { name: e.a, wins: e.winsA } : { name: e.b, wins: e.winsB };
+      if (!win.wins) continue;
+      add(1, '⚔️', e.a + ' en ' + e.b + ' speelden al ' + e.games + ' potjes samen; '
+        + win.name + ' won er ' + win.wins + '.');
+    }
+  }
+
+  // Halverwege: zegt de koploper na de 1-kaartronde iets? Even zwaar als het
+  // halverwege-weetje zelf, zodat ze elkaar afwisselen.
+  const half = game.rounds.findIndex(r => r.cards === 1);
+  if (half >= 0 && played === half + 1 && hist.halfway.games >= 4) {
+    add(9, '🔮', 'De koploper na de 1-kaartronde won ' + hist.halfway.leaderWon
+      + ' van de ' + hist.halfway.games + ' potjes.');
+  }
+
+  // Is dit ronde-type het lastigst of juist het makkelijkst?
+  const rows = bbStats.cardRows(hist).filter(c => c.rounds >= 12);
+  if (rows.length >= 3) {
+    const here = rows.find(c => c.cards === cards);
+    if (here) {
+      const hard = rows.reduce((a, b) => (b.exactPct < a.exactPct ? b : a));
+      const easy = rows.reduce((a, b) => (b.exactPct > a.exactPct ? b : a));
+      if (here.cards === hard.cards && hard.cards !== easy.cards) {
+        add(2, '😤', 'Bij ' + cardsTxt(cards) + ' zit maar ' + here.exactPct
+          + '% van de tafel goed — het lastigste ronde-type.');
+      } else if (here.cards === easy.cards && hard.cards !== easy.cards) {
+        add(2, '🍀', 'Bij ' + cardsTxt(cards) + ' zit ' + here.exactPct
+          + '% van de tafel goed — het makkelijkste ronde-type.');
+      }
+    }
+  }
+  return out;
+}
+
+// Reactie op de zojuist aangetikte voorspelling (`draft.last`). Anders dan het
+// weetje van de ronde mag dit wél bij elke keuze wisselen — dat is juist de bedoeling.
+function draftCandidates(game, hist) {
+  const out = [];
+  if (game.status !== 'active' || game.phase !== 'predict') return out;
+  const d = game.draft;
+  if (!d || d.phase !== 'predict' || !Number.isInteger(d.last)) return out;
+  const i = d.last, pred = d.values[i];
+  if (!Number.isInteger(pred)) return out;
+  const P = game.players, name = P[i];
+  const cards = game.rounds[game.currentRound].cards;
+  const played = game.roundScores.length;
+  const cum = cumulativeTotals(game);
+  const totals = played ? cum[played - 1] : P.map(() => 0);
+  const add = (weight, icon, text) => out.push({ weight, icon, text });
+  const p = hist ? hist.players.get(shared.nameKey(name)) : null;
+  const pc = p && p.byCards.get(cards);
+
+  const gain = pred + 5;
+  const leadMax = Math.max(...totals);
+  if (played >= 3 && totals[i] < leadMax && totals[i] + gain > leadMax) {
+    add(4, '🎯', 'Exact zitten levert ' + name + ' ' + gain + ' punten op — genoeg voor de kop.');
+  } else {
+    add(1, '🎯', 'Exact zitten levert ' + name + ' ' + gain + ' punten op.');
+  }
+
+  if (pred === 0) {
+    let zeros = 0;
+    for (let r = 0; r < played; r++) if (game.predictions[r][i] === 0) zeros++;
+    if (zeros >= 2) add(3, '0️⃣', name + ' vraagt nul — het ' + ordinal(zeros + 1) + ' nulletje vanavond.');
+    else if (p && p.zerosAsked >= 8) {
+      add(2, '0️⃣', name + ' vraagt nul; dat lukte ' + p.zerosMade + ' van de ' + p.zerosAsked + ' keer.');
+    } else add(1, '0️⃣', name + ' vraagt nul.');
+  }
+  if (p && p.rounds >= 20 && pred > p.maxAsk) {
+    add(4, '🚀', name + ' vraagt ' + pred + ' van ' + cards + ': de hoogste vraag ooit.');
+  }
+  if (pc) {
+    const ask = pc.asks.get(pred);
+    if (ask && ask.count >= 4) {
+      add(2, '📈', name + ' vraagt ' + pred + ' — bij ' + cardsTxt(cards) + ' lukte dat '
+        + ask.made + ' van de ' + ask.count + ' keer.');
+    }
+  }
+  if (pred === cards && cards >= 3) add(3, '😳', name + ' vraagt alle ' + cards + ' slagen.');
+  return out;
+}
+
 function hashStr(s) {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0;
@@ -426,12 +635,41 @@ function hashStr(s) {
 // bij elke aangetikte voorspelling verspringen. Uit de zwaarste kandidaten
 // (gewicht ≥ top − 1) kiest een hash, zodat niet elke ronde hetzelfde soort
 // weetje bovenkomt.
-function pickFact(game) {
-  const c = factCandidates(game);
-  if (!c.length) return null;
-  c.sort((a, b) => b.weight - a.weight);
-  const pool = c.filter(f => f.weight >= c[0].weight - 1);
+// Nieuws (wat er vanavond gebeurt) weegt zwaarder dan achtergrond (historie),
+// maar zou over 15 rondes alles opslokken: een lopende reeks wint anders elke
+// ronde opnieuw. Daarom wisselen de rondes elkaar af — oneven ronde nieuws,
+// even ronde achtergrond — met terugval op de andere groep als die leeg is.
+// Alleen echt groot nieuws (gewicht >= 9, zoals een onbereikbare koploper)
+// breekt daar doorheen.
+const NEWS_FROM = 4;
+function pickFact(game, hist) {
+  const all = factCandidates(game).concat(historyCandidates(game, hist));
+  if (!all.length) return null;
+  const top = all.reduce((a, b) => (b.weight > a.weight ? b : a));
+  let pool = all.filter(f => f.weight >= 9);
+  if (top.weight < 9) {
+    const news = all.filter(f => f.weight >= NEWS_FROM);
+    const background = all.filter(f => f.weight < NEWS_FROM);
+    let group = game.currentRound % 2 ? news : background;
+    if (!group.length) group = group === news ? background : news;
+    const best = group.reduce((a, b) => (b.weight > a.weight ? b : a)).weight;
+    pool = group.filter(f => f.weight >= best - 1);
+  }
   const f = pool[hashStr(game.id + ':' + game.currentRound) % pool.length];
+  return { icon: f.icon, text: f.text };
+}
+
+// Het weetje bij de laatst aangetikte voorspelling. Wisselt bewust wél mee met
+// de invoer: de sleutel bevat de speler en de gekozen waarde.
+function pickDraftFact(game, hist) {
+  const c = draftCandidates(game, hist);
+  if (!c.length) return null;
+  // Anders dan bij het weetje van de ronde geen speelruimte in het gewicht: het
+  // meest specifieke wint, anders verdringt "exact zitten levert X op" alles.
+  c.sort((a, b) => b.weight - a.weight);
+  const pool = c.filter(f => f.weight === c[0].weight);
+  const d = game.draft;
+  const f = pool[hashStr(game.id + ':' + game.currentRound + ':' + d.last + ':' + d.values[d.last]) % pool.length];
   return { icon: f.icon, text: f.text };
 }
 
@@ -606,7 +844,9 @@ module.exports = {
   createGame, applyPredictions, applyDraft, applyActuals, undo, abandon,
   getTotals, cumulativeTotals, positions, projection, getRoundKinds, enrich, gameSummary,
   leaderboard, leaderboardView, awards,
-  factCandidates, pickFact, highlights,
+  factCandidates, historyCandidates, draftCandidates, pickFact, pickDraftFact, highlights,
+  statsView: (games, exclude) => bbStats.statsView(games, exclude, RULES),
+  historyOf,
   finishedGames: shared.finishedGames,
   leaderboardPlayers: shared.leaderboardPlayers,
   httpError,

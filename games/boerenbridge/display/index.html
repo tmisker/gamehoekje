@@ -286,8 +286,10 @@
 
   // Weetje voor de komende ronde; per ronde vastgepind door de server, dus
   // op het tussen-, voorspel- en speelscherm dezelfde regel.
-  function factHtml(g){
-    const f=g.fact;
+  // `preferDraft`: tijdens het voorspellen gaat de reactie op de zojuist
+  // aangetikte keuze voor op het weetje van de ronde.
+  function factHtml(g,preferDraft){
+    const f=(preferDraft&&g.draftFact)||g.fact;
     if(!f) return '';
     return '<div class="factbar"><span class="ic">'+f.icon+'</span><span>'+esc(f.text)+'</span></div>';
   }
@@ -316,7 +318,7 @@
         sub: standSub(g,i),
         cls: vals[i]!=null?' chosen':'',
       }))
-      +factHtml(g)+askbarHtml(g,total,cards,delta);
+      +factHtml(g,true)+askbarHtml(g,total,cards,delta);
     drawTrend(g);
   }
 

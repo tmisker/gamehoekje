@@ -6,7 +6,8 @@ later op terug te komen — kies een selectie en bouw die uit in
 
 ## Stand van zaken (september 2026)
 
-Gebouwd, allemaal in `server/logic.js`:
+Gebouwd, in `server/logic.js` (één potje + de keuze van het weetje) en
+`server/bb-stats.js` (alles wat over meerdere potjes gaat):
 
 - **Klassement**: trefzekerheid (`exactPct`), te veel/te weinig gevraagd,
   nulletjes, langste reeks; plus **eretitels** (`awards`): Scherpschutter,
@@ -21,9 +22,24 @@ Gebouwd, allemaal in `server/logic.js`:
   halverwege, vorige ronde, uitschieters, tafel-percentage, nulletjes,
   spiegelronde. Vastgepind per ronde, getoond op tussen-, voorspel- en
   speelscherm van het display.
+- **Weetjes soort 2** (historie, ook in `fact`): trefzekerheid bij dit
+  kaartaantal, "nog nooit goed gezeten bij 8 kaarten", vaste gewoontes,
+  nulletjes over alle potjes, als laatste voorspellen, boven/onder het eigen
+  gemiddelde, het tafelrecord en wie erop koers ligt, onderlinge standen, de
+  koploper na de 1-kaartronde, en het lastigste ronde-type. Nieuws en
+  achtergrond wisselen per ronde af, zodat een lopende reeks niet elke ronde
+  het scherm pakt.
+- **Weetjes soort 3** (`draftFact`): reactie op de zojuist aangetikte
+  voorspelling, op het voorspelscherm van het display én onder de invoer op de
+  telefoon. `game.draft.last` onthoudt wiens keuze veranderde.
+- **Statistiekpagina** (`games/boerenbridge/stats/`, `GET .../stats`): per
+  speler een profiel (verdeling precies / te veel / te weinig gevraagd, durf,
+  wisselvalligheid, eerste vs tweede helft, per kaartaantal), records, per
+  ronde-type, per troef, onderlinge standen en tafelnotities.
 
-Nog niet: soort 2 en 3 (historie, reactie op een voorspelling), de rest van de
-klassement-ideeën hieronder, en het taalmodel.
+Nog niet: het taalmodel, en van de lijst hieronder onder meer het kantelpunt
+per potje, de weekdag-/tijdstipanalyse in de UI en een spelersvergelijking naast
+elkaar.
 
 ## Welke data er is
 

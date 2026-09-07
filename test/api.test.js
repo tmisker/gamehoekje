@@ -269,7 +269,7 @@ async function main() {
     // gedeeltelijke voorspelling → draft in het spel én in de snapshot
     let r = await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'predict', values: [2, null, null] });
     assert.equal(r.status, 200);
-    assert.deepEqual(r.body.draft, { phase: 'predict', values: [2, null, null] });
+    assert.deepEqual(r.body.draft, { phase: 'predict', values: [2, null, null], last: 0 });
     let cur = (await api('GET', '/api/boerenbridge/current')).body;
     assert.deepEqual(cur.game.draft.values, [2, null, null], 'draft zit in de snapshot');
     // verkeerde fase of ronde → 409
@@ -289,7 +289,7 @@ async function main() {
     assert.equal(r.body.projection, null, 'geen slagen-draft → geen projectie');
     // draft in de slagen-fase; undo wist hem ook
     r = await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'actual', values: [1, null, null] });
-    assert.deepEqual(r.body.draft, { phase: 'actual', values: [1, null, null] });
+    assert.deepEqual(r.body.draft, { phase: 'actual', values: [1, null, null], last: 0 });
     // gevraagd [2,3,3]: 1 gehaald is (nog) te weinig, de rest is nog niet ingevoerd
     assert.deepEqual(r.body.projection.kinds, ['under', null, null]);
     r = await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'actual', values: [5, 3, null] });
@@ -493,6 +493,32 @@ async function main() {
     assert.deepEqual(noop.leaderboard, full.leaderboard);
     assert.deepEqual(noop.excluded, []);
     console.log('OK klassement-filter (potjes zonder bepaalde spelers)');
+  }
+
+  // --- statistiek-endpoint (de details staan in test/stats.test.js) ---
+  {
+    const r = await api('GET', '/api/boerenbridge/stats');
+    assert.equal(r.status, 200);
+    const s = r.body;
+    for (const key of ['rows', 'byCards', 'bySuit', 'pairs', 'records', 'notes', 'players']) {
+      assert.ok(Array.isArray(s[key]), key + ' is een lijst');
+    }
+    assert.ok(s.gamesCounted > 0 && s.gamesCounted === s.gamesTotal);
+    assert.ok(s.rows.length > 0);
+    for (const row of s.rows) {
+      assert.ok(row.rounds > 0 && row.games > 0, 'rij heeft rondes: ' + row.name);
+      assert.ok(row.exactPct >= 0 && row.exactPct <= 100);
+      assert.equal(row.exact + row.over + row.under, row.rounds, 'elke ronde is precies één soort');
+      assert.ok(row.zerosMade <= row.zerosAsked);
+    }
+    for (const c of s.byCards) assert.ok(c.cards >= 1 && c.cards <= 8 && c.rounds > 0);
+    // Uitsluiten haalt potjes weg, net als bij het klassement.
+    const name = s.rows[0].name;
+    const less = (await api('GET', '/api/boerenbridge/stats?exclude=' + encodeURIComponent(name))).body;
+    assert.ok(less.gamesCounted < s.gamesCounted, 'uitsluiten telt minder potjes');
+    assert.deepEqual(less.excluded, [name]);
+    assert.ok(!less.rows.some(row => row.name === name), 'uitgesloten speler heeft geen rij');
+    console.log('OK statistiek-endpoint');
   }
 
   // --- naamsuggesties: vaakst-meespelend eerst, zonder afgebroken potjes ---

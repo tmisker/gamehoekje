@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f0f12">
+  <title>Boerenbridge – Statistieken</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    :root{
+      --bg:#0f0f12;--card:#1b1b20;--card2:#232329;--line:#2e2e36;
+      --text:#f4f4f6;--muted:#9a9aa3;--accent:#4caf50;--accent-dim:rgba(76,175,80,.15);
+      --red:#e53935;--red-dim:rgba(229,57,53,.12);--gold:#ffd600;--orange:#ff9800;
+    }
+    html{height:100%}
+    body{
+      min-height:100%;background:var(--bg);color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+      display:flex;flex-direction:column;align-items:center;padding:16px 10px 60px;
+    }
+    a.backlink{
+      align-self:flex-start;color:var(--muted);text-decoration:none;font-size:.9rem;margin-bottom:12px;
+    }
+    a.backlink:hover{color:var(--accent)}
+    h1{font-size:1.5rem;margin-bottom:4px;text-align:center}
+    p.sub{color:var(--muted);font-size:.85rem;margin-bottom:16px;text-align:center}
+    main{width:100%;max-width:900px;display:flex;flex-direction:column;gap:16px}
+
+    .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+    .panel h2{font-size:1rem;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+    .panel h2 .count{color:var(--muted);font-weight:400;font-size:.82rem}
+
+    /* filter */
+    .hint{color:var(--muted);font-size:.8rem;margin-bottom:6px}
+    .chips{display:flex;flex-wrap:wrap;gap:6px}
+    .chip{
+      padding:5px 11px;border:1px solid var(--line);border-radius:999px;background:var(--card2);
+      color:var(--muted);font-size:.82rem;font-weight:600;cursor:pointer;
+    }
+    .chip.on{background:var(--red-dim);border-color:var(--red);color:var(--text)}
+    .lb-count{color:var(--muted);font-size:.8rem;margin-top:10px}
+
+    /* spelerkaarten */
+    .cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(270px,1fr))}
+    .pc{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:14px}
+    .pc .top{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:2px}
+    .pc .nm{font-size:1.05rem;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .pc .meta{color:var(--muted);font-size:.78rem;white-space:nowrap}
+    .pc .tag{color:var(--muted);font-size:.78rem;margin-bottom:10px;min-height:1.1em}
+    .pc .tag b{color:var(--text)}
+
+    /* verdeling exact / te weinig gevraagd / te veel gevraagd */
+    .kindbar{display:flex;height:10px;border-radius:999px;overflow:hidden;background:var(--line);margin-bottom:6px}
+    .kindbar i{display:block;height:100%}
+    .kindbar .k-exact{background:var(--accent)}
+    .kindbar .k-over{background:var(--orange)}
+    .kindbar .k-under{background:var(--red)}
+    .kindlegend{display:flex;flex-wrap:wrap;gap:4px 12px;color:var(--muted);font-size:.75rem;margin-bottom:12px}
+    .kindlegend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px}
+
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:.85rem}
+    .grid .lbl{color:var(--muted)}
+    .grid .val{text-align:right;font-weight:700}
+    .grid .val.dim{color:var(--muted);font-weight:600}
+
+    /* mini-staafjes per kaartaantal */
+    .mini{margin-top:12px}
+    .mini .cap{color:var(--muted);font-size:.75rem;margin-bottom:4px}
+    .mini .row{display:flex;align-items:flex-end;gap:3px;height:44px}
+    .mini .col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}
+    .mini .bar{width:100%;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px}
+    .mini .bar.none{background:var(--line)}
+    .mini .lab{color:var(--muted);font-size:.65rem}
+
+    /* brede staven (per kaartaantal / troef over de hele tafel) */
+    .bars{display:flex;flex-direction:column;gap:7px}
+    .bars .b{display:grid;grid-template-columns:82px 1fr 96px;align-items:center;gap:8px;font-size:.85rem}
+    .bars .b .name{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .bars .b .track{display:block;background:var(--card2);border-radius:999px;height:14px;overflow:hidden}
+    .bars .b .fill{display:block;height:100%;background:var(--accent);border-radius:999px}
+    .bars .b .fill.hard{background:var(--orange)}
+    .bars .b .num{text-align:right;color:var(--muted);font-size:.78rem}
+    .bars .b .num b{color:var(--text)}
+
+    /* records en notities */
+    .list{display:flex;flex-direction:column;gap:10px}
+    .list .it{display:flex;gap:10px;align-items:flex-start;font-size:.9rem}
+    .list .it .ic{flex:0 0 auto;font-size:1.05rem;line-height:1.3}
+    .list .it .tt{color:var(--muted)}
+    .list .it b{color:var(--text)}
+
+    .pairs{display:flex;flex-direction:column;gap:8px;font-size:.88rem}
+    .pairs .p{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .pairs .p .who{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .pairs .p .sc{color:var(--muted);white-space:nowrap}
+    .pairs .p .sc b{color:var(--text)}
+
+    .empty{color:var(--muted);font-size:.9rem;text-align:center;padding:8px 0}
+    .conn-banner{
+      display:none;background:var(--red-dim);border:1px solid var(--red);border-radius:10px;
+      padding:10px;text-align:center;font-size:.9rem;
+    }
+    .conn-banner button{
+      margin-top:8px;padding:7px 14px;border:none;border-radius:8px;background:#3a3a3c;
+      color:#fff;font-size:.85rem;font-weight:700;cursor:pointer;
+    }
+    @media(max-width:380px){
+      .bars .b{grid-template-columns:72px 1fr 82px}
+      .grid{font-size:.8rem}
+    }
+  </style>
+</head>
+<body>
+  <a class="backlink" href="../index.html">← Boerenbridge</a>
+  <h1>📊 Statistieken</h1>
+  <p class="sub">Over alle afgeronde potjes</p>
+
+  <main>
+    <div class="conn-banner" id="conn">
+      Geen verbinding met de server
+      <button id="retry">Opnieuw proberen</button>
+    </div>
+    <div class="panel" id="filterPanel">
+      <div class="hint">Potjes weglaten waarin deze spelers meededen:</div>
+      <div class="chips" id="filter"></div>
+      <div class="lb-count" id="count"></div>
+    </div>
+    <div id="body"></div>
+  </main>
+
+<script>
+(function(){
+  const API='../../../api/boerenbridge';
+  const LB_KEY='bb-klassement-zonder';   // zelfde keuze als het klassement op de invoerpagina
+  const SUIT_SYMBOLS=['♣','♥','♦','♠','Sans'];
+  let exclude=[];
+  try{ exclude=JSON.parse(localStorage.getItem(LB_KEY))||[]; }catch(e){}
+  if(!Array.isArray(exclude)) exclude=[];
+
+  const $=s=>document.querySelector(s);
+  function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+  const nl=v=>(v==null?'–':String(v).replace('.',','));
+  const sign=v=>(v>0?'+':'')+nl(v);
+  const cardsTxt=c=>c+(c===1?' kaart':' kaarten');
+
+  async function load(){
+    const qs=exclude.map(n=>'exclude='+encodeURIComponent(n)).join('&');
+    const res=await fetch(API+'/stats'+(qs?'?'+qs:''));
+    if(!res.ok) throw new Error('status '+res.status);
+    return res.json();
+  }
+
+  async function refresh(){
+    try{
+      const s=await load();
+      $('#conn').style.display='none';
+      renderFilter(s);
+      renderBody(s);
+    }catch(e){
+      $('#conn').style.display='block';
+    }
+  }
+
+  function renderFilter(s){
+    const box=$('#filter');
+    box.innerHTML='';
+    $('#filterPanel').style.display=s.players.length?'':'none';
+    const off=new Set(s.excluded.map(n=>n.toLowerCase()));
+    s.players.forEach(name=>{
+      const b=document.createElement('button');
+      b.className='chip'+(off.has(name.toLowerCase())?' on':'');
+      b.textContent=name;
+      b.addEventListener('click',()=>{
+        const key=name.toLowerCase();
+        exclude=exclude.some(n=>n.toLowerCase()===key)
+          ? exclude.filter(n=>n.toLowerCase()!==key)
+          : exclude.concat(name);
+        try{ localStorage.setItem(LB_KEY,JSON.stringify(exclude)); }catch(e){}
+        refresh();
+      });
+      box.appendChild(b);
+    });
+    $('#count').textContent = s.excluded.length
+      ? s.gamesCounted+' van de '+s.gamesTotal+' potjes tellen mee'
+      : s.gamesCounted+(s.gamesCounted===1?' potje telt':' potjes tellen')+' mee';
+  }
+
+  function renderBody(s){
+    if(!s.gamesCounted){
+      $('#body').innerHTML='<div class="panel"><p class="empty">'
+        +(s.excluded.length?'Geen potjes zonder '+esc(s.excluded.join(', '))+'.':'Nog geen afgeronde potjes.')
+        +'</p></div>';
+      return;
+    }
+    $('#body').innerHTML=
+      panel('🏅 Records','',listHtml(s.records.map(r=>({icon:r.icon,html:'<span class="tt">'+esc(r.title)+':</span> <b>'+esc(r.text)+'</b>'}))))
+      +panel('🃏 Spelers','op trefzekerheid','<div class="cards">'+s.rows.map(playerCard).join('')+'</div>')
+      +panel('🎲 Per ronde','hoe vaak de tafel precies goed zit',cardBars(s.byCards))
+      +(s.bySuit.length?panel('♠ Per troef','',suitBars(s.bySuit)):'')
+      +(s.pairs.length?panel('⚔️ Onderling','wie wint er als deze twee samen spelen',pairsHtml(s.pairs)):'')
+      +(s.notes.length?panel('💡 Over de tafel','',listHtml(s.notes.map(n=>({icon:n.icon,html:esc(n.text)})))):'');
+  }
+
+  function panel(title,note,inner){
+    return '<div class="panel"><h2>'+title+(note?' <span class="count">'+esc(note)+'</span>':'')+'</h2>'+inner+'</div>';
+  }
+
+  function listHtml(items){
+    return '<div class="list">'+items.map(i=>
+      '<div class="it"><span class="ic">'+i.icon+'</span><span>'+i.html+'</span></div>').join('')+'</div>';
+  }
+
+  // Eén kaart per speler: het profiel (exact / te veel / te weinig gevraagd),
+  // de kerncijfers en per kaartaantal een staafje.
+  function playerCard(r){
+    const e=r.exactPct, o=r.overPct, u=r.underPct;
+    const durf = r.ask>1.08 ? 'vraagt <b>meer</b> dan het eerlijke deel'
+      : r.ask<0.92 ? 'vraagt <b>minder</b> dan het eerlijke deel'
+      : 'vraagt ongeveer <b>het eerlijke deel</b>';
+    const neiging = r.under>r.over*1.3 ? 'mist vaker door <b>te veel</b> te vragen'
+      : r.over>r.under*1.3 ? 'mist vaker door <b>te weinig</b> te vragen'
+      : 'mist even vaak naar boven als naar beneden';
+    return '<div class="pc">'
+      +'<div class="top"><span class="nm">'+esc(r.name)+'</span>'
+      +'<span class="meta">'+r.games+(r.games===1?' potje':' potjes')+' · '+r.rounds+' rondes</span></div>'
+      +'<div class="tag">'+neiging+', '+durf+'.</div>'
+      +'<div class="kindbar"><i class="k-exact" style="width:'+e+'%"></i>'
+        +'<i class="k-over" style="width:'+o+'%"></i><i class="k-under" style="width:'+u+'%"></i></div>'
+      +'<div class="kindlegend">'
+        +'<span><i class="k-exact" style="background:var(--accent)"></i>precies '+e+'%</span>'
+        +'<span><i class="k-over" style="background:var(--orange)"></i>te weinig gevraagd '+o+'%</span>'
+        +'<span><i class="k-under" style="background:var(--red)"></i>te veel gevraagd '+u+'%</span>'
+      +'</div>'
+      +'<div class="grid">'
+        +cell('Gewonnen',r.wins+' × ('+r.winPct+'%)')
+        +cell('Gem. punten',nl(r.avgPoints))
+        +cell('Beste potje',r.bestScore)
+        +cell('Slechtste potje',r.worstScore)
+        +cell('Nulletjes',r.zerosMade+' van '+r.zerosAsked)
+        +cell('Langste reeks',r.bestStreak+' op rij')
+        +cell('Beste ronde',sign(r.bestRound))
+        +cell('Slechtste ronde',sign(r.worstRound))
+        +cell('Durf',nl(r.ask)+'×',true)
+        +cell('Wisselvalligheid',r.spread==null?'–':'± '+nl(r.spread),true)
+        +cell('1e helft',sign(r.firstHalf),true)
+        +cell('2e helft',sign(r.secondHalf),true)
+        +(r.earlyPct!=null&&r.latePct!=null
+          ? cell('Als eerste / laatste',r.earlyPct+'% / '+r.latePct+'%',true) : '')
+      +'</div>'
+      +miniBars(r.byCards)
+      +'</div>';
+  }
+
+  function cell(label,value,dim){
+    return '<span class="lbl">'+label+'</span><span class="val'+(dim?' dim':'')+'">'+value+'</span>';
+  }
+
+  function miniBars(rows){
+    if(!rows||!rows.length) return '';
+    return '<div class="mini"><div class="cap">Precies goed per kaartaantal</div><div class="row">'
+      +rows.map(c=>'<div class="col" title="'+cardsTxt(c.cards)+': '+c.exact+' van '+c.rounds+'">'
+        +'<div class="bar'+(c.exactPct?'':' none')+'" style="height:'+Math.max(2,c.exactPct*0.34)+'px"></div>'
+        +'<span class="lab">'+c.cards+'</span></div>').join('')
+      +'</div></div>';
+  }
+
+  function cardBars(rows){
+    if(!rows.length) return '<p class="empty">Nog te weinig gegevens.</p>';
+    const worst=Math.min.apply(null,rows.map(r=>r.exactPct));
+    return '<div class="bars">'+rows.map(c=>
+      '<div class="b"><span class="name">'+cardsTxt(c.cards)+'</span>'
+      +'<span class="track"><span class="fill'+(c.exactPct===worst?' hard':'')+'" style="width:'+c.exactPct+'%"></span></span>'
+      +'<span class="num"><b>'+c.exactPct+'%</b> · '+(c.askDiff>0?'+':'')+nl(c.askDiff)+'</span></div>').join('')
+      +'</div><div class="hint" style="margin-top:10px">Rechts: hoeveel de tafel gemiddeld te veel (+) of te weinig (−) vraagt.</div>';
+  }
+
+  function suitBars(rows){
+    return '<div class="bars">'+rows.map(s=>
+      '<div class="b"><span class="name">'+(SUIT_SYMBOLS[s.suitIdx]===s.name?'':SUIT_SYMBOLS[s.suitIdx]+' ')+esc(s.name)+'</span>'
+      +'<span class="track"><span class="fill" style="width:'+s.exactPct+'%"></span></span>'
+      +'<span class="num"><b>'+s.exactPct+'%</b></span></div>').join('')+'</div>';
+  }
+
+  function pairsHtml(rows){
+    return '<div class="pairs">'+rows.map(p=>
+      '<div class="p"><span class="who">'+esc(p.a)+' &amp; '+esc(p.b)+'</span>'
+      +'<span class="sc">'+p.games+' potjes · <b>'+p.winsA+'–'+p.winsB+'</b></span></div>').join('')+'</div>';
+  }
+
+  $('#retry').addEventListener('click',refresh);
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') refresh(); });
+  refresh();
+})();
+</script>
+</body>
+</html>
