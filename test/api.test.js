@@ -497,6 +497,62 @@ async function main() {
     console.log('OK klassement-filter (potjes zonder bepaalde spelers)');
   }
 
+  // --- speler wisselen tijdens het spelen ---
+  {
+    const created = await api('POST', '/api/boerenbridge/games', { players: ['Wa', 'Wb', 'Wc'] });
+    const id = created.body.id;
+    assert.deepEqual(created.body.swaps, [], 'nieuw potje heeft geen wissels');
+    const swap = (body) => api('POST', '/api/boerenbridge/games/' + id + '/swap', body);
+
+    // validatie
+    assert.equal((await swap({ round: 0, seat: 9, name: 'X' })).status, 400, 'onbekende stoel');
+    assert.equal((await swap({ round: 0, seat: 0, name: '  ' })).status, 400, 'lege naam');
+    assert.equal((await swap({ round: 0, seat: 0, name: 'wb' })).status, 400, 'naam al aan tafel');
+    assert.equal((await swap({ round: 0, seat: 0, name: 'Wa' })).status, 400, 'zelfde speler');
+    assert.equal((await swap({ round: 1, seat: 0, name: 'X' })).status, 409, 'verkeerde ronde');
+
+    // in de voorspelfase gaat de wissel meteen in
+    let r = await swap({ round: 0, seat: 0, name: 'Wd' });
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body.players, ['Wd', 'Wb', 'Wc']);
+    assert.deepEqual(r.body.swaps, [{ seat: 0, round: 0, from: 'Wa', to: 'Wd' }]);
+
+    // nog een wissel in dezelfde ronde corrigeert de vorige
+    r = await swap({ round: 0, seat: 0, name: 'We' });
+    assert.deepEqual(r.body.swaps, [{ seat: 0, round: 0, from: 'Wa', to: 'We' }], 'correctie, geen tweede wissel');
+    r = await swap({ round: 0, seat: 0, name: 'Wa' });
+    assert.deepEqual(r.body.swaps, [], 'terug naar de oorspronkelijke naam wist de wissel');
+    assert.deepEqual(r.body.players, ['Wa', 'Wb', 'Wc']);
+
+    // in de slagen-fase hoort de ronde nog bij wie de voorspelling deed
+    await api('POST', '/api/boerenbridge/games/' + id + '/predictions', { round: 0, predictions: [2, 3, 3] });
+    r = await swap({ round: 0, seat: 1, name: 'Wf' });
+    assert.deepEqual(r.body.swaps, [{ seat: 1, round: 1, from: 'Wb', to: 'Wf' }], 'gaat pas volgende ronde in');
+    assert.deepEqual(r.body.players, ['Wa', 'Wf', 'Wc']);
+
+    // het potje uitspelen: rondes naar wie ze speelde, potje naar wie afmaakt
+    await api('POST', '/api/boerenbridge/games/' + id + '/actuals', { round: 0, actuals: [2, 3, 3] });
+    let game = (await api('GET', '/api/boerenbridge/games/' + id)).body;
+    for (let round = 1; round < game.rounds.length; round++) {
+      const c = game.rounds[round].cards;
+      await api('POST', '/api/boerenbridge/games/' + id + '/predictions', { round, predictions: [c, 0, 0] });
+      game = (await api('POST', '/api/boerenbridge/games/' + id + '/actuals', { round, actuals: [c, 0, 0] })).body;
+    }
+    assert.equal(game.status, 'finished');
+    assert.deepEqual(game.players, ['Wa', 'Wf', 'Wc']);
+    assert.equal((await swap({ round: 0, seat: 0, name: 'Wz' })).status, 409, 'afgelopen potje');
+
+    const stats = (await api('GET', '/api/boerenbridge/stats')).body;
+    const row = name => stats.rows.find(e => e.name === name);
+    assert.equal(row('Wb').games, 0, 'Wb speelde het potje niet uit');
+    assert.equal(row('Wb').rounds, 1, 'maar wel de eerste ronde');
+    assert.equal(row('Wb').avgPoints, null, 'zonder potje geen gemiddelde');
+    assert.equal(row('Wf').games, 1, 'Wf maakte het af');
+    assert.equal(row('Wf').rounds, game.rounds.length - 1, 'Wf speelde alle rondes behalve de eerste');
+    assert.equal(row('Wa').rounds, game.rounds.length, 'Wa zat er de hele tijd');
+    console.log('OK speler wisselen (rondes gesplitst, potje naar wie afmaakt)');
+  }
+
   // --- statistiek-endpoint (de details staan in test/stats.test.js) ---
   {
     const r = await api('GET', '/api/boerenbridge/stats');
@@ -508,10 +564,18 @@ async function main() {
     assert.ok(s.gamesCounted > 0 && s.gamesCounted === s.gamesTotal);
     assert.ok(s.rows.length > 0);
     for (const row of s.rows) {
-      assert.ok(row.rounds > 0 && row.games > 0, 'rij heeft rondes: ' + row.name);
+      assert.ok(row.rounds > 0, 'elke rij heeft rondes: ' + row.name);
       assert.ok(row.exactPct >= 0 && row.exactPct <= 100);
       assert.equal(row.exact + row.over + row.under, row.rounds, 'elke ronde is precies één soort');
       assert.ok(row.zerosMade <= row.zerosAsked);
+      // Wie alleen invalt heeft rondes maar geen uitgespeeld potje; dan blijven
+      // de potje-cijfers leeg in plaats van 0 of NaN.
+      if (row.games) {
+        assert.ok(Number.isFinite(row.avgPoints) && Number.isFinite(row.bestScore), 'potje-cijfers: ' + row.name);
+      } else {
+        assert.deepEqual([row.avgPoints, row.bestScore, row.worstScore], [null, null, null], 'invaller: ' + row.name);
+        assert.equal(row.wins, 0);
+      }
     }
     for (const c of s.byCards) assert.ok(c.cards >= 1 && c.cards <= 8 && c.rounds > 0);
     // Uitsluiten haalt potjes weg, net als bij het klassement.

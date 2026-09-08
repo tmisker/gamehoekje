@@ -242,7 +242,7 @@
       const sel=on.has(r.name.toLowerCase());
       return '<button class="prow'+(sel?' on':'')+'" data-name="'+esc(r.name)+'" aria-pressed="'+sel+'">'
         +'<span class="who"><span class="nm2">'+esc(r.name)+'</span>'
-          +'<span class="meta2">'+r.games+(r.games===1?' potje':' potjes')+'</span></span>'
+          +'<span class="meta2">'+(r.games?r.games+(r.games===1?' potje':' potjes'):r.rounds+' rondes')+'</span></span>'
         +'<span class="kindbar"><i class="k-exact" style="width:'+r.exactPct+'%"></i>'
           +'<i class="k-over" style="width:'+r.overPct+'%"></i>'
           +'<i class="k-under" style="width:'+r.underPct+'%"></i></span>'
@@ -291,8 +291,9 @@
       : 'mist even vaak naar boven als naar beneden';
     return '<div class="pc">'
       +'<div class="top"><span class="nm">'+esc(r.name)+'</span>'
-      +'<span class="meta">'+r.games+(r.games===1?' potje':' potjes')+' · '+r.rounds+' rondes</span></div>'
-      +'<div class="tag">'+neiging+', '+durf+'.</div>'
+      +'<span class="meta">'+(r.games?r.games+(r.games===1?' potje':' potjes')+' · ':'')+r.rounds+' rondes</span></div>'
+      +'<div class="tag">'+(r.games?'':'Alleen ingevallen: rondes gespeeld, geen potje uitgespeeld. ')
+        +neiging+', '+durf+'.</div>'
       +'<div class="kindbar"><i class="k-exact" style="width:'+e+'%"></i>'
         +'<i class="k-over" style="width:'+o+'%"></i><i class="k-under" style="width:'+u+'%"></i></div>'
       +'<div class="kindlegend">'
@@ -301,10 +302,10 @@
         +'<span><i class="k-under" style="background:var(--red)"></i>te veel gevraagd '+u+'%</span>'
       +'</div>'
       +'<div class="grid">'
-        +cell('Gewonnen',r.wins+' × ('+r.winPct+'%)')
+        +cell('Gewonnen',r.games?r.wins+' × ('+r.winPct+'%)':'–')
         +cell('Gem. punten',nl(r.avgPoints))
-        +cell('Beste potje',r.bestScore)
-        +cell('Slechtste potje',r.worstScore)
+        +cell('Beste potje',nl(r.bestScore))
+        +cell('Slechtste potje',nl(r.worstScore))
         +cell('Nulletjes',r.zerosMade+' van '+r.zerosAsked)
         +cell('Langste reeks',r.bestStreak+' op rij')
         +cell('Beste ronde',sign(r.bestRound))

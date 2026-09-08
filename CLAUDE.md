@@ -104,6 +104,21 @@ Dockerfile                     # node:22-alpine, geen npm install
   (predictions/actuals/undo/abandon) wist de draft. Het display kiest op basis
   van `phase` + `draft` tussen vier schermen: voorspellen (draft-invoer
   loopt), spelen, tussenstand, eindstand.
+- **Een stoel kan tijdens het spelen van bewoner wisselen.** `POST .../swap`
+  (`{round, seat, name}`) zet een andere naam op een stoel en legt de wissel
+  vast in `game.swaps` (`{seat, round, from, to}`). `players[i]` is altijd de
+  **huidige** bewoner; wie ronde r speelde komt uit `occupantAt(game, i, r)`.
+  Twee regels, en ze verschillen bewust:
+  rondecijfers (trefzekerheid, nulletjes, reeks, per kaartaantal) gaan naar wie
+  die ronde speelde, het **potje** (gespeeld, gewonnen, eindscore) naar wie het
+  **uitspeelt** — huisregel: wie voorstaat stopt toch niet. Iemand die alleen
+  inviel heeft dus wél rondes maar `games: 0`, en dan blijven `avgPoints`,
+  `bestScore` en `worstScore` `null` (de statistiekpagina toont een streepje).
+  Is er in de lopende ronde al voorspeld (`phase === 'actual'`), dan gaat de
+  wissel pas de volgende ronde in: de voorspelling hoort bij wie hem deed. Een
+  tweede wissel op dezelfde stoel in dezelfde ronde **corrigeert** de vorige
+  (terug naar de oorspronkelijke naam wist hem helemaal), zodat een typefout te
+  herstellen is.
 - **De tussenstand komt van de server.** `enrich` levert naast `totals` ook
   `cumulative` (`[ronde][speler]` = stand t/m die ronde; `getTotals` is de
   laatste rij), `positions` (plek in de stand, gelijke totalen delen een plek

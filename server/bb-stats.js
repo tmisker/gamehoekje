@@ -94,20 +94,26 @@ function collect(finished, rules) {
       }
     }
 
+    // Het potje zelf (gespeeld, gewonnen, eindscore) telt voor wie het
+    // uitspeelt — dat is de huidige bewoner van de stoel. De losse rondes gaan
+    // naar wie ze speelde; na een wissel is dat iemand anders.
+    const streaks = new Map();
     P.forEach((name, i) => {
-      const p = bucket(players, nameKey(name), () => emptyPlayer(name));
-      p.name = name;                       // recentste schrijfwijze wint
-      if (at >= p.lastPlayed) p.lastPlayed = at;
-      p.games++;
-      if (winners.includes(i)) { p.wins++; if (winners.length > 1) p.shared++; }
-      p.totals.push(totals[i]);
-      if (totals[i] > p.bestScore) p.bestScore = totals[i];
-      if (totals[i] < p.worstScore) p.worstScore = totals[i];
+      const seat = bucket(players, nameKey(name), () => emptyPlayer(name));
+      seat.name = name;                    // recentste schrijfwijze wint
+      if (at >= seat.lastPlayed) seat.lastPlayed = at;
+      seat.games++;
+      if (winners.includes(i)) { seat.wins++; if (winners.length > 1) seat.shared++; }
+      seat.totals.push(totals[i]);
+      if (totals[i] > seat.bestScore) seat.bestScore = totals[i];
+      if (totals[i] < seat.worstScore) seat.worstScore = totals[i];
 
-      let streak = 0;
       for (let r = 0; r < played; r++) {
         const kind = kinds[r][i];
         if (!kind) continue;
+        const occupant = rules.occupantAt(game, i, r);
+        const p = bucket(players, nameKey(occupant), () => emptyPlayer(occupant));
+        if (at >= p.lastPlayed) p.lastPlayed = at;
         const cards = game.rounds[r].cards;
         const suit = game.rounds[r].suitIdx;
         const pred = game.predictions[r][i];
@@ -115,7 +121,8 @@ function collect(finished, rules) {
 
         p.rounds++;
         p[kind]++;
-        streak = kind === 'exact' ? streak + 1 : 0;
+        const streak = kind === 'exact' ? (streaks.get(p.key) || 0) + 1 : 0;
+        streaks.set(p.key, streak);
         if (streak > p.bestStreak) p.bestStreak = streak;
         if (pred === 0) { p.zerosAsked++; if (game.actuals[r][i] === 0) p.zerosMade++; }
         p.askIndexSum += (pred * n) / cards;      // 1 = precies het eerlijke deel
@@ -128,9 +135,6 @@ function collect(finished, rules) {
         ask.count++;
         if (kind === 'exact') ask.made++;
         if (pred > p.maxAsk) p.maxAsk = pred;
-        const cb = p.cumByRound[r] || (p.cumByRound[r] = { sum: 0, count: 0 });
-        cb.sum += cum[r][i];
-        cb.count++;
         const ps = bucket(p.bySuit, suit, () => ({ rounds: 0, exact: 0 }));
         ps.rounds++;
         if (kind === 'exact') ps.exact++;
@@ -140,18 +144,22 @@ function collect(finished, rules) {
         const slot = order[0] === i ? p.early : order[n - 1] === i ? p.late : null;
         if (slot) { slot.rounds++; if (kind === 'exact') slot.exact++; }
 
-        const roundRec = { name, score, cards, round: r + 1, at, players: P.slice() };
+        const roundRec = { name: occupant, score, cards, round: r + 1, at, players: P.slice() };
         if (!p.bestRound || score > p.bestRound.score) p.bestRound = roundRec;
         if (!p.worstRound || score < p.worstRound.score) p.worstRound = roundRec;
         if (!records.bestRound || score > records.bestRound.score) records.bestRound = roundRec;
         if (!records.worstRound || score < records.worstRound.score) records.worstRound = roundRec;
+
+        const cb = p.cumByRound[r] || (p.cumByRound[r] = { sum: 0, count: 0 });
+        cb.sum += cum[r][i];
+        cb.count++;
+        if (!records.longestStreak || streak > records.longestStreak.streak) {
+          records.longestStreak = { name: occupant, streak };
+        }
       }
       const scoreRec = { name, score: totals[i], at, players: P.slice() };
       if (!records.topScore || scoreRec.score > records.topScore.score) records.topScore = scoreRec;
       if (!records.lowScore || scoreRec.score < records.lowScore.score) records.lowScore = scoreRec;
-      if (!records.longestStreak || p.bestStreak > records.longestStreak.streak) {
-        records.longestStreak = { name, streak: p.bestStreak };
-      }
     });
 
     // Per ronde-type: hoeveel van de tafel zat goed, en vroeg de tafel te veel?
@@ -224,9 +232,11 @@ function playerRows(hist) {
     wins: p.wins,
     sharedWins: p.shared,
     winPct: pct(p.wins, p.games),
-    avgPoints: round1(p.totals.reduce((a, b) => a + b, 0) / p.games),
-    bestScore: p.bestScore,
-    worstScore: p.worstScore,
+    // Wie alleen rondes speelde (ingevallen en er weer uit) heeft wél
+    // rondecijfers maar geen eindscores; die blijven leeg.
+    avgPoints: p.games ? round1(p.totals.reduce((a, b) => a + b, 0) / p.games) : null,
+    bestScore: p.games ? p.bestScore : null,
+    worstScore: p.games ? p.worstScore : null,
     spread: stdev(p.totals),
     rounds: p.rounds,
     exact: p.exact, over: p.over, under: p.under,

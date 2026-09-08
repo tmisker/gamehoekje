@@ -151,6 +151,27 @@
 
     .btn-row{display:flex;gap:8px;justify-content:center;margin-top:6px}
 
+    /* speler wisselen tijdens het spelen */
+    details.swap{
+      background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;
+    }
+    details.swap summary{cursor:pointer;font-size:.9rem;font-weight:700;list-style:none}
+    details.swap summary::-webkit-details-marker{display:none}
+    details.swap summary::after{content:' ▸';color:var(--muted)}
+    details.swap[open] summary::after{content:' ▾'}
+    details.swap .hint{color:var(--muted);font-size:.8rem;line-height:1.5;margin:8px 0 10px}
+    .swap-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .swap-row .who{
+      flex:0 0 34%;font-weight:600;font-size:.9rem;min-width:0;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    }
+    .swap-row input{
+      flex:1;min-width:0;padding:8px;border:1px solid var(--line);border-radius:8px;
+      background:var(--card2);color:var(--text);font-size:.9rem;margin:0;
+    }
+    .swap-row button{flex:0 0 auto;padding:8px 12px;font-size:.85rem;border-radius:8px;background:#3a3a3c}
+    .swap-row button:hover{background:#555}
+
     /* Scoreboard */
     .scoreboard{
       background:var(--card);border:1px solid var(--line);border-radius:12px;
@@ -259,6 +280,14 @@
 
     <div id="winnerArea"></div>
 
+    <details class="swap" id="swapPanel">
+      <summary>🔄 Speler wisselen</summary>
+      <p class="hint">Neemt iemand anders het over? De rondes die al gespeeld zijn
+      blijven van de vorige speler; het potje telt voor wie het uitspeelt.</p>
+      <div id="swapRows"></div>
+      <div id="swapWarn"></div>
+    </details>
+
     <div class="btn-row">
       <button class="btn-small" id="backToStartBtn">↩ Naar overzicht</button>
       <button class="btn-small btn-danger" id="abandonBtn">Spel afbreken</button>
@@ -297,7 +326,7 @@
   }
 
   // Voert een actie uit; bij netwerk/serverfout → banner + retry, bij 409 → refetch.
-  async function attempt(run, connBannerId){
+  async function attempt(run, connBannerId, warnId){
     lastFailed = null;
     $('#startConn').style.display='none';
     $('#gameConn').style.display='none';
@@ -312,8 +341,8 @@
       }
       if(err.status === 404 && game){ game=null; showStart(); return; }
       if(err.status && err.status < 500){
-        // validatiefout: toon in het formulier
-        const warn = $('#predWarn') || $('#actWarn') || $('#startWarn');
+        // validatiefout: toon in het formulier waar de actie vandaan kwam
+        const warn = (warnId && $(warnId)) || $('#predWarn') || $('#actWarn') || $('#startWarn');
         if(warn) warn.innerHTML = '<span class="error">'+esc(err.message)+'</span>';
         return;
       }
@@ -517,6 +546,7 @@
     $('#game').style.display='flex';
     $('#gameConn').style.display='none';
     renderScoreTable();
+    renderSwap();
     if(game.status!=='active'){
       $('#roundSuit').textContent='';
       $('#roundInfo').textContent = game.status==='finished' ? '' : 'Spel afgebroken';
@@ -787,6 +817,36 @@
     });
     $('#scoreFoot').innerHTML=footHtml+'</tr>';
   }
+  // Wisselen van speler: de server houdt bij vanaf welke ronde iemand zat, dus
+  // wij sturen alleen de stoel en de nieuwe naam.
+  function renderSwap(){
+    const panel=$('#swapPanel'), rows=$('#swapRows');
+    if(!game||game.status!=='active'){ panel.style.display='none'; return; }
+    panel.style.display='';
+    rows.innerHTML='';
+    game.players.forEach((name,seat)=>{
+      const row=document.createElement('div');
+      row.className='swap-row';
+      row.innerHTML='<span class="who">'+esc(name)+'</span>'
+        +'<input list="knownNames" placeholder="neemt over…" aria-label="Nieuwe naam voor '+esc(name)+'">'
+        +'<button class="btn-small">Wissel</button>';
+      const input=row.querySelector('input');
+      const go=()=>{
+        const nieuw=input.value.trim();
+        $('#swapWarn').innerHTML='';
+        if(!nieuw) return;
+        attempt(async()=>{
+          game = await api('POST','/games/'+game.id+'/swap',
+            {round:game.currentRound, seat:seat, name:nieuw});
+          renderGame(name+' is vervangen door '+nieuw);
+        },'#gameConn','#swapWarn');
+      };
+      row.querySelector('button').addEventListener('click',go);
+      input.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); go(); } });
+      rows.appendChild(row);
+    });
+  }
+
   const SUITS_LOCAL=['♣','♥','♦','♠','Sans'];
   const ORD_LOCAL=['1e','2e','3e','4e','5e','6e'];
 

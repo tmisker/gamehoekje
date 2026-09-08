@@ -71,14 +71,20 @@ scorebord. Configuratie via omgevingsvariabelen:
    vaakst goed zat, de beste ronde, de zwaarste klap en de nulletjes-koning.
    Staat er geen potje op het scherm, dan wisselt onder het klassement elke
    negen seconden een weetje over de tafel (records, het lastigste ronde-type).
-3. Onder 🏆 Klassement op de telefoon kun je spelers aantikken om potjes
+3. Neemt iemand halverwege een plek over? Onder 🔄 **Speler wisselen** op de
+   telefoon zet je een andere naam op die stoel. De rondes die al gespeeld
+   zijn blijven van de vorige speler, dus trefzekerheid, nulletjes en reeksen
+   kloppen voor allebei. Het potje zelf — gespeeld, gewonnen, eindscore —
+   telt voor wie het uitspeelt. Was er in die ronde al voorspeld, dan gaat de
+   wissel pas de ronde erna in.
+4. Onder 🏆 Klassement op de telefoon kun je spelers aantikken om potjes
    waarin zij meededen weg te laten — handig als er af en toe kinderen
    meespelen. Je keuze blijft op dat toestel bewaard; het display toont
    altijd het volledige klassement. Naast potjes, winst en gemiddelde staat
    per speler hoe vaak hij precies goed zat, hoeveel nulletjes hij haalde en
    zijn langste reeks; daaronder de eretitels (Scherpschutter,
    Nulletjes-koning, Langste reeks, Optimist, Pessimist).
-4. 📊 **Statistieken** (link op de telefoon, of `games/boerenbridge/stats/`)
+5. 📊 **Statistieken** (link op de telefoon, of `games/boerenbridge/stats/`)
    gaat dieper. Iedereen staat op één regel met het aantal potjes en een balkje
    precies / te weinig gevraagd / te veel gevraagd; tik een naam aan voor het
    volledige profiel met durf, wisselvalligheid, eerste tegen tweede helft en

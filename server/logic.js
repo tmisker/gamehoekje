@@ -69,8 +69,59 @@ function createGame(names) {
     phase: 'predict', // predict | actual
     status: 'active', // active | finished | abandoned
     winnerIdxs: null,
-    draft: null, // concept-invoer voor live meekijken: {phase, values} of null
+    draft: null, // concept-invoer voor live meekijken: {phase, values, last} of null
+    // Wissels van speler op een stoel: {seat, round, from, to}, oplopend per
+    // stoel. players[i] is altijd de HUIDIGE bewoner; wie ronde r speelde komt
+    // uit occupantAt(). Oude potjes zonder dit veld hebben nooit gewisseld.
+    swaps: [],
   };
+}
+
+// Wie er in ronde r op stoel `seat` zat. Elke wissel bewaart de vorige
+// bewoner, dus de eerste wissel ná ronde r levert precies wie er tot dan zat.
+function occupantAt(game, seat, round) {
+  const swaps = (game.swaps || []).filter(s => s.seat === seat).sort((a, b) => a.round - b.round);
+  for (const s of swaps) if (round < s.round) return s.from;
+  return game.players[seat];
+}
+
+// Iemand neemt een stoel over. De rondes die al gespeeld zijn blijven van de
+// vorige speler; het potje zelf (winst, eindscore) telt voor wie het uitspeelt
+// — die staat in players[seat].
+function applySwap(game, round, seat, rawName) {
+  if (game.status !== 'active') throw httpError(409, 'Dit spel is al afgelopen');
+  if (round !== game.currentRound) throw httpError(409, 'Spel is elders bijgewerkt');
+  if (!Number.isInteger(seat) || seat < 0 || seat >= game.players.length) {
+    throw httpError(400, 'Onbekende speler');
+  }
+  const name = String(rawName == null ? '' : rawName).trim();
+  if (!name) throw httpError(400, 'Vul een naam in');
+  if (game.players.some((n, i) => i !== seat && shared.nameKey(n) === shared.nameKey(name))) {
+    throw httpError(400, 'Elke speler heeft een eigen naam nodig');
+  }
+  if (shared.nameKey(name) === shared.nameKey(game.players[seat])) {
+    throw httpError(400, 'Dat is dezelfde speler');
+  }
+  // Is er in deze ronde al voorspeld, dan hoort die ronde nog bij degene die
+  // de voorspelling deed — de wissel gaat dan pas de volgende ronde in.
+  const from = game.phase === 'actual' ? game.currentRound + 1 : game.currentRound;
+  if (!Array.isArray(game.swaps)) game.swaps = [];
+  const mine = game.swaps.filter(s => s.seat === seat);
+  const last = mine.length ? mine[mine.length - 1] : null;
+  if (last && from < last.round) throw httpError(409, 'Er is in een latere ronde al gewisseld');
+  if (last && last.round === from) {
+    // Correctie van een wissel die nog in dezelfde ronde is gemaakt (typefout);
+    // terug naar de oorspronkelijke naam laat geen wissel achter.
+    if (shared.nameKey(last.from) === shared.nameKey(name)) {
+      game.swaps.splice(game.swaps.indexOf(last), 1);
+    } else {
+      last.to = name;
+    }
+  } else {
+    game.swaps.push({ seat, round: from, from: game.players[seat], to: name });
+  }
+  game.players[seat] = name;
+  game.updatedAt = new Date().toISOString();
 }
 
 function checkValues(game, round, values, label) {
@@ -414,7 +465,7 @@ function factCandidates(game) {
 
 // De spelregels die bb-stats nodig heeft om te kunnen tellen; daar staat
 // bewust geen scoreformule of kleurclassificatie in.
-const RULES = { getRoundKinds, playerOrder, cumulativeTotals, suitNames: SUIT_NAMES };
+const RULES = { getRoundKinds, playerOrder, cumulativeTotals, occupantAt, suitNames: SUIT_NAMES };
 
 // Historie = alles uit eerdere afgeronde potjes. Wordt bij élke mutatie
 // opgevraagd (ook bij een draft-POST), dus gecachet op wat er verandert als er
@@ -811,17 +862,20 @@ function buildRows(finished) {
   const extra = new Map();
   for (const game of finished) {
     const kinds = getRoundKinds(game);
-    game.players.forEach((name, i) => {
-      const key = shared.nameKey(name);
-      let e = extra.get(key);
-      if (!e) { e = emptyExtra(); extra.set(key, e); }
-      let streak = 0;
+    // Rondecijfers gaan naar wie die ronde speelde; is er gewisseld, dan is dat
+    // niet per se de speler die nu op de stoel zit.
+    const streaks = new Map();
+    game.players.forEach((_, i) => {
       for (let r = 0; r < game.roundScores.length; r++) {
         const k = kinds[r][i];
         if (!k) continue;
+        const key = shared.nameKey(occupantAt(game, i, r));
+        let e = extra.get(key);
+        if (!e) { e = emptyExtra(); extra.set(key, e); }
         e.rounds++;
         e[k]++;
-        streak = k === 'exact' ? streak + 1 : 0;
+        const streak = k === 'exact' ? (streaks.get(key) || 0) + 1 : 0;
+        streaks.set(key, streak);
         if (streak > e.bestStreak) e.bestStreak = streak;
         if (game.predictions[r][i] === 0) {
           e.zerosAsked++;
@@ -846,7 +900,7 @@ function leaderboardView(games, exclude) {
 module.exports = {
   SUITS, SUIT_NAMES, SUIT_COLORS,
   buildRounds, scoreRound, scoreKind, dealerIdx, playerOrder,
-  createGame, applyPredictions, applyDraft, applyActuals, undo, abandon,
+  createGame, applyPredictions, applyDraft, applyActuals, applySwap, occupantAt, undo, abandon,
   getTotals, cumulativeTotals, positions, projection, getRoundKinds, enrich, gameSummary,
   leaderboard, leaderboardView, awards,
   // Records + notities over de tafel; het scorebord toont ze als er geen potje loopt.

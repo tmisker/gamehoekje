@@ -198,6 +198,46 @@ function main() {
     console.log('OK hoogtepunten (comeback, kantelpunt, van start tot finish)');
   }
 
+  // --- wisselen van speler: wie speelde welke ronde ---
+  {
+    // Ann speelt de eerste zes rondes, daarna neemt Dee de stoel over.
+    const game = logic.createGame(NAMES);
+    for (let r = 0; r < game.rounds.length; r++) {
+      const cards = game.rounds[r].cards;
+      if (r === 6) logic.applySwap(game, r, 0, 'Dee');
+      logic.applyPredictions(game, r, [cards, 0, 0]);
+      logic.applyActuals(game, r, [cards, 0, 0]);
+    }
+    assert.deepEqual(game.players, ['Dee', 'Bo', 'Cas'], 'Dee zit nu op de stoel');
+    assert.deepEqual(game.swaps, [{ seat: 0, round: 6, from: 'Ann', to: 'Dee' }]);
+    assert.equal(logic.occupantAt(game, 0, 5), 'Ann');
+    assert.equal(logic.occupantAt(game, 0, 6), 'Dee');
+    assert.equal(logic.occupantAt(game, 1, 6), 'Bo', 'andere stoelen ongemoeid');
+    assert.deepEqual(game.winnerIdxs, [0], 'de stoel wint');
+
+    const view = logic.statsView([game], []);
+    const row = name => view.rows.find(r => r.name === name);
+    assert.equal(row('Dee').games, 1, 'het potje telt voor wie het uitspeelt');
+    assert.equal(row('Dee').wins, 1);
+    assert.equal(row('Dee').rounds, 9, 'ronde 7 t/m 15');
+    assert.equal(row('Dee').bestScore, WIN_TOTAL, 'de eindscore hoort bij de stoel');
+    assert.equal(row('Ann').games, 0, 'Ann speelde dit potje niet uit');
+    assert.equal(row('Ann').wins, 0);
+    assert.equal(row('Ann').rounds, 6, 'ronde 1 t/m 6');
+    assert.equal(row('Ann').avgPoints, null);
+    assert.equal(row('Ann').bestScore, null);
+    assert.equal(row('Ann').worstScore, null);
+    assert.equal(row('Ann').exactPct, 100, 'haar rondes tellen wél mee');
+    assert.equal(row('Ann').bestStreak, 6, 'de reeks stopt bij de wissel');
+    assert.equal(row('Dee').bestStreak, 9);
+    // Het klassement kent alleen wie een potje uitspeelde.
+    const lb = logic.leaderboardView([game], []).leaderboard;
+    assert.ok(lb.some(e => e.name === 'Dee'), 'Dee staat in het klassement');
+    assert.ok(!lb.some(e => e.name === 'Ann'), 'Ann niet: zij maakte geen potje af');
+    assert.equal(lb.find(e => e.name === 'Dee').exactPct, 100);
+    console.log('OK wisselen van speler (rondes en potje apart toegewezen)');
+  }
+
   // --- weetjes voor het idle-scherm ---
   {
     const facts = logic.tableFacts(GAMES);

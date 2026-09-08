@@ -41,6 +41,9 @@ Gebouwd, in `server/logic.js` (één potje + de keuze van het weetje) en
 
 - **Idle-scherm**: onder het klassement wisselt elke negen seconden een record
   of tafelnotitie (`tableFacts` in de snapshot, alleen als er geen potje loopt).
+- **Wisselen van speler** (`game.swaps` + `occupantAt`): rondecijfers gaan naar
+  wie de ronde speelde, het potje naar wie het uitspeelt. Wie alleen inviel
+  heeft rondes maar geen potje-cijfers.
 
 Nog niet: het taalmodel, en van de lijst hieronder onder meer de
 weekdag-/tijdstipanalyse in de UI en een spelersvergelijking naast elkaar.
