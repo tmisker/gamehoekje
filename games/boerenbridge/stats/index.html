@@ -25,6 +25,9 @@
     h1{font-size:1.5rem;margin-bottom:4px;text-align:center}
     p.sub{color:var(--muted);font-size:.85rem;margin-bottom:16px;text-align:center}
     main{width:100%;max-width:900px;display:flex;flex-direction:column;gap:16px}
+    /* De panelen worden in #body gerenderd; zonder eigen gap zouden ze tegen
+       elkaar aan plakken (main's gap geldt alleen voor zijn eigen kinderen). */
+    #body{display:flex;flex-direction:column;gap:16px}
 
     .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
     .panel h2{font-size:1rem;margin-bottom:12px;display:flex;align-items:center;gap:8px}

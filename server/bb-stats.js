@@ -277,13 +277,14 @@ function formatDuration(ms) {
 }
 
 const cardsTxt = c => c + (c === 1 ? ' kaart' : ' kaarten');
+const pointsTxt = p => p + (Math.abs(p) === 1 ? ' punt' : ' punten');
 
 // Records als kant-en-klare regels; de pagina toont ze alleen.
 function recordRows(hist) {
   const r = hist.records, out = [];
   const add = (icon, title, text) => out.push({ icon, title, text });
-  if (r.topScore) add('🏆', 'Hoogste eindscore', r.topScore.name + ' — ' + r.topScore.score + ' punten');
-  if (r.lowScore) add('🧊', 'Laagste eindscore', r.lowScore.name + ' — ' + r.lowScore.score + ' punten');
+  if (r.topScore) add('🏆', 'Hoogste eindscore', r.topScore.name + ' — ' + pointsTxt(r.topScore.score));
+  if (r.lowScore) add('🧊', 'Laagste eindscore', r.lowScore.name + ' — ' + pointsTxt(r.lowScore.score));
   if (r.bestRound) {
     add('🚀', 'Beste ronde', r.bestRound.name + ' — +' + r.bestRound.score
       + ' bij ' + cardsTxt(r.bestRound.cards));
@@ -295,8 +296,8 @@ function recordRows(hist) {
   if (r.longestStreak && r.longestStreak.streak >= 3) {
     add('🔥', 'Langste reeks', r.longestStreak.name + ' — ' + r.longestStreak.streak + ' rondes op rij precies');
   }
-  if (r.widest) add('📏', 'Ruimste winst', r.widest.name + ' — ' + r.widest.margin + ' punten voorsprong');
-  if (r.closest) add('😬', 'Nipste winst', r.closest.name + ' — ' + r.closest.margin + ' punten voorsprong');
+  if (r.widest) add('📏', 'Ruimste winst', r.widest.name + ' — ' + pointsTxt(r.widest.margin) + ' voorsprong');
+  if (r.closest) add('😬', 'Nipste winst', r.closest.name + ' — ' + pointsTxt(r.closest.margin) + ' voorsprong');
   const d = hist.durations;
   if (d.length >= 3) {
     const fast = d.reduce((a, b) => (b.ms < a.ms ? b : a));
@@ -364,5 +365,5 @@ function statsView(games, exclude, rules) {
 
 module.exports = {
   collect, statsView, playerRows, cardRows, suitRows, pairRows, recordRows, tableNotes,
-  favouriteAsk, formatDuration, cardsTxt, joinNames, stdev, pct, num, leadersAfter, WEEKDAYS,
+  favouriteAsk, formatDuration, cardsTxt, pointsTxt, joinNames, stdev, pct, num, leadersAfter, WEEKDAYS,
 };

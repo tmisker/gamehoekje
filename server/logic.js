@@ -270,7 +270,7 @@ function enrich(game, games) {
 
 // Formuleer- en telhulpjes: één plek, gedeeld met de statistiek.
 // leadersAfter(cum, r) = wie er na ronde r aan kop staan (gelijk = samen).
-const { joinNames, cardsTxt, formatDuration, leadersAfter } = bbStats;
+const { joinNames, cardsTxt, pointsTxt, formatDuration, leadersAfter } = bbStats;
 
 // Hoe vaak de kop van eigenaar wisselde: pas als niemand van de vorige
 // koplopers nog bovenaan staat — een gedeelde kop is nog geen wissel.
@@ -351,7 +351,7 @@ function factCandidates(game) {
   if (half >= 0 && played === half + 1) {
     add(9, '⏱️', 'Halverwege! ' + leaderNames + (leaders.length > 1
       ? ' staan gelijk aan kop.'
-      : ' staat aan kop, ' + gap + ' punten voor op ' + joinNames(chasers) + '.'));
+      : ' staat aan kop, ' + pointsTxt(gap) + ' voor op ' + joinNames(chasers) + '.'));
   }
 
   // Vorige ronde: hoeveel zaten er goed, en vroeg de tafel te veel of te weinig?
@@ -678,7 +678,7 @@ function highlights(game) {
     }
   }
   if (back.who >= 0) {
-    add('📈', P[back.who] + ' kwam terug van ' + back.deficit + ' punten achterstand (na ronde ' + (back.round + 1) + ').');
+    add('📈', P[back.who] + ' kwam terug van ' + pointsTxt(back.deficit) + ' achterstand (na ronde ' + (back.round + 1) + ').');
   }
 
   // Kantelpunt: vanaf welke ronde stond de winnaar onbetwist bovenaan? Dat is
