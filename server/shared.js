@@ -18,10 +18,15 @@ function excludeSet(exclude) {
 // Afgeronde spellen, eventueel zonder de potjes waarin een uitgesloten speler
 // meedeed. Uitsluiten geldt per potje, niet per speler: één kind aan tafel
 // haalt het hele spel uit het klassement.
+// Een potje kan met de hand buiten de telling worden gezet (`counted: false`),
+// bijvoorbeeld als er van alles door elkaar liep. Potjes van vóór dat veld
+// tellen gewoon mee.
+const countsForRanking = game => game.counted !== false;
+
 function finishedGames(games, exclude) {
   const skip = excludeSet(exclude);
-  return games.filter(g =>
-    g.status === 'finished' && !g.players.some(n => skip.has(nameKey(n))));
+  return games.filter(g => g.status === 'finished' && countsForRanking(g)
+    && !g.players.some(n => skip.has(nameKey(n))));
 }
 
 // Alle spelers die in een afgerond spel voorkomen — de keuzelijst van het
@@ -107,6 +112,6 @@ function leaderboardView(games, exclude, buildRows) {
 }
 
 module.exports = {
-  httpError, nameKey, excludeSet,
+  httpError, nameKey, excludeSet, countsForRanking,
   finishedGames, leaderboardPlayers, playerSuggestions, aggregate, leaderboardView,
 };

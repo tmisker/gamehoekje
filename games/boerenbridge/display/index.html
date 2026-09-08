@@ -519,6 +519,7 @@
       +'<div class="name">'+names+(g.winnerIdxs.length>1?' winnen!':' wint!')+'</div>'
       +'<div class="score">'+max+' punten</div></div>'
       +'<div class="standings">'+standings+'</div>'
+      +(g.counted===false?'<div class="standings">Dit potje telt niet mee voor het klassement</div>':'')
       +highlightsHtml(g)
       +'</div>';
   }

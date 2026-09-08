@@ -70,6 +70,9 @@ function createGame(names) {
     status: 'active', // active | finished | abandoned
     winnerIdxs: null,
     draft: null, // concept-invoer voor live meekijken: {phase, values, last} of null
+    // Telt dit potje mee voor klassement, statistiek en weetjes? Met de hand
+    // uit te zetten als er iets geks gebeurde aan tafel.
+    counted: true,
     // Wissels van speler op een stoel: {seat, round, from, to}, oplopend per
     // stoel. players[i] is altijd de HUIDIGE bewoner; wie ronde r speelde komt
     // uit occupantAt(). Oude potjes zonder dit veld hebben nooit gewisseld.
@@ -121,6 +124,14 @@ function applySwap(game, round, seat, rawName) {
     game.swaps.push({ seat, round: from, from: game.players[seat], to: name });
   }
   game.players[seat] = name;
+  game.updatedAt = new Date().toISOString();
+}
+
+// Een potje in of uit de telling zetten. Mag ook nog na afloop — dat is juist
+// het moment waarop je bedenkt dat die avond niet meetelde.
+function setCounted(game, counted) {
+  if (typeof counted !== 'boolean') throw httpError(400, 'Geef aan of het potje meetelt');
+  game.counted = counted;
   game.updatedAt = new Date().toISOString();
 }
 
@@ -473,16 +484,15 @@ const RULES = { getRoundKinds, playerOrder, cumulativeTotals, occupantAt, suitNa
 let historyCache = { key: null, value: null };
 function historyOf(games) {
   if (!Array.isArray(games)) return null;
-  let count = 0, last = '';
-  for (const g of games) {
-    if (g.status !== 'finished') continue;
-    count++;
-    if (g.finishedAt > last) last = g.finishedAt;
-  }
-  if (!count) return null;
-  const key = count + '@' + last;
+  const counted = shared.finishedGames(games);
+  let last = '';
+  for (const g of counted) if (g.finishedAt > last) last = g.finishedAt;
+  if (!counted.length) return null;
+  // Het aantal zit in de sleutel, dus een potje uit de telling halen ververst
+  // de cache ook als het niet het laatste potje was.
+  const key = counted.length + '@' + last;
   if (historyCache.key !== key) {
-    const value = bbStats.collect(games.filter(g => g.status === 'finished'), RULES);
+    const value = bbStats.collect(counted, RULES);
     value.cardRows = bbStats.cardRows(value);   // vaste tabel; hoort bij deze historie
     historyCache = { key, value };
   }
@@ -900,7 +910,7 @@ function leaderboardView(games, exclude) {
 module.exports = {
   SUITS, SUIT_NAMES, SUIT_COLORS,
   buildRounds, scoreRound, scoreKind, dealerIdx, playerOrder,
-  createGame, applyPredictions, applyDraft, applyActuals, applySwap, occupantAt, undo, abandon,
+  createGame, applyPredictions, applyDraft, applyActuals, applySwap, occupantAt, setCounted, undo, abandon,
   getTotals, cumulativeTotals, positions, projection, getRoundKinds, enrich, gameSummary,
   leaderboard, leaderboardView, awards,
   // Records + notities over de tafel; het scorebord toont ze als er geen potje loopt.

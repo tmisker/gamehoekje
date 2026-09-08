@@ -227,6 +227,7 @@ async function handleBoerenbridgeApi(req, res, pathname, query) {
         case 'predictions': logic.applyPredictions(game, body.round, body.predictions); break;
         case 'draft': logic.applyDraft(game, body.round, body.phase, body.values); break;
         case 'swap': logic.applySwap(game, body.round, body.seat, body.name); break;
+        case 'counted': logic.setCounted(game, body.counted); break;
         case 'actuals': logic.applyActuals(game, body.round, body.actuals); break;
         case 'undo': logic.undo(game); break;
         case 'abandon': logic.abandon(game); break;

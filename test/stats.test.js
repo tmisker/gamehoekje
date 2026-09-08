@@ -238,6 +238,25 @@ function main() {
     console.log('OK wisselen van speler (rondes en potje apart toegewezen)');
   }
 
+  // --- een potje buiten de telling ---
+  {
+    const skipped = play(NAMES, allToAnn);
+    logic.setCounted(skipped, false);
+    const withIt = logic.statsView(GAMES.concat([skipped]), []);
+    assert.equal(withIt.gamesCounted, GAMES.length, 'het potje telt niet mee');
+    const row = withIt.rows.find(r => r.name === 'Ann');
+    assert.equal(row.games, 3, 'Ann houdt haar drie potjes');
+    // Ook de weetjes en het klassement slaan het over.
+    assert.deepEqual(logic.tableFacts(GAMES.concat([skipped])), logic.tableFacts(GAMES));
+    const lb = logic.leaderboardView(GAMES.concat([skipped]), []);
+    assert.equal(lb.gamesTotal, GAMES.length);
+    // Weer aanzetten telt hem gewoon weer mee.
+    logic.setCounted(skipped, true);
+    assert.equal(logic.statsView(GAMES.concat([skipped]), []).gamesCounted, GAMES.length + 1);
+    assert.throws(() => logic.setCounted(skipped, 'ja'), /meetelt/, 'alleen true of false');
+    console.log('OK potje buiten de telling');
+  }
+
   // --- weetjes voor het idle-scherm ---
   {
     const facts = logic.tableFacts(GAMES);

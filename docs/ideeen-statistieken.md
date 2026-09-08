@@ -44,6 +44,8 @@ Gebouwd, in `server/logic.js` (één potje + de keuze van het weetje) en
 - **Wisselen van speler** (`game.swaps` + `occupantAt`): rondecijfers gaan naar
   wie de ronde speelde, het potje naar wie het uitspeelt. Wie alleen inviel
   heeft rondes maar geen potje-cijfers.
+- **Potje buiten de telling** (`game.counted`): vangnet voor een avond die niet
+  representatief was. Klassement, statistiek en weetjes slaan hem over.
 
 Nog niet: het taalmodel, en van de lijst hieronder onder meer de
 weekdag-/tijdstipanalyse in de UI en een spelersvergelijking naast elkaar.

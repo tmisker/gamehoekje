@@ -553,6 +553,50 @@ async function main() {
     console.log('OK speler wisselen (rondes gesplitst, potje naar wie afmaakt)');
   }
 
+  // --- een potje buiten de telling zetten ---
+  {
+    const before = (await api('GET', '/api/boerenbridge/leaderboard')).body;
+    const stats0 = (await api('GET', '/api/boerenbridge/stats')).body;
+    // Een vers potje met eigen namen, zodat we het effect kunnen isoleren.
+    const pick = (r, cards) => ({ preds: [cards, 0, 0], acts: [cards, 0, 0] });
+    const game = await playGame(['Ca', 'Cb', 'Cc'], pick);
+    assert.equal(game.counted, true, 'een potje telt standaard mee');
+
+    let lb = (await api('GET', '/api/boerenbridge/leaderboard')).body;
+    assert.equal(lb.gamesTotal, before.gamesTotal + 1);
+    assert.ok(lb.leaderboard.some(e => e.name === 'Ca'));
+
+    const off = await api('POST', '/api/boerenbridge/games/' + game.id + '/counted', { counted: false });
+    assert.equal(off.status, 200);
+    assert.equal(off.body.counted, false);
+    lb = (await api('GET', '/api/boerenbridge/leaderboard')).body;
+    assert.equal(lb.gamesTotal, before.gamesTotal, 'telt niet meer mee');
+    assert.ok(!lb.leaderboard.some(e => e.name === 'Ca'), 'de spelers verdwijnen uit het klassement');
+    const stats1 = (await api('GET', '/api/boerenbridge/stats')).body;
+    assert.equal(stats1.gamesCounted, stats0.gamesCounted, 'ook uit de statistiek');
+    assert.ok(!stats1.rows.some(e => e.name === 'Ca'));
+
+    // en weer terug
+    const on = await api('POST', '/api/boerenbridge/games/' + game.id + '/counted', { counted: true });
+    assert.equal(on.body.counted, true);
+    lb = (await api('GET', '/api/boerenbridge/leaderboard')).body;
+    assert.equal(lb.gamesTotal, before.gamesTotal + 1, 'telt weer mee');
+    assert.ok(lb.leaderboard.some(e => e.name === 'Ca'));
+
+    // validatie
+    assert.equal((await api('POST', '/api/boerenbridge/games/' + game.id + '/counted', {})).status, 400);
+    assert.equal((await api('POST', '/api/boerenbridge/games/' + game.id + '/counted', { counted: 'nee' })).status, 400);
+    // mag ook tijdens het spelen
+    const live = (await api('POST', '/api/boerenbridge/games', { players: ['Cd', 'Ce', 'Cf'] })).body;
+    const r = await api('POST', '/api/boerenbridge/games/' + live.id + '/counted', { counted: false });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.counted, false);
+    await api('POST', '/api/boerenbridge/games/' + live.id + '/abandon', {});
+    // Opruimen: dit potje mag de latere tellingen niet verstoren.
+    await api('POST', '/api/boerenbridge/games/' + game.id + '/counted', { counted: false });
+    console.log('OK potje buiten de telling zetten');
+  }
+
   // --- statistiek-endpoint (de details staan in test/stats.test.js) ---
   {
     const r = await api('GET', '/api/boerenbridge/stats');

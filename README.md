@@ -71,12 +71,15 @@ scorebord. Configuratie via omgevingsvariabelen:
    vaakst goed zat, de beste ronde, de zwaarste klap en de nulletjes-koning.
    Staat er geen potje op het scherm, dan wisselt onder het klassement elke
    negen seconden een weetje over de tafel (records, het lastigste ronde-type).
-3. Neemt iemand halverwege een plek over? Onder 🔄 **Speler wisselen** op de
-   telefoon zet je een andere naam op die stoel. De rondes die al gespeeld
-   zijn blijven van de vorige speler, dus trefzekerheid, nulletjes en reeksen
-   kloppen voor allebei. Het potje zelf — gespeeld, gewonnen, eindscore —
-   telt voor wie het uitspeelt. Was er in die ronde al voorspeld, dan gaat de
-   wissel pas de ronde erna in.
+3. Onder ⚙️ **Spelbeheer** op de telefoon staan twee dingen voor als het
+   anders loopt dan gepland. **Speler wisselen** zet een andere naam op een
+   stoel: de rondes die al gespeeld zijn blijven van de vorige speler, dus
+   trefzekerheid, nulletjes en reeksen kloppen voor allebei, en het potje zelf
+   — gespeeld, gewonnen, eindscore — telt voor wie het uitspeelt. Was er in die
+   ronde al voorspeld, dan gaat de wissel pas de ronde erna in. **Meetellen**
+   zet het hele potje buiten de telling: het blijft bewaard en op het scorebord
+   te zien, maar klassement, statistiek en weetjes slaan het over. Dat kan ook
+   nog na afloop.
 4. Onder 🏆 Klassement op de telefoon kun je spelers aantikken om potjes
    waarin zij meededen weg te laten — handig als er af en toe kinderen
    meespelen. Je keuze blijft op dat toestel bewaard; het display toont

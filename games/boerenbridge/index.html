@@ -171,6 +171,18 @@
     }
     .swap-row button{flex:0 0 auto;padding:8px 12px;font-size:.85rem;border-radius:8px;background:#3a3a3c}
     .swap-row button:hover{background:#555}
+    details.swap h4{
+      font-size:.82rem;color:var(--muted);font-weight:700;text-transform:uppercase;
+      letter-spacing:.04em;margin:14px 0 8px;
+    }
+    details.swap h4:first-of-type{margin-top:10px}
+    .flag-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .flag-row .lbl{font-size:.9rem;font-weight:600}
+    .flag-row button{flex:0 0 auto;padding:8px 16px;font-size:.85rem;border-radius:8px}
+    .flag-row button.yes{background:var(--accent)}
+    .flag-row button.yes:hover{background:#43a047}
+    .flag-row button.no{background:var(--red)}
+    .flag-row button.no:hover{background:#c62828}
 
     /* Scoreboard */
     .scoreboard{
@@ -281,10 +293,20 @@
     <div id="winnerArea"></div>
 
     <details class="swap" id="swapPanel">
-      <summary>🔄 Speler wisselen</summary>
-      <p class="hint">Neemt iemand anders het over? De rondes die al gespeeld zijn
-      blijven van de vorige speler; het potje telt voor wie het uitspeelt.</p>
-      <div id="swapRows"></div>
+      <summary>⚙️ Spelbeheer</summary>
+      <div id="swapSection">
+        <h4>Speler wisselen</h4>
+        <p class="hint">Neemt iemand anders het over? De rondes die al gespeeld zijn
+        blijven van de vorige speler; het potje telt voor wie het uitspeelt.</p>
+        <div id="swapRows"></div>
+      </div>
+      <h4>Meetellen</h4>
+      <p class="hint">Ging er van alles door elkaar? Zet het potje buiten de telling.
+      Het blijft bewaard, maar het klassement, de statistiek en de weetjes slaan het over.</p>
+      <div class="flag-row">
+        <span class="lbl" id="countedLbl"></span>
+        <button class="btn-small" id="countedBtn"></button>
+      </div>
       <div id="swapWarn"></div>
     </details>
 
@@ -821,9 +843,14 @@
   // wij sturen alleen de stoel en de nieuwe naam.
   function renderSwap(){
     const panel=$('#swapPanel'), rows=$('#swapRows');
-    if(!game||game.status!=='active'){ panel.style.display='none'; return; }
+    // Afgebroken potjes tellen sowieso niet mee; daar valt niets te beheren.
+    if(!game||game.status==='abandoned'){ panel.style.display='none'; return; }
     panel.style.display='';
+    renderCounted();
+    // Wisselen kan alleen zolang er gespeeld wordt; de vlag ook daarna nog.
+    $('#swapSection').style.display = game.status==='active' ? '' : 'none';
     rows.innerHTML='';
+    if(game.status!=='active') return;
     game.players.forEach((name,seat)=>{
       const row=document.createElement('div');
       row.className='swap-row';
@@ -845,6 +872,24 @@
       input.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); go(); } });
       rows.appendChild(row);
     });
+  }
+
+  // Telt dit potje mee voor klassement, statistiek en weetjes?
+  function renderCounted(){
+    const on = game.counted !== false;
+    $('#countedLbl').textContent = on
+      ? 'Dit potje telt mee'
+      : 'Dit potje telt niet mee';
+    const btn=$('#countedBtn');
+    btn.textContent = on ? 'Meetellen: ja' : 'Meetellen: nee';
+    btn.className = 'btn-small '+(on?'yes':'no');
+    btn.onclick = ()=>{
+      $('#swapWarn').innerHTML='';
+      attempt(async()=>{
+        game = await api('POST','/games/'+game.id+'/counted',{counted:!on});
+        renderGame(on ? 'Dit potje telt niet meer mee' : 'Dit potje telt weer mee');
+      },'#gameConn','#swapWarn');
+    };
   }
 
   const SUITS_LOCAL=['♣','♥','♦','♠','Sans'];

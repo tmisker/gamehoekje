@@ -104,6 +104,14 @@ Dockerfile                     # node:22-alpine, geen npm install
   (predictions/actuals/undo/abandon) wist de draft. Het display kiest op basis
   van `phase` + `draft` tussen vier schermen: voorspellen (draft-invoer
   loopt), spelen, tussenstand, eindstand.
+- **Een potje kan buiten de telling worden gezet.** `POST .../counted`
+  (`{counted: false}`) zet `game.counted`; `shared.countsForRanking` is de
+  enige plek die dat leest en zit in `shared.finishedGames`, dus klassement,
+  statistiek én de weetjes slaan het potje in één klap over. Potjes van vóór
+  dit veld tellen gewoon mee (`counted !== false`). `historyOf` filtert via
+  dezelfde functie en heeft het aantal meetellende potjes in zijn cachesleutel,
+  anders zou de vlag omzetten geen effect hebben op een ouder potje. Mag ook na
+  afloop — dat is juist het moment waarop je het bedenkt.
 - **Een stoel kan tijdens het spelen van bewoner wisselen.** `POST .../swap`
   (`{round, seat, name}`) zet een andere naam op een stoel en legt de wissel
   vast in `game.swaps` (`{seat, round, from, to}`). `players[i]` is altijd de
