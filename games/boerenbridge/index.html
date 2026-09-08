@@ -81,6 +81,17 @@
     #nameSuggest .chip.used{background:var(--accent-dim);border-color:var(--accent);color:var(--text)}
     #nameSuggest .chip.more{color:var(--accent);border-style:dashed}
 
+    /* eretitels onder het klassement */
+    .awards{margin-top:12px;display:flex;flex-direction:column;gap:6px;font-size:.88rem;color:var(--muted)}
+    .awards b{color:var(--text)}
+    /* hoogtepunten onder de winnaar */
+    .highlights{
+      margin-top:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;
+      padding:12px 14px;display:flex;flex-direction:column;gap:8px;font-size:.92rem;
+    }
+    .highlights .hl{display:flex;gap:8px;align-items:flex-start}
+    .highlights .ic{flex:0 0 auto}
+
     /* Game */
     #game{width:100%;max-width:600px;display:none;flex-direction:column;gap:14px}
     .round-header{
@@ -124,6 +135,12 @@
     .projline .k-exact{color:var(--accent);font-weight:700}
     .projline .k-over{color:var(--orange);font-weight:700}
     .projline .k-under{color:var(--red);font-weight:700}
+    /* reactie van de server op de zojuist aangetikte voorspelling */
+    .factline{
+      color:var(--muted);font-size:.85rem;text-align:center;line-height:1.5;
+      margin:6px 0 2px;min-height:1.3em;
+    }
+    .factline .ic{margin-right:5px}
     .warn{color:var(--gold);font-size:.82rem;text-align:center;margin-top:4px}
     .error{color:var(--red);font-size:.82rem;text-align:center;margin-top:4px}
     .conn-banner{
@@ -212,6 +229,7 @@
         <div class="lb-count" id="lbCount"></div>
       </details>
     </div>
+    <a class="display-link" href="stats/">📊 Statistieken bekijken</a>
     <a class="display-link" href="display/">📺 Scherm-weergave openen</a>
   </div>
 
@@ -467,11 +485,22 @@
       area.innerHTML='<p class="sub" style="margin:10px 0 0">'+esc(msg)+'</p>';
       return;
     }
-    let html='<table><thead><tr><th>Speler</th><th>Potjes</th><th>Gewonnen</th><th>Gem.</th><th>Beste</th></tr></thead><tbody>';
+    let html='<table><thead><tr><th>Speler</th><th>Potjes</th><th>Gew.</th><th>Gem.</th><th>Beste</th>'
+      +'<th title="Rondes precies voorspeld">Precies</th><th title="Nulletjes gehaald / gevraagd">Nul</th>'
+      +'<th title="Langste reeks precies goed in één potje">Reeks</th></tr></thead><tbody>';
     rows.forEach(e=>{
-      html+='<tr><td>'+esc(e.name)+'</td><td>'+e.gamesPlayed+'</td><td>'+e.wins+'</td><td>'+e.avgPoints+'</td><td>'+e.bestScore+'</td></tr>';
+      html+='<tr><td>'+esc(e.name)+'</td><td>'+e.gamesPlayed+'</td><td>'+e.wins+'</td><td>'+e.avgPoints+'</td><td>'+e.bestScore+'</td>'
+        +'<td>'+e.exactPct+'%</td><td>'+e.zerosMade+'/'+e.zerosAsked+'</td><td>'+e.bestStreak+'</td></tr>';
     });
-    area.innerHTML=html+'</tbody></table>';
+    area.innerHTML=html+'</tbody></table>'+awardsHtml(lb.awards);
+  }
+
+  // Eretitels: de server bepaalt wie ze krijgt, wij zetten ze op een rij.
+  function awardsHtml(awards){
+    if(!awards||!awards.length) return '';
+    return '<div class="awards">'+awards.map(a=>
+      '<div>'+a.icon+' '+esc(a.title)+': <b>'
+      +a.winners.map(w=>esc(w.name)+' ('+esc(w.detail)+')').join(', ')+'</b></div>').join('')+'</div>';
   }
 
   $('#startBtn').addEventListener('click',()=>{
@@ -534,6 +563,7 @@
         // hier); alleen tonen als we nog in dezelfde ronde/fase zitten.
         if(game&&game.id===id&&game.currentRound===payload.round&&game.phase===payload.phase){
           showProjection(res.projection);
+          showDraftFact(res.draftFact);
         }
       }
       catch(err){
@@ -616,6 +646,14 @@
       }).join(' · ');
   }
 
+  // Weetje bij de laatst aangetikte voorspelling; ook dit komt kant-en-klaar
+  // van de server (die kent de historie, wij niet).
+  function showDraftFact(f){
+    const box=document.getElementById('draftFact');
+    if(!box) return;
+    box.innerHTML=f?'<span class="ic">'+f.icon+'</span>'+esc(f.text):'';
+  }
+
   function selTotal(){ return sel.reduce((a,v)=>a+(v||0),0); }
   function selMissing(){ return sel.filter(v=>v==null).length; }
 
@@ -626,6 +664,7 @@
     sec.innerHTML='<h3>Hoeveel slagen raad je? (max '+cards+')</h3>'
       +numRows(false)
       +'<div class="sumline" id="predSum"></div>'
+      +'<div class="factline" id="draftFact"></div>'
       +'<div id="predWarn">'+(notice?'<span class="warn">'+esc(notice)+'</span>':'')+'</div>'
       +'<div class="btn-row">'
       +(game.currentRound>0?'<button class="btn-small" id="predUndo">← Terug</button>':'')
@@ -639,10 +678,14 @@
       okBtn.disabled=missing>0;
     }
     updateState();
+    // Ook na een herlaad of terugkeer uit de slaapstand: de server stuurt de
+    // reactie bij het spel mee, dus die hoort er meteen te staan.
+    showDraftFact(game.draftFact);
     wireNumRows(sec,false,()=>{
       const w=document.getElementById('predWarn');
       delete w.dataset.warned;
       w.innerHTML='';
+      if(selMissing()===game.players.length) showDraftFact(null);
       updateState();
     });
 
@@ -753,7 +796,16 @@
     $('#winnerArea').innerHTML='<div class="winner-banner">'
       +'<div class="trophy">🏆</div>'
       +'<div class="name">'+names+(game.winnerIdxs.length>1?' winnen!':' wint!')+'</div>'
-      +'<div class="score">'+max+' punten</div></div>';
+      +'<div class="score">'+max+' punten</div></div>'
+      +highlightsHtml();
+  }
+
+  // Hoogtepunten van het potje (door de server samengesteld).
+  function highlightsHtml(){
+    const hl=game.highlights||[];
+    if(!hl.length) return '';
+    return '<div class="highlights">'+hl.map(h=>
+      '<div class="hl"><span class="ic">'+h.icon+'</span><span>'+esc(h.text)+'</span></div>').join('')+'</div>';
   }
 
   // ---- knoppen onder het spel ----

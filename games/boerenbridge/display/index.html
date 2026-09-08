@@ -151,7 +151,40 @@
     }
     .lb-panel h2{font-size:1.2rem;margin-bottom:12px;text-align:center}
 
+    /* weetje van de ronde — de server kiest en formuleert, wij tonen */
+    .factbar{
+      display:flex;align-items:center;justify-content:center;gap:14px;
+      background:var(--card);border:1px solid var(--line);border-radius:16px;
+      padding:12px 22px;font-size:1.35rem;font-weight:600;text-align:center;
+    }
+    .factbar .ic{font-size:1.6rem;line-height:1}
+    /* hoogtepunten op het eindscherm */
+    .highlights{
+      display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 22px;
+      background:var(--card);border:1px solid var(--line);border-radius:16px;
+      padding:18px 24px;max-width:1000px;width:100%;text-align:left;font-size:1.15rem;
+    }
+    .highlights .hl{display:flex;gap:10px;align-items:flex-start}
+    .highlights .ic{flex:0 0 auto;font-size:1.3rem;line-height:1.2}
+    /* eretitels onder het klassement (idle-scherm) */
+    .awards{
+      display:flex;flex-wrap:wrap;gap:6px 20px;justify-content:center;margin-top:14px;
+      color:var(--muted);font-size:.95rem;
+    }
+    .awards b{color:var(--text)}
+    /* wisselend weetje over de tafel, als er geen potje loopt */
+    .tablefact{
+      display:flex;align-items:center;justify-content:center;gap:12px;min-height:2.2em;
+      max-width:820px;font-size:1.15rem;text-align:center;color:var(--muted);
+      transition:opacity .4s;
+    }
+    .tablefact.fade{opacity:0}
+    .tablefact .ic{font-size:1.4rem;line-height:1}
+    .tablefact b{color:var(--text);font-weight:700}
+
     @media(max-width:700px){
+      .highlights{grid-template-columns:1fr;font-size:1rem}
+      .factbar{font-size:1.05rem;padding:10px 14px}
       .topbar{flex-direction:column;gap:6px}
       .topbar .dealer,.topbar .round{text-align:center}
       .pcard .tot{font-size:1.9rem}
@@ -193,7 +226,8 @@
     const g = snapshot.game;
     lastGame=g;
     app.style.display='contents';
-    if(!g){ renderIdle(snapshot.leaderboard); return; }
+    if(g&&factTimer){ clearInterval(factTimer); factTimer=null; }
+    if(!g){ renderIdle(snapshot.leaderboard, snapshot.awards, snapshot.tableFacts); return; }
     if(g.status==='finished'){ renderWinner(g); return; }
     const d=g.draft;
     if(g.phase==='predict'&&d&&d.phase==='predict'&&d.values.some(v=>v!=null)){
@@ -260,6 +294,23 @@
     return {cls:'even',txt:'precies rond'};
   }
 
+  // Weetje voor de komende ronde; per ronde vastgepind door de server, dus
+  // op het tussen-, voorspel- en speelscherm dezelfde regel.
+  // `preferDraft`: tijdens het voorspellen gaat de reactie op de zojuist
+  // aangetikte keuze voor op het weetje van de ronde.
+  function factHtml(g,preferDraft){
+    const f=(preferDraft&&g.draftFact)||g.fact;
+    if(!f) return '';
+    return '<div class="factbar"><span class="ic">'+f.icon+'</span><span>'+esc(f.text)+'</span></div>';
+  }
+
+  function highlightsHtml(g){
+    const hl=g.highlights||[];
+    if(!hl.length) return '';
+    return '<div class="highlights">'+hl.map(h=>
+      '<div class="hl"><span class="ic">'+h.icon+'</span><span>'+esc(h.text)+'</span></div>').join('')+'</div>';
+  }
+
   // Scherm 1: voorspellen — live meekijken met de invoer op de telefoon.
   function renderBidding(g,draft){
     const cards=g.roundInfo.cards;
@@ -277,7 +328,7 @@
         sub: standSub(g,i),
         cls: vals[i]!=null?' chosen':'',
       }))
-      +askbarHtml(g,total,cards,delta);
+      +factHtml(g,true)+askbarHtml(g,total,cards,delta);
     drawTrend(g);
   }
 
@@ -299,7 +350,7 @@
           sub: standSub(g,i),
         };
       })
-      +askbarHtml(g,total,cards,deltaInfo(total,cards));
+      +factHtml(g)+askbarHtml(g,total,cards,deltaInfo(total,cards));
     drawTrend(g);
   }
 
@@ -325,7 +376,7 @@
           crown:isLeader,
         };
       });
-    html+='<div class="boardwrap"><div class="scoreboard"><table>'+scoreTableHtml(g)+'</table></div>'
+    html+=factHtml(g)+'<div class="boardwrap"><div class="scoreboard"><table>'+scoreTableHtml(g)+'</table></div>'
       +trendHtml(g)+'</div>';
     app.innerHTML=html;
     drawTrend(g);
@@ -468,23 +519,58 @@
       +'<div class="name">'+names+(g.winnerIdxs.length>1?' winnen!':' wint!')+'</div>'
       +'<div class="score">'+max+' punten</div></div>'
       +'<div class="standings">'+standings+'</div>'
+      +highlightsHtml(g)
       +'</div>';
   }
 
-  function renderIdle(leaderboard){
+  function awardsHtml(awards){
+    if(!awards||!awards.length) return '';
+    return '<div class="awards">'+awards.map(a=>
+      '<span>'+a.icon+' '+esc(a.title)+': <b>'
+      +a.winners.map(w=>esc(w.name)+' ('+esc(w.detail)+')').join(', ')+'</b></span>').join('')+'</div>';
+  }
+
+  function renderIdle(leaderboard, awards, tableFacts){
     let lb='';
     if(leaderboard&&leaderboard.length){
       lb='<div class="lb-panel"><h2>🏆 Klassement</h2><table>'
-        +'<thead><tr><th>Speler</th><th>Potjes</th><th>Gewonnen</th><th>Gem. punten</th><th>Beste score</th></tr></thead><tbody>';
+        +'<thead><tr><th>Speler</th><th>Potjes</th><th>Gewonnen</th><th>Gem. punten</th><th>Beste score</th><th>Precies</th></tr></thead><tbody>';
       leaderboard.forEach(e=>{
-        lb+='<tr><td>'+esc(e.name)+'</td><td>'+e.gamesPlayed+'</td><td>'+e.wins+'</td><td>'+e.avgPoints+'</td><td>'+e.bestScore+'</td></tr>';
+        lb+='<tr><td>'+esc(e.name)+'</td><td>'+e.gamesPlayed+'</td><td>'+e.wins+'</td><td>'+e.avgPoints+'</td><td>'+e.bestScore+'</td><td>'+e.exactPct+'%</td></tr>';
       });
-      lb+='</tbody></table></div>';
+      lb+='</tbody></table>'+awardsHtml(awards)+'</div>';
     }
     app.innerHTML='<div class="center">'
       +'<div><div class="idle-title">🃏 Boerenbridge</div>'
       +'<div class="idle-sub">Geen actief spel — start een spel op je telefoon</div></div>'
-      +lb+'</div>';
+      +lb
+      +((tableFacts&&tableFacts.length)?'<div class="tablefact" id="tableFact"></div>':'')
+      +'</div>';
+    startFactRotation(tableFacts);
+  }
+
+  // Eén weetje tegelijk, elke 9 seconden een volgende. Alleen op het
+  // idle-scherm; elke andere render zet de timer weer stil.
+  // De plek in de rij overleeft een nieuwe idle-render (een afgebroken potje,
+  // een verlopen winnaarscherm); alleen een andere lijst begint opnieuw.
+  let factTimer=null, factIdx=0, factKey='';
+  function startFactRotation(facts){
+    clearInterval(factTimer);
+    factTimer=null;
+    const box=document.getElementById('tableFact');
+    if(!box||!facts||!facts.length) return;
+    const key=facts.map(f=>f.text).join('|');
+    if(key!==factKey){ factKey=key; factIdx=Math.floor(Math.random()*facts.length); }
+    const show=()=>{
+      const f=facts[factIdx%facts.length];
+      box.innerHTML='<span class="ic">'+f.icon+'</span><span>'+esc(f.text)+'</span>';
+    };
+    show();
+    if(facts.length<2) return;
+    factTimer=setInterval(()=>{
+      box.classList.add('fade');
+      setTimeout(()=>{ factIdx++; show(); box.classList.remove('fade'); },400);
+    },9000);
   }
 
   // Elk scherm dat een grafiek bevat, tekent hem na het invoegen; bij een

@@ -63,17 +63,24 @@ const WINNER_WINDOW = 10 * 60 * 1000;
 // < 10 min geleden eindigde (winnaarscherm), anders idle + klassement.
 function snapshotOf(store, mod) {
   const byUpdated = (a, b) => (a.updatedAt < b.updatedAt ? 1 : -1);
+  const leaderboard = mod.leaderboard(store.games);
+  const snap = { game: null, leaderboard };
+  // Eretitels (alleen spellen die ze kennen) — voor het idle-scherm.
+  if (mod.awards) snap.awards = mod.awards(leaderboard);
   const active = store.games.filter(g => g.status === 'active').sort(byUpdated);
   if (active.length) {
-    return { game: mod.enrich(active[0]), leaderboard: mod.leaderboard(store.games) };
+    snap.game = mod.enrich(active[0], store.games);
+    return snap;
   }
   const justFinished = store.games
     .filter(g => g.status === 'finished' && Date.now() - Date.parse(g.finishedAt) < WINNER_WINDOW)
     .sort(byUpdated);
-  return {
-    game: justFinished.length ? mod.enrich(justFinished[0]) : null,
-    leaderboard: mod.leaderboard(store.games),
-  };
+  if (justFinished.length) snap.game = mod.enrich(justFinished[0], store.games);
+  // Zonder potje op het scherm is er ruimte voor weetjes over de tafel. Alleen
+  // dán meesturen: tijdens het spelen gaat de snapshot bij elke mutatie over
+  // de lijn en hoeft die niet dikker te zijn dan nodig.
+  if (!snap.game && mod.tableFacts) snap.tableFacts = mod.tableFacts(store.games);
+  return snap;
 }
 
 // ---------- SSE ----------
@@ -190,6 +197,12 @@ async function handleBoerenbridgeApi(req, res, pathname, query) {
     return sendJson(res, 200, logic.leaderboardView(bb.games, exclude));
   }
 
+  // Statistiek over alle afgeronde potjes; zelfde exclude-filter als het klassement.
+  if (req.method === 'GET' && sub[0] === 'stats' && sub.length === 1) {
+    const exclude = query.getAll('exclude').flatMap(v => v.split(','));
+    return sendJson(res, 200, logic.statsView(bb.games, exclude));
+  }
+
   if (sub[0] === 'games') {
     if (req.method === 'GET' && sub.length === 1) {
       let list = bb.games;
@@ -202,10 +215,10 @@ async function handleBoerenbridgeApi(req, res, pathname, query) {
       const game = logic.createGame(body.players);
       bb.games.push(game);
       bb.save(); bbLive.broadcast();
-      return sendJson(res, 201, logic.enrich(game));
+      return sendJson(res, 201, logic.enrich(game, bb.games));
     }
     if (sub.length === 2 && req.method === 'GET') {
-      return sendJson(res, 200, logic.enrich(bb.find(sub[1])));
+      return sendJson(res, 200, logic.enrich(bb.find(sub[1]), bb.games));
     }
     if (sub.length === 3 && req.method === 'POST') {
       const game = bb.find(sub[1]);
@@ -219,7 +232,7 @@ async function handleBoerenbridgeApi(req, res, pathname, query) {
         default: throw logic.httpError(404, 'Onbekende actie');
       }
       bb.save(); bbLive.broadcast();
-      return sendJson(res, 200, logic.enrich(game));
+      return sendJson(res, 200, logic.enrich(game, bb.games));
     }
   }
 

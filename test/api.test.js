@@ -269,7 +269,7 @@ async function main() {
     // gedeeltelijke voorspelling → draft in het spel én in de snapshot
     let r = await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'predict', values: [2, null, null] });
     assert.equal(r.status, 200);
-    assert.deepEqual(r.body.draft, { phase: 'predict', values: [2, null, null] });
+    assert.deepEqual(r.body.draft, { phase: 'predict', values: [2, null, null], last: 0 });
     let cur = (await api('GET', '/api/boerenbridge/current')).body;
     assert.deepEqual(cur.game.draft.values, [2, null, null], 'draft zit in de snapshot');
     // verkeerde fase of ronde → 409
@@ -289,7 +289,7 @@ async function main() {
     assert.equal(r.body.projection, null, 'geen slagen-draft → geen projectie');
     // draft in de slagen-fase; undo wist hem ook
     r = await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'actual', values: [1, null, null] });
-    assert.deepEqual(r.body.draft, { phase: 'actual', values: [1, null, null] });
+    assert.deepEqual(r.body.draft, { phase: 'actual', values: [1, null, null], last: 0 });
     // gevraagd [2,3,3]: 1 gehaald is (nog) te weinig, de rest is nog niet ingevoerd
     assert.deepEqual(r.body.projection.kinds, ['under', null, null]);
     r = await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: 0, phase: 'actual', values: [5, 3, null] });
@@ -389,6 +389,75 @@ async function main() {
     console.log('OK leaderboard-aggregatie (incl. case-insensitieve namen)');
   }
 
+  // --- weetjes (lopend potje), hoogtepunten (eindscherm) en eretitels ---
+  {
+    // Fa leidt twee rondes (alles exact). Daarna vraagt Fa alles en haalt
+    // niets, pakt Fb alles exact en vraagt én haalt Fc steeds nul.
+    const created = await api('POST', '/api/boerenbridge/games', { players: ['Fa', 'Fb', 'Fc'] });
+    const id = created.body.id;
+    assert.equal(created.body.fact, null, 'vóór ronde 1 is er geen weetje');
+    assert.deepEqual(created.body.highlights, [], 'lopend potje heeft geen hoogtepunten');
+    let game = created.body;
+    for (let r = 0; r < 15; r++) {
+      const c = game.rounds[r].cards;
+      const preds = r < 2 ? [c, 0, 0] : [c, c, 0];
+      const acts = r < 2 ? [c, 0, 0] : [0, c, 0];
+      let resp = await api('POST', '/api/boerenbridge/games/' + id + '/predictions', { round: r, predictions: preds });
+      assert.equal(resp.status, 200);
+      if (r === 5) {
+        const fact = resp.body.fact;
+        assert.ok(fact && typeof fact.icon === 'string' && fact.text.length > 0, 'weetje na 5 rondes');
+        // Concept-invoer verandert het weetje niet: het is per ronde vastgepind.
+        const d = await api('POST', '/api/boerenbridge/games/' + id + '/draft', { round: r, phase: 'actual', values: [1, null, null] });
+        assert.deepEqual(d.body.fact, fact, 'draft laat het weetje staan');
+        const cur = (await api('GET', '/api/boerenbridge/current')).body;
+        assert.deepEqual(cur.game.fact, fact, 'weetje zit in de snapshot');
+      }
+      if (r === 14) {
+        assert.match(resp.body.fact.text, /^Fb is niet meer in te halen\./, 'onbereikbare kop wint van elk ander weetje');
+      }
+      resp = await api('POST', '/api/boerenbridge/games/' + id + '/actuals', { round: r, actuals: acts });
+      assert.equal(resp.status, 200);
+      game = resp.body;
+    }
+    assert.equal(game.status, 'finished');
+    assert.equal(game.fact, null, 'afgerond potje heeft geen weetje meer');
+    const texts = game.highlights.map(h => h.text);
+    const has = re => assert.ok(texts.some(t => re.test(t)), 'hoogtepunt ' + re + ' ontbreekt in ' + JSON.stringify(texts));
+    has(/^Fb kwam terug van 15 punten achterstand \(na ronde 2\)\./);
+    has(/^Fb stond 13 van de 15 rondes aan kop\./);
+    has(/^De kop wisselde 1 keer van eigenaar\./);
+    has(/^Fb en Fc zaten het vaakst goed: 15 van de 15 rondes\./);
+    has(/^Fa zat er het vaakst naast: 13 keer\./);
+    has(/^Beste ronde: Fa \+13 \(ronde 1, 8 kaarten\)\./);
+    has(/^Zwaarste klap: Fa -8 \(ronde 15, 8 kaarten\)\./);
+    has(/^Nulletjes-koning: Fc \(15 van 15\)\./);
+    assert.ok(!texts.some(t => /duurde/.test(t)), 'een potje van een paar milliseconden heeft geen duur');
+    game.highlights.forEach(h => assert.ok(h.icon && h.text));
+
+    // Klassement-extra's en eretitels, via het filter beperkt tot dit potje.
+    const all = (await api('GET', '/api/boerenbridge/leaderboard')).body;
+    const others = all.players.filter(p => !['Fa', 'Fb', 'Fc'].includes(p));
+    const lb = (await api('GET', '/api/boerenbridge/leaderboard?exclude=' + others.map(encodeURIComponent).join(','))).body;
+    assert.equal(lb.gamesCounted, 1, 'alleen het Fa/Fb/Fc-potje telt');
+    const row = name => lb.leaderboard.find(e => e.name === name);
+    assert.deepEqual([row('Fa').exactPct, row('Fb').exactPct, row('Fc').exactPct], [13, 100, 100]);
+    assert.equal(row('Fa').rounds, 15);
+    assert.deepEqual([row('Fa').exact, row('Fa').under, row('Fa').over], [2, 13, 0], 'Fa vroeg 13× te veel');
+    assert.deepEqual([row('Fa').bestStreak, row('Fb').bestStreak], [2, 15]);
+    assert.deepEqual([row('Fc').zerosAsked, row('Fc').zerosMade], [15, 15]);
+    const award = key => lb.awards.find(a => a.key === key);
+    assert.deepEqual(award('scherpschutter').winners.map(w => w.name).sort(), ['Fb', 'Fc'], 'gedeelde titel');
+    assert.deepEqual(award('nulletjes').winners, [{ name: 'Fc', detail: '15 van 15' }]);
+    assert.deepEqual(award('reeks').winners.map(w => w.detail), ['15 op rij', '15 op rij']);
+    assert.deepEqual(award('optimist').winners, [{ name: 'Fa', detail: '13× te veel gevraagd' }]);
+    assert.equal(award('pessimist'), undefined, 'niemand vroeg structureel te weinig');
+    // Het scorebord krijgt de eretitels via de snapshot.
+    const snap = (await api('GET', '/api/boerenbridge/current')).body;
+    assert.ok(Array.isArray(snap.awards) && snap.awards.length, 'awards in de snapshot');
+    console.log('OK weetjes, hoogtepunten en eretitels');
+  }
+
   // --- klassement zonder bepaalde spelers ---
   {
     // Eén potje waarin "Kind" meedoet en wint; dat potje moet uit het
@@ -424,6 +493,32 @@ async function main() {
     assert.deepEqual(noop.leaderboard, full.leaderboard);
     assert.deepEqual(noop.excluded, []);
     console.log('OK klassement-filter (potjes zonder bepaalde spelers)');
+  }
+
+  // --- statistiek-endpoint (de details staan in test/stats.test.js) ---
+  {
+    const r = await api('GET', '/api/boerenbridge/stats');
+    assert.equal(r.status, 200);
+    const s = r.body;
+    for (const key of ['rows', 'byCards', 'bySuit', 'pairs', 'records', 'notes', 'players']) {
+      assert.ok(Array.isArray(s[key]), key + ' is een lijst');
+    }
+    assert.ok(s.gamesCounted > 0 && s.gamesCounted === s.gamesTotal);
+    assert.ok(s.rows.length > 0);
+    for (const row of s.rows) {
+      assert.ok(row.rounds > 0 && row.games > 0, 'rij heeft rondes: ' + row.name);
+      assert.ok(row.exactPct >= 0 && row.exactPct <= 100);
+      assert.equal(row.exact + row.over + row.under, row.rounds, 'elke ronde is precies één soort');
+      assert.ok(row.zerosMade <= row.zerosAsked);
+    }
+    for (const c of s.byCards) assert.ok(c.cards >= 1 && c.cards <= 8 && c.rounds > 0);
+    // Uitsluiten haalt potjes weg, net als bij het klassement.
+    const name = s.rows[0].name;
+    const less = (await api('GET', '/api/boerenbridge/stats?exclude=' + encodeURIComponent(name))).body;
+    assert.ok(less.gamesCounted < s.gamesCounted, 'uitsluiten telt minder potjes');
+    assert.deepEqual(less.excluded, [name]);
+    assert.ok(!less.rows.some(row => row.name === name), 'uitgesloten speler heeft geen rij');
+    console.log('OK statistiek-endpoint');
   }
 
   // --- naamsuggesties: vaakst-meespelend eerst, zonder afgebroken potjes ---
@@ -468,6 +563,22 @@ async function main() {
     assert.equal(cur.game.id, created.body.id, 'actief spel gaat voor');
     await api('POST', '/api/boerenbridge/games/' + created.body.id + '/abandon', {});
     console.log('OK current-snapshot prioriteit');
+  }
+
+  // --- tafelweetjes: alleen als er geen potje op het scherm staat ---
+  {
+    const created = await api('POST', '/api/boerenbridge/games', { players: ['T1', 'T2', 'T3'] });
+    let cur = (await api('GET', '/api/boerenbridge/current')).body;
+    assert.ok(cur.game, 'er loopt een potje');
+    assert.equal(cur.tableFacts, undefined, 'tijdens het spelen blijft de snapshot licht');
+    await api('POST', '/api/boerenbridge/games/' + created.body.id + '/abandon', {});
+    // Er is net van alles afgerond, dus nu staat er een winnaarscherm: ook dan
+    // is er een potje in beeld en horen de weetjes er niet bij te zitten.
+    cur = (await api('GET', '/api/boerenbridge/current')).body;
+    assert.equal(cur.game.status, 'finished', 'winnaarscherm na het afbreken');
+    assert.equal(cur.tableFacts, undefined, 'winnaarscherm is ook een potje in beeld');
+    // Wat er op het idle-scherm komt te staan, staat in test/stats.test.js.
+    console.log('OK tafelweetjes niet in de snapshot zolang er een potje staat');
   }
 
   // --- SSE: event komt binnen na mutatie ---
