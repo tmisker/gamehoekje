@@ -395,7 +395,9 @@ async function main() {
     // niets, pakt Fb alles exact en vraagt én haalt Fc steeds nul.
     const created = await api('POST', '/api/boerenbridge/games', { players: ['Fa', 'Fb', 'Fc'] });
     const id = created.body.id;
-    assert.equal(created.body.fact, null, 'vóór ronde 1 is er geen weetje');
+    // Vóór de eerste ronde valt er uit dít potje nog niets te melden; dat er
+    // tóch een weetje kan staan komt dan uit de historie, en die is er in deze
+    // suite inmiddels. Dat geval staat in test/stats.test.js.
     assert.deepEqual(created.body.highlights, [], 'lopend potje heeft geen hoogtepunten');
     let game = created.body;
     for (let r = 0; r < 15; r++) {
