@@ -79,9 +79,11 @@ scorebord. Configuratie via omgevingsvariabelen:
    zijn langste reeks; daaronder de eretitels (Scherpschutter,
    Nulletjes-koning, Langste reeks, Optimist, Pessimist).
 4. 📊 **Statistieken** (link op de telefoon, of `games/boerenbridge/stats/`)
-   gaat dieper: per speler een profiel met de verdeling precies / te veel
-   gevraagd / te weinig gevraagd, durf, wisselvalligheid, eerste tegen tweede
-   helft en trefzekerheid per kaartaantal. Daarnaast records, welk ronde-type
+   gaat dieper. Iedereen staat op één regel met het aantal potjes en een balkje
+   precies / te weinig gevraagd / te veel gevraagd; tik een naam aan voor het
+   volledige profiel met durf, wisselvalligheid, eerste tegen tweede helft en
+   trefzekerheid per kaartaantal. Tik er meer aan om ze naast elkaar te
+   vergelijken; die keuze blijft op dat toestel bewaard. Daarnaast records, welk ronde-type
    het lastigst is, per troef, de onderlinge standen en wat opvalt aan de tafel
    (bijvoorbeeld hoe vaak de koploper na de 1-kaartronde uiteindelijk wint).
    Hetzelfde filter als bij het klassement, en die keuze wordt gedeeld.

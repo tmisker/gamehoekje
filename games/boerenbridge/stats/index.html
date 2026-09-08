@@ -30,8 +30,11 @@
     #body{display:flex;flex-direction:column;gap:16px}
 
     .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
-    .panel h2{font-size:1rem;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+    .panel h2{font-size:1rem;margin-bottom:12px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+    /* Op een smal scherm zakt de toelichting onder de titel in plaats van
+       ernaast te worden geperst. */
     .panel h2 .count{color:var(--muted);font-weight:400;font-size:.82rem}
+    @media(max-width:440px){.panel h2 .count{flex:1 0 100%}}
 
     /* filter */
     .hint{color:var(--muted);font-size:.8rem;margin-bottom:6px}
@@ -43,8 +46,26 @@
     .chip.on{background:var(--red-dim);border-color:var(--red);color:var(--text)}
     .lb-count{color:var(--muted);font-size:.8rem;margin-top:10px}
 
-    /* spelerkaarten */
-    .cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(270px,1fr))}
+    /* compacte spelerslijst: iedereen in beeld, tikken opent het profiel */
+    .plist{display:flex;flex-direction:column;gap:4px}
+    .prow{
+      display:grid;grid-template-columns:1fr 88px 52px;align-items:center;gap:10px;
+      width:auto;padding:9px 10px;border:1px solid transparent;border-radius:10px;
+      background:var(--card2);color:var(--text);font:inherit;font-size:.88rem;
+      text-align:left;cursor:pointer;
+    }
+    .prow:hover{border-color:var(--line)}
+    .prow.on{border-color:var(--accent);background:var(--accent-dim)}
+    .prow .who{display:flex;align-items:baseline;gap:8px;min-width:0}
+    .prow .who .nm2{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .prow .who .meta2{color:var(--muted);font-size:.76rem;white-space:nowrap}
+    .prow .pct{text-align:right;font-weight:700}
+    .plist .kindbar{margin:0;height:8px}
+    .picked-hint{color:var(--muted);font-size:.8rem;margin:12px 0 0;line-height:1.5}
+
+    /* spelerkaarten — alleen voor wie is aangetikt */
+    .cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));margin-top:12px}
+    .cards:empty{display:none}
     .pc{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:14px}
     .pc .top{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:2px}
     .pc .nm{font-size:1.05rem;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -135,10 +156,17 @@
 (function(){
   const API='../../../api/boerenbridge';
   const LB_KEY='bb-klassement-zonder';   // zelfde keuze als het klassement op de invoerpagina
+  const PICK_KEY='bb-stats-uitgeklapt';  // welke profielen openstaan (per toestel)
   const SUIT_SYMBOLS=['♣','♥','♦','♠','Sans'];
   let exclude=[];
   try{ exclude=JSON.parse(localStorage.getItem(LB_KEY))||[]; }catch(e){}
   if(!Array.isArray(exclude)) exclude=[];
+  // Namen waarvan het volledige profiel openstaat. Standaard geen: met veertien
+  // spelers is een muur van kaarten onleesbaar, en de lijst vergelijkt zelf al.
+  let picked=[];
+  try{ picked=JSON.parse(localStorage.getItem(PICK_KEY))||[]; }catch(e){}
+  if(!Array.isArray(picked)) picked=[];
+  let lastStats=null;   // laatste payload: open/dicht hoeft niet opnieuw te fetchen
 
   const $=s=>document.querySelector(s);
   function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
@@ -156,6 +184,7 @@
   async function refresh(){
     try{
       const s=await load();
+      lastStats=s;
       $('#conn').style.display='none';
       renderFilter(s);
       renderBody(s);
@@ -197,12 +226,49 @@
     }
     $('#body').innerHTML=
       panel('🏅 Records','',listHtml(s.records.map(r=>({icon:r.icon,html:'<span class="tt">'+esc(r.title)+':</span> <b>'+esc(r.text)+'</b>'}))))
-      +panel('🃏 Spelers','op trefzekerheid','<div class="cards">'+s.rows.map(playerCard).join('')+'</div>')
+      +panel('🃏 Spelers','tik voor het profiel, meerdere om te vergelijken',playersHtml(s.rows))
       +panel('🎲 Per ronde','hoe vaak de tafel precies goed zit',cardBars(s.byCards))
       +(s.bySuit.length?panel('♠ Per troef','',suitBars(s.bySuit)):'')
       +(s.pairs.length?panel('⚔️ Onderling','wie wint er als deze twee samen spelen',pairsHtml(s.pairs)):'')
       +(s.notes.length?panel('💡 Over de tafel','',listHtml(s.notes.map(n=>({icon:n.icon,html:esc(n.text)})))):'');
   }
+
+  // Iedereen op één regel, met de cijfers die je naast elkaar wilt zien. Wie is
+  // aangetikt krijgt daaronder het volledige profiel; meerdere naast elkaar.
+  function playersHtml(rows){
+    const on=new Set(picked.map(n=>n.toLowerCase()));
+    const open=rows.filter(r=>on.has(r.name.toLowerCase()));
+    return '<div class="plist">'+rows.map(r=>{
+      const sel=on.has(r.name.toLowerCase());
+      return '<button class="prow'+(sel?' on':'')+'" data-name="'+esc(r.name)+'" aria-pressed="'+sel+'">'
+        +'<span class="who"><span class="nm2">'+esc(r.name)+'</span>'
+          +'<span class="meta2">'+r.games+(r.games===1?' potje':' potjes')+'</span></span>'
+        +'<span class="kindbar"><i class="k-exact" style="width:'+r.exactPct+'%"></i>'
+          +'<i class="k-over" style="width:'+r.overPct+'%"></i>'
+          +'<i class="k-under" style="width:'+r.underPct+'%"></i></span>'
+        +'<span class="pct">'+r.exactPct+'%</span>'
+        +'</button>';
+    }).join('')+'</div>'
+      +'<div class="cards">'+open.map(playerCard).join('')+'</div>'
+      +(open.length?'':'<p class="picked-hint">Het balkje: groen = precies voorspeld, '
+        +'oranje = te weinig gevraagd, rood = te veel gevraagd. '
+        +'Tik op een naam voor het volledige profiel.</p>');
+  }
+
+  function togglePicked(name){
+    const key=name.toLowerCase();
+    picked = picked.some(n=>n.toLowerCase()===key)
+      ? picked.filter(n=>n.toLowerCase()!==key)
+      : picked.concat(name);
+    try{ localStorage.setItem(PICK_KEY,JSON.stringify(picked)); }catch(e){}
+    if(lastStats) renderBody(lastStats);
+  }
+
+  // Eén luisteraar op de container: de lijst wordt telkens opnieuw opgebouwd.
+  $('#body').addEventListener('click',e=>{
+    const row=e.target.closest('.prow');
+    if(row) togglePicked(row.dataset.name);
+  });
 
   function panel(title,note,inner){
     return '<div class="panel"><h2>'+title+(note?' <span class="count">'+esc(note)+'</span>':'')+'</h2>'+inner+'</div>';
