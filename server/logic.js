@@ -356,6 +356,23 @@ function zeroStats(game) {
   return zeros;
 }
 
+// Het dagdeel waarin dit potje speelt: er wordt ook op een zondagmiddag
+// gekaart, dus niet alles is "vanavond". Anker is het begin van het potje en
+// niet de klok van nu, zodat de tekst niet halverwege omslaat — een potje dat
+// om kwart voor zes begint blijft de hele rit "vanmiddag".
+const DAYPARTS = [
+  { from: 18, now: 'vanavond', noun: 'avond' },
+  { from: 12, now: 'vanmiddag', noun: 'middag' },
+  { from: 6, now: 'vanochtend', noun: 'ochtend' },
+  { from: 0, now: 'vannacht', noun: 'nacht' },
+];
+function daypart(game) {
+  const t = Date.parse(game && game.createdAt);
+  const hour = (Number.isFinite(t) ? new Date(t) : new Date()).getHours();
+  return DAYPARTS.find(d => hour >= d.from);
+}
+const capitalize = s => s.charAt(0).toUpperCase() + s.slice(1);
+
 // Kandidaat-weetjes voor de komende ronde, elk met een gewicht: nieuws
 // (reeks, onbereikbare kop, halverwege) weegt zwaarder dan achtergrond.
 function factCandidates(game) {
@@ -370,6 +387,7 @@ function factCandidates(game) {
   const remaining = game.rounds.slice(game.currentRound);
   const add = (weight, icon, text) => out.push({ weight, icon, text });
   const last = played - 1;
+  const dp = daypart(game);
 
   // Reeksen: rondes op rij precies goed, of juist mis.
   P.forEach((name, i) => {
@@ -403,10 +421,10 @@ function factCandidates(game) {
       const l = leadersAfter(cum, r);
       return l.length === 1 && l[0] === leaders[0];
     });
-    if (played >= 5 && always) add(3, '👑', leaderNames + ' staat al de hele avond aan kop.');
+    if (played >= 5 && always) add(3, '👑', leaderNames + ' staat al de hele ' + dp.noun + ' aan kop.');
   }
   const changes = leadChanges(cum);
-  if (changes >= 2) add(2 + Math.min(changes, 4), '🔁', 'De kop is vanavond al ' + changes + ' keer gewisseld.');
+  if (changes >= 2) add(2 + Math.min(changes, 4), '🔁', 'De kop is ' + dp.now + ' al ' + changes + ' keer gewisseld.');
 
   // Halverwege: na de 1-kaartronde.
   const half = game.rounds.findIndex(r => r.cards === 1);
@@ -427,7 +445,7 @@ function factCandidates(game) {
   else if (hits === 0) add(4, '🙈', 'Vorige ronde zat niemand goed; ' + askedTxt + '.');
   else add(1, '📋', 'Vorige ronde ' + (hits === 1 ? 'zat ' : 'zaten ') + hits + ' van de ' + n + ' goed; ' + askedTxt + '.');
 
-  // Uitschieters van de vorige ronde, als het de grootste van de avond zijn.
+  // Uitschieters van de vorige ronde, als het de grootste van het dagdeel zijn.
   if (played >= 3) {
     const row = game.roundScores[last];
     const all = game.roundScores.flat();
@@ -435,37 +453,37 @@ function factCandidates(game) {
     if (maxLast === Math.max(...all) && maxLast >= 8) {
       const who = P.filter((_, i) => row[i] === maxLast);
       add(3, '🚀', joinNames(who) + (who.length > 1 ? ' pakten' : ' pakte') + ' vorige ronde '
-        + maxLast + ' punten, de beste ronde van de avond.');
+        + maxLast + ' punten, de beste ronde van de ' + dp.noun + '.');
     }
     const minLast = Math.min(...row);
     if (minLast === Math.min(...all) && minLast <= -4) {
       const who = P.filter((_, i) => row[i] === minLast);
       add(3, '💥', joinNames(who) + (who.length > 1 ? ' leverden' : ' leverde') + ' vorige ronde '
-        + (-minLast) + ' punten in, de zwaarste klap van de avond.');
+        + (-minLast) + ' punten in, de zwaarste klap van de ' + dp.noun + '.');
     }
   }
 
-  // De tafel vanavond.
+  // De tafel tot nu toe.
   if (played >= 4) {
     const all = kinds.flat();
     const pct = Math.round(100 * all.filter(k => k === 'exact').length / all.length);
-    add(1, '📊', 'Vanavond zit ' + pct + '% van de voorspellingen precies goed.');
+    add(1, '📊', capitalize(dp.now) + ' zit ' + pct + '% van de voorspellingen precies goed.');
   }
   const zeros = zeroStats(game);
   const zerosAsked = zeros.reduce((a, z) => a + z.asked, 0);
   const zerosMade = zeros.reduce((a, z) => a + z.made, 0);
-  if (zerosAsked >= 4) add(2, '0️⃣', 'Vanavond al ' + zerosAsked + ' keer nul gevraagd, ' + zerosMade + ' keer gehaald.');
+  if (zerosAsked >= 4) add(2, '0️⃣', capitalize(dp.now) + ' al ' + zerosAsked + ' keer nul gevraagd, ' + zerosMade + ' keer gehaald.');
   const mostZeros = Math.max(...zeros.map(z => z.made));
   if (mostZeros >= 3) {
     const who = P.filter((_, i) => zeros[i].made === mostZeros);
-    add(2, '0️⃣', joinNames(who) + (who.length > 1 ? ' haalden' : ' haalde') + ' vanavond al ' + mostZeros + ' nulletjes.');
+    add(2, '0️⃣', joinNames(who) + (who.length > 1 ? ' haalden' : ' haalde') + ' ' + dp.now + ' al ' + mostZeros + ' nulletjes.');
   }
 
-  // Spiegelronde: dezelfde kaarten eerder vanavond.
+  // Spiegelronde: dezelfde kaarten eerder in dit potje.
   const mirror = game.rounds.findIndex((r, i) => i < game.currentRound && r.cards === next.cards);
   if (mirror >= 0) {
     const good = P.filter((_, i) => kinds[mirror][i] === 'exact');
-    const pre = 'Eerder vanavond met ' + cardsTxt(next.cards);
+    const pre = 'Eerder ' + dp.now + ' met ' + cardsTxt(next.cards);
     add(2, '🪞', good.length === 0 ? pre + ' zat niemand goed.'
       : good.length === n ? pre + ' zat iedereen goed.'
         : good.length === 1 ? pre + ' zat alleen ' + good[0] + ' goed.'
@@ -503,7 +521,7 @@ const ORDINAL = ['1e', '2e', '3e', '4e', '5e', '6e', '7e', '8e', '9e', '10e'];
 const ordinal = k => ORDINAL[k - 1] || k + 'e';
 
 // Weetjes uit eerdere potjes. Bewust lichter gewogen dan het nieuws van
-// vanavond (reeksen, kopwisselingen): achtergrond verliest van wat er nú
+// dit potje (reeksen, kopwisselingen): achtergrond verliest van wat er nú
 // gebeurt. Overal een minimum aantal waarnemingen, en bij weinig data een
 // telling ("4 van de 9") in plaats van een percentage.
 function historyCandidates(game, hist) {
@@ -561,7 +579,7 @@ function historyCandidates(game, hist) {
     }
   });
 
-  // Het record aan deze tafel, en wie daar vanavond op koers ligt.
+  // Het record aan deze tafel, en wie daar in dit potje op koers ligt.
   const holders = mine.map((p, i) => (p && p.bestScore > -Infinity ? { i, score: p.bestScore } : null))
     .filter(Boolean);
   if (holders.length) {
@@ -638,6 +656,7 @@ function draftCandidates(game, hist) {
   const cum = cumulativeTotals(game);
   const totals = played ? cum[played - 1] : P.map(() => 0);
   const add = (weight, icon, text) => out.push({ weight, icon, text });
+  const dp = daypart(game);
   const p = hist ? hist.players.get(shared.nameKey(name)) : null;
   const pc = p && p.byCards.get(cards);
 
@@ -652,7 +671,7 @@ function draftCandidates(game, hist) {
   if (pred === 0) {
     let zeros = 0;
     for (let r = 0; r < played; r++) if (game.predictions[r][i] === 0) zeros++;
-    if (zeros >= 2) add(3, '0️⃣', name + ' vraagt nul — het ' + ordinal(zeros + 1) + ' nulletje vanavond.');
+    if (zeros >= 2) add(3, '0️⃣', name + ' vraagt nul — het ' + ordinal(zeros + 1) + ' nulletje ' + dp.now + '.');
     else if (p && p.zerosAsked >= 8) {
       add(2, '0️⃣', name + ' vraagt nul; dat lukte ' + p.zerosMade + ' van de ' + p.zerosAsked + ' keer.');
     } else add(1, '0️⃣', name + ' vraagt nul.');
@@ -682,7 +701,7 @@ function hashStr(s) {
 // bij elke aangetikte voorspelling verspringen. Uit de zwaarste kandidaten
 // (gewicht ≥ top − 1) kiest een hash, zodat niet elke ronde hetzelfde soort
 // weetje bovenkomt.
-// Nieuws (wat er vanavond gebeurt) weegt zwaarder dan achtergrond (historie),
+// Nieuws (wat er in dit potje gebeurt) weegt zwaarder dan achtergrond (historie),
 // maar zou over 15 rondes alles opslokken: een lopende reeks wint anders elke
 // ronde opnieuw. Daarom wisselen de rondes elkaar af — oneven ronde nieuws,
 // even ronde achtergrond — met terugval op de andere groep als die leeg is.
@@ -921,7 +940,7 @@ module.exports = {
       .map(r => ({ icon: r.icon, text: r.title + ': ' + r.text }))
       .concat(bbStats.tableNotes(hist));
   },
-  factCandidates, historyCandidates, draftCandidates, pickFact, pickDraftFact, highlights,
+  factCandidates, historyCandidates, draftCandidates, pickFact, pickDraftFact, highlights, daypart,
   statsView: (games, exclude) => bbStats.statsView(games, exclude, RULES),
   historyOf,
   finishedGames: shared.finishedGames,

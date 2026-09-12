@@ -169,6 +169,13 @@ Dockerfile                     # node:22-alpine, geen npm install
   en `bestStreak`; `leaderboardView` en de SSE-snapshot leveren `awards`
   (eretitels, `winners` = iedereen met de topwaarde). De pagina's tonen dit
   alleen. Ideeën voor meer: `docs/ideeen-statistieken.md`.
+- **De weetjes praten over het juiste dagdeel.** `daypart(game)` geeft
+  `{now, noun}` (`vanmiddag`/`middag`, …) op basis van `game.createdAt` — niet
+  van de klok van nu, zodat een potje dat om kwart voor zes begint "vanmiddag"
+  blijft in plaats van halverwege om te slaan. Schrijf nooit "vanavond" hard in
+  een weetje. Het dagdeel volgt de lokale tijd van de server; de Dockerfile zet
+  daarom `TZ=Europe/Amsterdam` (ook de weekdag-telling in `bb-stats.js` hangt
+  daaraan).
 - **Weetjes putten ook uit eerdere potjes.** `enrich(game, games)` krijgt de
   hele lijst mee; `historyOf` bouwt daar de historie uit op (gecachet op
   "hoeveel potjes zijn af + wanneer eindigde het laatste"). Naast

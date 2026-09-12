@@ -63,12 +63,14 @@ scorebord. Configuratie via omgevingsvariabelen:
    "Tim is niet meer in te halen", "Halverwege!"); dat blijft de hele ronde
    staan. Zijn er al eerdere potjes gespeeld, dan komen daar weetjes uit de
    historie bij ("Piet vraagt bij 5 kaarten meestal 1", "het record aan deze
-   tafel is 87"); nieuws van vanavond en achtergrond wisselen elkaar af. Terwijl
-   er voorspeld wordt, reageert het scherm op de zojuist aangetikte keuze
-   ("Anne vraagt nul; dat lukte 30 van de 42 keer") — diezelfde regel staat ook
-   onder de invoer op de telefoon. Op de eindstand staan de hoogtepunten van de
-   avond: comeback, het kantelpunt, wie het langst aan kop stond, wie het
-   vaakst goed zat, de beste ronde, de zwaarste klap en de nulletjes-koning.
+   tafel is 87"); nieuws uit dit potje en achtergrond wisselen elkaar af. De
+   weetjes praten mee met de klok: wie 's middags kaart leest "vanmiddag".
+   Terwijl er voorspeld wordt, reageert het scherm op de zojuist aangetikte
+   keuze ("Anne vraagt nul; dat lukte 30 van de 42 keer") — diezelfde regel
+   staat ook onder de invoer op de telefoon. Op de eindstand staan de
+   hoogtepunten van het potje: comeback, het kantelpunt, wie het langst aan kop
+   stond, wie het vaakst goed zat, de beste ronde, de zwaarste klap en de
+   nulletjes-koning.
    Staat er geen potje op het scherm, dan wisselt onder het klassement elke
    negen seconden een weetje over de tafel (records, het lastigste ronde-type).
 3. Onder ⚙️ **Spelbeheer** op de telefoon staan twee dingen voor als het
