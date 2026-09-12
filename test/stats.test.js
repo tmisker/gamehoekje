@@ -292,6 +292,58 @@ function main() {
     console.log('OK weetjes uit de historie');
   }
 
+  // --- het dagdeel: de weetjes praten over vanochtend/vanmiddag/vanavond ---
+  {
+    // Lokale tijd, want het dagdeel volgt de klok aan tafel.
+    const at = (h, m) => new Date(2026, 2, 6, h, m).toISOString();
+    const now = when => logic.daypart({ createdAt: when }).now;
+    assert.equal(now(at(0, 0)), 'vannacht');
+    assert.equal(now(at(5, 59)), 'vannacht');
+    assert.equal(now(at(6, 0)), 'vanochtend');
+    assert.equal(now(at(11, 59)), 'vanochtend');
+    assert.equal(now(at(12, 0)), 'vanmiddag');
+    assert.equal(now(at(17, 59)), 'vanmiddag');
+    assert.equal(now(at(18, 0)), 'vanavond');
+    assert.equal(now(at(23, 59)), 'vanavond');
+    assert.ok(/^van(nacht|ochtend|middag|avond)$/.test(logic.daypart({}).now),
+      'zonder begintijd terugvallen op de klok');
+
+    // Een potje dat halverwege de middag begint, negen rondes ver: genoeg voor
+    // de tafelstand, de nulletjes, de hele-dagdeel-koploper en de spiegelronde.
+    const start = (when, rounds) => {
+      const game = logic.createGame(NAMES);
+      game.createdAt = when;
+      for (let r = 0; r < rounds; r++) {
+        const cards = game.rounds[r].cards;
+        logic.applyPredictions(game, r, [cards, 0, 0]);
+        logic.applyActuals(game, r, [cards, 0, 0]);
+      }
+      return game;
+    };
+    const middag = start(at(14, 30), 9);
+    const texts = logic.factCandidates(middag).map(f => f.text);
+    const has = re => assert.ok(texts.some(t => re.test(t)), re + ' ontbreekt in ' + JSON.stringify(texts));
+    has(/^Vanmiddag zit \d+% van de voorspellingen precies goed\.$/);
+    has(/^Vanmiddag al \d+ keer nul gevraagd/);
+    has(/haalden vanmiddag al \d+ nulletjes\.$/);
+    has(/^Ann staat al de hele middag aan kop\.$/);
+    has(/^Eerder vanmiddag met /);
+    assert.ok(!texts.some(t => /avond|ochtend|nacht/.test(t)), 'geen avond in de middag: ' + JSON.stringify(texts));
+
+    // Hetzelfde potje 's avonds levert dezelfde weetjes met "avond".
+    const avond = logic.factCandidates(start(at(20, 0), 9)).map(f => f.text);
+    assert.equal(avond.length, texts.length);
+    assert.deepEqual(avond, texts.map(t => t.replace(/[Vv]anmiddag/g, m => m[0] + 'anavond').replace(/hele middag/, 'hele avond')),
+      'alleen het dagdeel verschilt: ' + JSON.stringify(avond));
+
+    // Ook de reactie op een aangetikte nul telt in het juiste dagdeel.
+    const ochtend = start(at(9, 15), 2);
+    logic.applyDraft(ochtend, 2, 'predict', [null, 0, null]);
+    const draft = logic.draftCandidates(ochtend, null).map(f => f.text);
+    assert.ok(draft.includes('Bo vraagt nul — het 3e nulletje vanochtend.'), 'draft: ' + JSON.stringify(draft));
+    console.log('OK het dagdeel in de weetjes');
+  }
+
   // --- reactie op de zojuist aangetikte voorspelling ---
   {
     const game = logic.createGame(NAMES);
