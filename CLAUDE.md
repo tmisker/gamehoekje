@@ -147,6 +147,16 @@ Dockerfile                     # node:22-alpine, geen npm install
   plakken er alleen een `.k-<kind>`-class op. Leid dit nooit af uit de score
   zelf: +6 kan zowel mét bonus (1 gevraagd, 1 gehaald) als zonder (6 gehaald
   op minder gevraagd).
+- **De animaties hangen aan het verschil tussen twee snapshots.** Het display
+  bouwt bij elke snapshot alles opnieuw op, dus een effect dat aan de stánd
+  hangt zou bij elke aangetikte voorspelling opnieuw knallen. `fxState` maakt
+  daarom een samenvatting van de vorige snapshot, `fxDiff` leidt daar het
+  nieuws uit af (ronde geteld, kopwissel, potje uit, keuze aangetikt) en
+  `fxPlay` speelt dat ná het renderen af: klassen op de kaarten plus emoji in
+  de `#fx`-laag. Is er geen vorige snapshot of een ander `game.id`, dan gebeurt
+  er niets — anders gaf elk herladen op het winnaarscherm weer confetti. De
+  invoerpagina heeft een kleine variant (`fxCheck`). Alles zwijgt bij
+  `prefers-reduced-motion: reduce`.
 - **Weetjes, hoogtepunten en eretitels komen ook van de server.** `enrich`
   levert `fact` (lopend potje: één weetje voor de komende ronde,
   `{icon, text}` of `null`) en `highlights` (afgerond potje: lijst

@@ -214,6 +214,59 @@
     .winner-banner .name{font-size:1.4rem;font-weight:800;color:var(--gold);margin-top:6px}
     .winner-banner .score{color:var(--muted);margin-top:4px}
 
+    /* ---- feestjes ----------------------------------------------------
+       Klein gehouden: de telefoon is de invoer, het scorebord is de show.
+       De effecten hangen aan wát er verandert, niet aan de stand — anders
+       zou elke render van het spelscherm opnieuw beginnen. */
+    #fx{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:60}
+    #fx .r{position:absolute;top:-12vh;animation:fx-fall var(--dur) linear both}
+    #fx .r i{
+      display:block;font-style:normal;line-height:1;font-size:var(--sz);
+      animation:fx-sway calc(var(--dur)/3) ease-in-out infinite alternate;
+    }
+    @keyframes fx-fall{
+      0%{transform:translateY(0) rotate(0deg);opacity:0}
+      8%{opacity:1}
+      90%{opacity:1}
+      100%{transform:translateY(125vh) rotate(var(--rot));opacity:0}
+    }
+    @keyframes fx-sway{from{transform:translateX(calc(var(--sway) * -1))}to{transform:translateX(var(--sway))}}
+    @keyframes fx-pop{
+      0%{transform:scale(.4);opacity:0}
+      60%{transform:scale(1.2);opacity:1}
+      100%{transform:scale(1)}
+    }
+    @keyframes fx-rise{
+      0%{transform:translateY(12px);opacity:0}
+      100%{transform:translateY(0);opacity:1}
+    }
+    /* Aangetikte knop veert even op — bevestiging zonder een regel tekst. */
+    .numbtn.fx-tap{animation:fx-pop .28s cubic-bezier(.2,1.6,.4,1)}
+    /* De zojuist getelde ronde licht op, cijfers komen na elkaar binnen. */
+    tr.fx-row{animation:fx-rowflash 1.3s ease-out}
+    @keyframes fx-rowflash{
+      0%{background:rgba(255,214,0,.4)}
+      35%{background:rgba(255,214,0,.22)}
+      100%{background:var(--accent-dim)}
+    }
+    tr.fx-row td .d{animation:fx-pop .4s cubic-bezier(.2,1.5,.4,1) var(--fxd,0s) backwards}
+    #winnerArea .winner-banner{animation:fx-pop .7s cubic-bezier(.2,1.3,.35,1) backwards}
+    #winnerArea .trophy{display:inline-block;animation:fx-trophy 1.3s ease-in-out .3s both}
+    @keyframes fx-trophy{
+      0%{transform:translateY(-70px) scale(.4) rotate(-25deg);opacity:0}
+      35%{transform:translateY(0) scale(1.2) rotate(8deg);opacity:1}
+      55%{transform:translateY(-10px) scale(1) rotate(-5deg)}
+      75%{transform:translateY(0) scale(1.05) rotate(3deg)}
+      100%{transform:translateY(0) scale(1) rotate(0deg)}
+    }
+    #winnerArea .highlights .hl{animation:fx-rise .45s ease-out var(--fxd,0s) backwards}
+
+    @media(prefers-reduced-motion:reduce){
+      #fx{display:none}
+      .numbtn.fx-tap,tr.fx-row,tr.fx-row td .d,#winnerArea .winner-banner,
+      #winnerArea .trophy,#winnerArea .highlights .hl{animation:none}
+    }
+
     @media(max-width:380px){
       .numbtn{height:38px;font-size:.9rem;border-radius:7px}
       .numgrid{gap:4px}
@@ -223,6 +276,7 @@
   </style>
 </head>
 <body>
+  <div id="fx" aria-hidden="true"></div>
   <a class="backlink" href="../../index.html">← Alle spellen</a>
   <h1>🃏 Boerenbridge</h1>
   <p class="sub">Score bijhouden</p>
@@ -374,6 +428,56 @@
   }
   $('#startRetry').addEventListener('click',()=>{ if(lastFailed) attempt(lastFailed,'#startConn'); });
   $('#gameRetry').addEventListener('click',()=>{ if(lastFailed) attempt(lastFailed,'#gameConn'); });
+
+  // ---- feestjes ----
+  // Confetti en een oplichtende rij: puur versiering. Wat er afgaat volgt uit
+  // het verschil met de vorige stand (fxSeen), nooit uit de stand zelf — het
+  // spelscherm wordt bij elke actie opnieuw opgebouwd.
+  const fxBox=$('#fx');
+  const noMotion=window.matchMedia
+    ? window.matchMedia('(prefers-reduced-motion:reduce)') : {matches:false};
+  const rnd=(a,b)=>a+Math.random()*(b-a);
+
+  function rain(emojis,count,dur){
+    if(noMotion.matches||!emojis.length) return;
+    for(let k=0;k<count;k++){
+      if(fxBox.childElementCount>90) return;
+      const el=document.createElement('span');
+      el.className='r';
+      el.style.left=rnd(-2,100).toFixed(1)+'%';
+      el.style.setProperty('--rot',Math.round(rnd(-540,540))+'deg');
+      el.style.setProperty('--sz',rnd(1.1,2).toFixed(2)+'rem');
+      el.style.setProperty('--sway',Math.round(rnd(10,32))+'px');
+      el.style.setProperty('--dur',rnd(dur*0.7,dur*1.3).toFixed(2)+'s');
+      el.style.animationDelay=rnd(0,dur*0.5).toFixed(2)+'s';
+      el.innerHTML='<i>'+emojis[Math.floor(Math.random()*emojis.length)]+'</i>';
+      el.addEventListener('animationend',e=>{ if(e.target===el) el.remove(); });
+      fxBox.appendChild(el);
+    }
+  }
+
+  // Wat we de vorige keer zagen: {id, played, finished}. null = nog niets, dan
+  // gaat er niets af (anders zou een hervat potje meteen confetti geven).
+  let fxSeen=null;
+  function fxCheck(){
+    const was=fxSeen;
+    if(!game){ fxSeen=null; return; }
+    const now={id:game.id,played:game.roundScores.length,finished:game.status==='finished'};
+    fxSeen=now;
+    if(!was||was.id!==now.id) return;
+    if(now.finished&&!was.finished){ rain(['🏆','🎉','🎊','🥳','✨','🃏'],34,4.5); return; }
+    if(now.played<=was.played) return;
+    const r=now.played-1;
+    const scores=game.roundScores[r], kinds=game.roundKinds[r];
+    // De rij van die ronde licht op; de cijfers komen na elkaar binnen.
+    const row=$('#scoreBody tr.current-round');
+    if(row){
+      row.classList.add('fx-row');
+      row.querySelectorAll('td .d').forEach((d,k)=>d.style.setProperty('--fxd',(k*0.06).toFixed(2)+'s'));
+    }
+    if(kinds.every(k=>k==='exact')) rain(['🤯','🎯','🎉'],20,3.6);
+    else if(Math.max(...scores)>=8) rain(['🎉','🎊','⭐','🔥'],16,3.4);
+  }
 
   // ---- startscherm ----
   const countSel=$('#playerCount'), nameDiv=$('#nameInputs');
@@ -576,6 +680,7 @@
       $('#roundDealer').textContent='';
       $('#inputSection').style.display='none';
       if(game.status==='finished') showWinner(); else $('#winnerArea').innerHTML='';
+      fxCheck();
       return;
     }
     $('#winnerArea').innerHTML='';
@@ -588,6 +693,7 @@
     $('#roundDealer').textContent='Deler: '+game.players[game.dealerIdx];
     if(game.phase==='predict') showPredictForm(notice);
     else showActualForm(notice);
+    fxCheck();
   }
 
   // ---- knopgroep-invoer ----
@@ -673,6 +779,9 @@
         btn.addEventListener('click',()=>{
           const v=+btn.dataset.v;
           sel[pi]=(sel[pi]===v)?null:v; // nogmaals tikken = keuze wissen
+          btn.classList.remove('fx-tap');
+          void btn.offsetWidth; // forceer herstart van de animatie
+          btn.classList.add('fx-tap');
           refreshNumRows(sec,isActual);
           sendDraft();
           onChange();
@@ -909,8 +1018,9 @@
   function highlightsHtml(){
     const hl=game.highlights||[];
     if(!hl.length) return '';
-    return '<div class="highlights">'+hl.map(h=>
-      '<div class="hl"><span class="ic">'+h.icon+'</span><span>'+esc(h.text)+'</span></div>').join('')+'</div>';
+    return '<div class="highlights">'+hl.map((h,i)=>
+      '<div class="hl" style="--fxd:'+(0.55+i*0.08).toFixed(2)+'s"><span class="ic">'+h.icon+'</span>'
+      +'<span>'+esc(h.text)+'</span></div>').join('')+'</div>';
   }
 
   // ---- knoppen onder het spel ----
