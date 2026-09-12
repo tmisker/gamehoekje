@@ -182,6 +182,164 @@
     .tablefact .ic{font-size:1.4rem;line-height:1}
     .tablefact b{color:var(--text);font-weight:700}
 
+    /* ---- feestjes ----------------------------------------------------
+       Puur versiering. Elk effect hangt aan het VERSCHIL tussen twee
+       snapshots (zie fxDiff), nooit aan de stand zelf — anders zou elke
+       draft-POST de boel opnieuw laten knallen. */
+    #fx{
+      position:fixed;top:0;left:0;width:100vw;height:100vh;
+      overflow:hidden;pointer-events:none;z-index:60;
+    }
+    /* Eén deeltje = buitenste span (x-drift + fade) met daarin een <i>
+       (boog omhoog-omlaag). Twee lagen, want één transform kan niet
+       tegelijk lineair opzij en met zwaartekracht omlaag. */
+    #fx .p{position:absolute;animation:fx-x var(--dur) linear forwards,fx-fade var(--dur) linear forwards}
+    #fx .p i{
+      display:block;font-style:normal;line-height:1;font-size:var(--sz);
+      animation:fx-y var(--dur) forwards;
+    }
+    @keyframes fx-x{
+      from{transform:translate(-50%,-50%) rotate(0deg)}
+      to{transform:translate(calc(-50% + var(--dx)),-50%) rotate(var(--rot))}
+    }
+    @keyframes fx-fade{0%,65%{opacity:1}100%{opacity:0}}
+    @keyframes fx-y{
+      0%{transform:translateY(0) scale(.5);animation-timing-function:cubic-bezier(.1,.75,.35,1)}
+      45%{transform:translateY(var(--rise)) scale(1);animation-timing-function:cubic-bezier(.45,0,.75,.6)}
+      100%{transform:translateY(var(--fall)) scale(.9)}
+    }
+    /* Regen: van boven het scherm naar beneden, met een zwaai erin. */
+    #fx .r{position:absolute;top:-10vh;animation:fx-fall var(--dur) linear both}
+    #fx .r i{
+      display:block;font-style:normal;line-height:1;font-size:var(--sz);
+      animation:fx-sway calc(var(--dur)/3) ease-in-out infinite alternate;
+    }
+    @keyframes fx-fall{
+      0%{transform:translateY(0) rotate(0deg);opacity:0}
+      6%{opacity:1}
+      92%{opacity:1}
+      100%{transform:translateY(120vh) rotate(var(--rot));opacity:0}
+    }
+    @keyframes fx-sway{from{transform:translateX(calc(var(--sway) * -1))}to{transform:translateX(var(--sway))}}
+
+    /* Schermschud bij een dikke score. */
+    body.fx-shake{animation:fx-shake .5s cubic-bezier(.36,.07,.19,.97)}
+    @keyframes fx-shake{
+      0%,100%{transform:translate(0,0)}
+      12%{transform:translate(-9px,4px)}
+      26%{transform:translate(8px,-5px)}
+      40%{transform:translate(-7px,-3px)}
+      55%{transform:translate(6px,4px)}
+      70%{transform:translate(-4px,-2px)}
+      85%{transform:translate(3px,1px)}
+    }
+
+    /* Binnenknallen: van ver weg en onscherp naar op z'n plek, met een
+       tikje doorschieten. fx-pop is de lichte variant. */
+    @keyframes fx-slam{
+      0%{transform:scale(3.4);opacity:0;filter:blur(7px)}
+      55%{transform:scale(.84);opacity:1;filter:blur(0)}
+      74%{transform:scale(1.12)}
+      100%{transform:scale(1);filter:blur(0)}
+    }
+    @keyframes fx-pop{
+      0%{transform:scale(.35);opacity:0}
+      60%{transform:scale(1.22);opacity:1}
+      100%{transform:scale(1)}
+    }
+    @keyframes fx-jolt{
+      0%,100%{transform:translateX(0)}
+      20%{transform:translateX(-8px)}
+      40%{transform:translateX(7px)}
+      60%{transform:translateX(-5px)}
+      80%{transform:translateX(3px)}
+    }
+    /* De ring die van de kaart af golft; --fxc kleurt hem naar de score. */
+    @keyframes fx-ring{
+      0%{transform:scale(1);opacity:.85}
+      100%{transform:scale(1.3);opacity:0}
+    }
+    @keyframes fx-glow{
+      0%{box-shadow:0 0 0 0 var(--fxc)}
+      40%{box-shadow:0 0 34px 6px var(--fxc)}
+      100%{box-shadow:0 0 0 0 transparent}
+    }
+
+    /* De score van de zojuist getelde ronde, op de kaart. Per speler een
+       eigen vertraging (--fxd) zodat ze na elkaar binnenkomen. */
+    .pcard.fx-hit .stat span{display:inline-block;animation:fx-pop .5s cubic-bezier(.2,1.5,.4,1) var(--fxd,0s) backwards}
+    .pcard.fx-bid .tot,.pcard.fx-trick .stat span{
+      display:inline-block;animation:fx-pop .45s cubic-bezier(.2,1.5,.4,1) backwards;
+    }
+    .pcard.fx-hit .tot{display:inline-block;animation:fx-pop .45s cubic-bezier(.2,1.5,.4,1) var(--fxd,0s) backwards}
+    .pcard.fx-slam .stat span{animation:fx-slam .65s cubic-bezier(.2,.9,.3,1) var(--fxd,0s) backwards}
+    .pcard.fx-hit{animation:fx-glow 1s ease-out var(--fxd,0s) backwards}
+    .pcard.fx-jolt{animation:fx-jolt .45s ease-out var(--fxd,0s) backwards}
+    .pcard.fx-hit::after{
+      content:'';position:absolute;inset:-1px;border-radius:16px;pointer-events:none;
+      border:3px solid var(--fxc);animation:fx-ring .8s ease-out var(--fxd,0s) backwards;
+    }
+    /* De kroon die neervalt bij een kopwissel. */
+    .pcard .crown.fx-crown{animation:fx-drop .7s cubic-bezier(.2,1.6,.35,1) backwards}
+    @keyframes fx-drop{
+      0%{transform:translate(-50%,-90px) scale(.4) rotate(-35deg);opacity:0}
+      60%{transform:translate(-50%,4px) scale(1.25) rotate(6deg);opacity:1}
+      100%{transform:translate(-50%,0) scale(1) rotate(0deg)}
+    }
+
+    /* "Samen gevraagd": het getal springt bij elke wijziging, en de hele
+       balk schudt als het precies rond uitkomt (dan gaat er niemand nat). */
+    .askbar .num.fx-bump{display:inline-block;animation:fx-pop .35s cubic-bezier(.2,1.5,.4,1)}
+    .askbar.fx-jolt{animation:fx-jolt .5s ease-out}
+
+    /* Nieuwe rij in de scoretabel: even oplichten, cijfers na elkaar erin. */
+    tr.fx-row{animation:fx-rowflash 1.3s ease-out}
+    @keyframes fx-rowflash{
+      0%{background:rgba(255,214,0,.4)}
+      35%{background:rgba(255,214,0,.22)}
+      100%{background:var(--accent-dim)}
+    }
+    tr.fx-row td .d{display:block;animation:fx-pop .4s cubic-bezier(.2,1.5,.4,1) var(--fxd,0s) backwards}
+    /* De verlooplijnen tekenen zichzelf na (JS zet de dash-lengte). */
+    .trend svg polyline.fx-draw{transition:stroke-dashoffset .9s cubic-bezier(.3,.8,.4,1)}
+
+    /* Winnaarscherm. */
+    .winner-banner{animation:fx-banner .8s cubic-bezier(.2,1.3,.35,1) backwards}
+    @keyframes fx-banner{
+      0%{transform:scale(.6);opacity:0}
+      60%{transform:scale(1.06);opacity:1}
+      100%{transform:scale(1)}
+    }
+    .winner-banner .trophy{display:inline-block;animation:fx-trophy 1.4s ease-in-out .5s both}
+    @keyframes fx-trophy{
+      0%{transform:translateY(-120px) scale(.4) rotate(-25deg);opacity:0}
+      35%{transform:translateY(0) scale(1.2) rotate(8deg);opacity:1}
+      50%{transform:translateY(-14px) scale(1) rotate(-5deg)}
+      65%{transform:translateY(0) scale(1.05) rotate(3deg)}
+      80%{transform:translateY(-6px) scale(1)}
+      100%{transform:translateY(0) scale(1) rotate(0deg)}
+    }
+    .winner-banner .name{animation:fx-slam .7s cubic-bezier(.2,.9,.3,1) .35s backwards}
+    .winner-banner .score,.center .standings{animation:fx-rise .6s ease-out .8s backwards}
+    .highlights .hl{animation:fx-rise .5s ease-out var(--fxd,0s) backwards}
+    @keyframes fx-rise{
+      0%{transform:translateY(14px);opacity:0}
+      100%{transform:translateY(0);opacity:1}
+    }
+
+    /* Wie dit niet wil, krijgt het niet. JS kijkt naar dezelfde query en
+       laat de deeltjes dan helemaal achterwege. */
+    @media(prefers-reduced-motion:reduce){
+      #fx{display:none}
+      body.fx-shake,.pcard.fx-hit,.pcard.fx-jolt,.pcard.fx-hit .stat span,.pcard.fx-slam .stat span,
+      .pcard.fx-hit .tot,.pcard.fx-bid .tot,.pcard.fx-trick .stat span,.pcard .crown.fx-crown,
+      .askbar .num.fx-bump,.askbar.fx-jolt,tr.fx-row,tr.fx-row td .d,
+      .winner-banner,.winner-banner .trophy,.winner-banner .name,.winner-banner .score,
+      .center .standings,.highlights .hl{animation:none}
+      .pcard.fx-hit::after{display:none}
+      .trend svg polyline.fx-draw{transition:none}
+    }
+
     @media(max-width:700px){
       .highlights{grid-template-columns:1fr;font-size:1rem}
       .factbar{font-size:1.05rem;padding:10px 14px}
@@ -197,6 +355,7 @@
 <body>
   <div id="connDot" title="Verbinding met de server"></div>
   <div id="app"></div>
+  <div id="fx" aria-hidden="true"></div>
 
 <script>
 (function(){
@@ -218,25 +377,260 @@
   const ORD=['1e','2e','3e','4e','5e','6e'];
   const sign=v=>(v>0?'+':'')+v;
 
+  // ---- feestjes ----
+  // De schermen worden bij élke snapshot compleet opnieuw opgebouwd. Een
+  // animatie die aan de stand hangt zou dus bij elke aangetikte voorspelling
+  // opnieuw starten. Daarom: onthoud een samenvatting van de vorige snapshot
+  // (fxPrev), leid uit het verschil af wát er nieuw is (fxDiff) en speel dat
+  // ná het renderen af (fxPlay). Bij de eerste snapshot na het laden gebeurt
+  // er niets — anders gaf herladen op het winnaarscherm telkens confetti.
+  const fxBox=document.getElementById('fx');
+  const noMotion=window.matchMedia
+    ? window.matchMedia('(prefers-reduced-motion:reduce)') : {matches:false};
+  const FXC={exact:'#4caf50',over:'#ff9800',under:'#e53935'};
+  const FXE={
+    exact:['🎯','✨','⭐','💚'],
+    big:['🎉','🎊','💥','⭐','🔥'],
+    under:['💥','🙈','📉','😵'],
+    zero:['😇','🫥','🧘'],
+    crown:['👑','✨','🌟'],
+    all:['🤯','🎯','🎉'],
+    none:['🫠','😬','💀'],
+    max:['🔥','🚀','😤'],
+    win:['🏆','🎉','🎊','🥳','✨','🌟','🃏','🎈'],
+  };
+  const rnd=(a,b)=>a+Math.random()*(b-a);
+  const pick=a=>a[Math.floor(Math.random()*a.length)];
+
+  // Eén deeltje = buitenste span (drift opzij + fade) met daarin een <i> die
+  // de boog omhoog-omlaag doet; samen geeft dat zwaartekracht.
+  function burst(x,y,emojis,count,opt){
+    if(noMotion.matches||!emojis||!emojis.length) return;
+    const o=opt||{}, spread=o.spread||220, rise=o.rise||-170, fall=o.fall||420;
+    for(let k=0;k<count;k++){
+      if(fxBox.childElementCount>180) return; // nooit het scherm dichtgooien
+      const el=document.createElement('span');
+      el.className='p';
+      el.style.left=Math.round(x)+'px';
+      el.style.top=Math.round(y)+'px';
+      el.style.setProperty('--dx',Math.round(rnd(-spread,spread))+'px');
+      el.style.setProperty('--rise',Math.round(rnd(rise*1.4,rise*0.5))+'px');
+      el.style.setProperty('--fall',Math.round(rnd(fall*0.6,fall*1.3))+'px');
+      el.style.setProperty('--rot',Math.round(rnd(-420,420))+'deg');
+      el.style.setProperty('--sz',rnd(1.5,2.8).toFixed(2)+'rem');
+      el.style.setProperty('--dur',rnd(1.3,2.1).toFixed(2)+'s');
+      el.innerHTML='<i>'+pick(emojis)+'</i>';
+      el.addEventListener('animationend',e=>{ if(e.target===el) el.remove(); });
+      fxBox.appendChild(el);
+    }
+  }
+
+  // Uitbarsting vanaf een element; kan later afgaan dan het renderen, dus
+  // eerst kijken of het nog in beeld staat.
+  function burstFrom(el,emojis,count,opt){
+    if(!el||!el.isConnected) return;
+    const r=el.getBoundingClientRect();
+    burst(r.left+r.width/2,r.top+r.height*0.45,emojis,count,opt);
+  }
+
+  // Regen over de volle breedte, voor de momenten die het hele scherm raken.
+  function rain(emojis,count,opt){
+    if(noMotion.matches||!emojis||!emojis.length) return;
+    const o=opt||{}, dur=o.dur||4.5, spreadIn=o.delay||2.5;
+    for(let k=0;k<count;k++){
+      if(fxBox.childElementCount>180) return;
+      const el=document.createElement('span');
+      el.className='r';
+      el.style.left=rnd(-2,100).toFixed(1)+'%';
+      el.style.setProperty('--rot',Math.round(rnd(-540,540))+'deg');
+      el.style.setProperty('--sz',rnd(1.4,2.6).toFixed(2)+'rem');
+      el.style.setProperty('--sway',Math.round(rnd(14,46))+'px');
+      el.style.setProperty('--dur',rnd(dur*0.7,dur*1.3).toFixed(2)+'s');
+      el.style.animationDelay=rnd(0,spreadIn).toFixed(2)+'s';
+      el.innerHTML='<i>'+pick(emojis)+'</i>';
+      el.addEventListener('animationend',e=>{ if(e.target===el) el.remove(); });
+      fxBox.appendChild(el);
+    }
+  }
+
+  let shakeTimer=null;
+  function shakeScreen(){
+    if(noMotion.matches) return;
+    document.body.classList.remove('fx-shake');
+    void document.body.offsetWidth; // forceer herstart van de animatie
+    document.body.classList.add('fx-shake');
+    clearTimeout(shakeTimer);
+    shakeTimer=setTimeout(()=>document.body.classList.remove('fx-shake'),600);
+  }
+
+  // Samenvatting van een snapshot: precies genoeg om te zien wat er nieuw is.
+  function fxState(g){
+    if(!g) return null;
+    const d=g.draft, live=d&&d.phase===g.phase?d.values:null;
+    const vals=live?live.slice():g.players.map(()=>null);
+    return {
+      id:g.id,
+      status:g.status,
+      played:g.roundScores.length,
+      phase:g.phase,
+      round:g.currentRound,
+      leaders:(g.positions||[]).map((p,i)=>p===1?i:-1).filter(i=>i>=0).join(','),
+      draft:vals,
+      ask:vals.reduce((a,v)=>a+(v||0),0),
+      missing:vals.filter(v=>v==null).length,
+    };
+  }
+
+  function fxDiff(prev,g){
+    const out=[];
+    const now=fxState(g);
+    if(!g||!prev||!now||prev.id!==g.id) return out; // eerste snapshot of ander potje
+    if(prev.status!=='finished'&&g.status==='finished'){ out.push({t:'win'}); return out; }
+    if(g.status!=='active') return out;
+    if(now.played<prev.played) return out;         // undo: niets te vieren
+    if(now.played>prev.played){
+      const r=now.played-1;
+      let exact=0;
+      g.players.forEach((_,i)=>{
+        const kind=g.roundKinds[r][i];
+        if(kind==='exact') exact++;
+        out.push({t:'round',seat:i,kind:kind,score:g.roundScores[r][i],
+                  pred:g.predictions[r][i],act:g.actuals[r][i]});
+      });
+      out.push({t:'roundAll',exact:exact,n:g.players.length});
+      // De stand verandert alleen als er geteld is, dus een kopwissel hoort hier.
+      if(now.leaders!==prev.leaders){
+        now.leaders.split(',').filter(s=>s!=='').forEach(s=>out.push({t:'lead',seat:+s}));
+      }
+      return out;
+    }
+    // Concept-invoer: reageer op elke nieuwe of gewijzigde keuze.
+    if(prev.round===now.round&&prev.phase===now.phase){
+      const cards=g.roundInfo.cards;
+      now.draft.forEach((v,i)=>{
+        if(v==null||v===prev.draft[i]) return;
+        out.push({t:now.phase==='predict'?'bid':'trick',seat:i,value:v,cards:cards});
+      });
+      if(now.phase==='predict'&&now.ask!==prev.ask) out.push({t:'ask'});
+      if(now.phase==='predict'&&!now.missing&&now.ask===cards
+         &&(prev.missing||prev.ask!==cards)) out.push({t:'askJolt'});
+    }
+    return out;
+  }
+
+  function fxPlay(effects){
+    if(!effects.length) return;
+    const cards=app.querySelectorAll('.pcard');
+    let shakeAt=-1;
+    effects.forEach(e=>{
+      const card=cards[e.seat];
+      if(e.t==='win'){
+        rain(FXE.win,46,{dur:5.5,delay:3.5});
+        shakeScreen();
+        setTimeout(()=>burstFrom(app.querySelector('.winner-banner'),FXE.win,22,
+          {spread:340,rise:-260,fall:560}),700);
+        return;
+      }
+      if(e.t==='round'){
+        if(!card) return;
+        const wait=e.seat*0.09;
+        card.style.setProperty('--fxd',wait.toFixed(2)+'s');
+        card.style.setProperty('--fxc',FXC[e.kind]||'#9a9aa3');
+        card.classList.add('fx-hit');
+        const zero=e.pred===0&&e.act===0;
+        let emo=zero?FXE.zero:e.kind==='exact'?FXE.exact:e.kind==='under'?FXE.under:null;
+        let n=zero?8:e.kind==='exact'?9:e.kind==='under'?7:0;
+        let opt={spread:170,rise:-170,fall:400};
+        if(e.kind==='under'){ opt={spread:130,rise:-70,fall:520}; card.classList.add('fx-jolt'); }
+        if(e.score>=8){ // een dikke score knalt binnen, met schokgolf en al
+          card.classList.add('fx-slam');
+          emo=FXE.big; n=e.score>=10?18:12; opt={spread:280,rise:-240,fall:560};
+          // Schudden is voor de echt grote klappers; anders went het te snel.
+          if(e.score>=10&&e.seat>shakeAt) shakeAt=e.seat;
+        }
+        if(emo) setTimeout(()=>burstFrom(card,emo,n,opt),wait*1000+140);
+        return;
+      }
+      if(e.t==='roundAll'){
+        if(e.n>=2&&e.exact===e.n) rain(FXE.all,26,{dur:4,delay:1.6});
+        else if(!e.exact) rain(FXE.none,10,{dur:4.5,delay:2});
+        return;
+      }
+      if(e.t==='lead'){
+        if(!card) return;
+        const crown=card.querySelector('.crown');
+        if(crown) crown.classList.add('fx-crown');
+        setTimeout(()=>burstFrom(crown||card,FXE.crown,10,
+          {spread:150,rise:-160,fall:320}),300);
+        return;
+      }
+      if(e.t==='bid'||e.t==='trick'){
+        if(!card) return;
+        card.classList.add(e.t==='bid'?'fx-bid':'fx-trick');
+        // Alles vragen is een statement; dat mag gezien worden.
+        if(e.t==='bid'&&e.cards>=3&&e.value===e.cards){
+          setTimeout(()=>burstFrom(card,FXE.max,10,{spread:150,rise:-180,fall:340}),60);
+        }
+        return;
+      }
+      if(e.t==='ask'){
+        const num=app.querySelector('.askbar .num');
+        if(num) num.classList.add('fx-bump');
+        return;
+      }
+      if(e.t==='askJolt'){
+        const bar=app.querySelector('.askbar');
+        if(bar) bar.classList.add('fx-jolt');
+      }
+    });
+    if(shakeAt>=0) setTimeout(shakeScreen,shakeAt*90+170);
+    // De net getelde ronde licht op in de tabel en de lijnen tekenen zich na.
+    if(effects.some(e=>e.t==='round')){ fxRow(); fxTrend(); }
+  }
+
+  function fxRow(){
+    const row=app.querySelector('tr.current-round');
+    if(!row) return;
+    row.classList.add('fx-row');
+    row.querySelectorAll('td .d').forEach((d,k)=>d.style.setProperty('--fxd',(k*0.06).toFixed(2)+'s'));
+  }
+
+  function fxTrend(){
+    if(noMotion.matches) return;
+    app.querySelectorAll('.trend svg polyline').forEach(pl=>{
+      if(typeof pl.getTotalLength!=='function') return;
+      let len=0;
+      try{ len=pl.getTotalLength(); }catch(err){ return; }
+      if(!len) return;
+      pl.style.strokeDasharray=len;
+      pl.style.strokeDashoffset=len;
+      pl.classList.add('fx-draw');
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{ pl.style.strokeDashoffset=0; }));
+    });
+  }
+
   // ---- renderen ----
   // Vier schermen: voorspellen (draft-invoer loopt) → spelen (voorspellingen
   // bevestigd) → tussenstand (ronde geteld, nog geen nieuwe invoer) → eindstand.
-  let lastGame=null;
+  let lastGame=null, fxPrev=null;
   function render(snapshot){
     const g = snapshot.game;
+    // Eerst kijken wát er nieuw is (het scherm staat er dan nog), daarna pas
+    // opnieuw opbouwen; de effecten hangen aan het verschil, niet aan de stand.
+    const effects = fxDiff(fxPrev, g);
+    fxPrev = fxState(g);
     lastGame=g;
     app.style.display='contents';
     if(g&&factTimer){ clearInterval(factTimer); factTimer=null; }
-    if(!g){ renderIdle(snapshot.leaderboard, snapshot.awards, snapshot.tableFacts); return; }
-    if(g.status==='finished'){ renderWinner(g); return; }
-    const d=g.draft;
-    if(g.phase==='predict'&&d&&d.phase==='predict'&&d.values.some(v=>v!=null)){
-      renderBidding(g,d); return;
+    if(!g) renderIdle(snapshot.leaderboard, snapshot.awards, snapshot.tableFacts);
+    else if(g.status==='finished') renderWinner(g);
+    else{
+      const d=g.draft;
+      if(g.phase==='predict'&&d&&d.phase==='predict'&&d.values.some(v=>v!=null)) renderBidding(g,d);
+      else if(g.phase==='actual') renderPlaying(g, d&&d.phase==='actual'?d:null);
+      else renderStandings(g);
     }
-    if(g.phase==='actual'){
-      renderPlaying(g, d&&d.phase==='actual'?d:null); return;
-    }
-    renderStandings(g);
+    fxPlay(effects);
   }
 
   function topbarHtml(g,label){
@@ -307,8 +701,9 @@
   function highlightsHtml(g){
     const hl=g.highlights||[];
     if(!hl.length) return '';
-    return '<div class="highlights">'+hl.map(h=>
-      '<div class="hl"><span class="ic">'+h.icon+'</span><span>'+esc(h.text)+'</span></div>').join('')+'</div>';
+    return '<div class="highlights">'+hl.map((h,i)=>
+      '<div class="hl" style="--fxd:'+(0.9+i*0.09).toFixed(2)+'s"><span class="ic">'+h.icon+'</span>'
+      +'<span>'+esc(h.text)+'</span></div>').join('')+'</div>';
   }
 
   // Scherm 1: voorspellen — live meekijken met de invoer op de telefoon.
