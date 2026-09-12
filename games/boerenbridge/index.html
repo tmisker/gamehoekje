@@ -843,9 +843,7 @@
     // reactie bij het spel mee, dus die hoort er meteen te staan.
     showDraftFact(game.draftFact);
     wireNumRows(sec,false,()=>{
-      const w=document.getElementById('predWarn');
-      delete w.dataset.warned;
-      w.innerHTML='';
+      document.getElementById('predWarn').innerHTML='';
       if(selMissing()===game.players.length) showDraftFact(null);
       updateState();
     });
@@ -859,16 +857,6 @@
     okBtn.addEventListener('click',()=>{
       if(selMissing()>0) return;
       const preds=sel.slice();
-      const total=preds.reduce((a,b)=>a+b,0);
-      // advieswaarschuwing blijft client-side; blokkeert niet
-      if(total===cards){
-        const w=document.getElementById('predWarn');
-        if(!w.dataset.warned){
-          w.dataset.warned='1';
-          w.innerHTML='<span class="warn">⚠ Totaal voorspeld ('+total+') is gelijk aan het aantal kaarten ('+cards+') — druk nogmaals om door te gaan</span>';
-          return;
-        }
-      }
       okBtn.disabled=true;
       attempt(async()=>{
         game = await api('POST','/games/'+game.id+'/predictions',{round:game.currentRound,predictions:preds});
