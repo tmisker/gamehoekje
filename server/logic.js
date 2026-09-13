@@ -334,13 +334,20 @@ function enrich(game, games) {
 // leadersAfter(cum, r) = wie er na ronde r aan kop staan (gelijk = samen).
 const { joinNames, cardsTxt, pointsTxt, formatDuration, leadersAfter } = bbStats;
 
-// Hoe vaak de kop van eigenaar wisselde: pas als niemand van de vorige
-// koplopers nog bovenaan staat — een gedeelde kop is nog geen wissel.
+// Hoe vaak de kop van eigenaar wisselde. De kop is van iedereen die hem
+// onafgebroken vasthoudt (`holder`): zolang één van hen bovenaan blijft staan
+// is er geen wissel, en versmalt de eigenaar tot wie hem al die tijd had.
+// Vergelijken met alleen de vorige ronde is niet genoeg: een gedeelde kop
+// waste de eigenaar dan wit — Tim → Tim+Elien → Elien → Tim+Elien → Tim is
+// twee wissels, maar bij elke stap zat er iemand van de vorige ronde nog bij.
 function leadChanges(cum) {
   let changes = 0;
+  let holder = cum.length ? leadersAfter(cum, 0) : [];
   for (let r = 1; r < cum.length; r++) {
-    const prev = leadersAfter(cum, r - 1), now = leadersAfter(cum, r);
-    if (!now.some(i => prev.includes(i))) changes++;
+    const now = leadersAfter(cum, r);
+    const kept = holder.filter(i => now.includes(i));
+    if (kept.length) holder = kept;
+    else { changes++; holder = now; }
   }
   return changes;
 }
@@ -941,6 +948,7 @@ module.exports = {
       .concat(bbStats.tableNotes(hist));
   },
   factCandidates, historyCandidates, draftCandidates, pickFact, pickDraftFact, highlights, daypart,
+  leadChanges,
   statsView: (games, exclude) => bbStats.statsView(games, exclude, RULES),
   historyOf,
   finishedGames: shared.finishedGames,
