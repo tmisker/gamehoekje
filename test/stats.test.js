@@ -198,6 +198,51 @@ function main() {
     console.log('OK hoogtepunten (comeback, kantelpunt, van start tot finish)');
   }
 
+  // --- hoe vaak de kop van eigenaar wisselde ---
+  {
+    // Direct op cumulatieve standen: zo zijn de gedeelde koppen te sturen
+    // zonder er een heel potje omheen te hoeven spelen.
+    const lc = logic.leadChanges;
+    assert.equal(lc([]), 0, 'geen rondes, geen wissels');
+    assert.equal(lc([[3, 1, 0]]), 0, 'één ronde is nog geen wissel');
+    assert.equal(lc([[3, 1, 0], [6, 2, 0], [9, 3, 0]]), 0, 'dezelfde koploper');
+    assert.equal(lc([[3, 1, 0], [3, 5, 0]]), 1, 'kale wissel');
+
+    // Een gedeelde kop is op zichzelf geen wissel: er blijft iemand staan.
+    assert.equal(lc([[3, 1, 0], [3, 3, 0]]), 0, 'erbij komen is geen wissel');
+    assert.equal(lc([[3, 1, 0], [3, 3, 0], [5, 3, 0]]), 0, 'en weer eraf ook niet');
+    assert.equal(lc([[3, 3, 0], [5, 3, 0]]), 0, 'uit een gedeelde kop losbreken');
+    assert.equal(lc([[3, 3, 0], [3, 3, 9]]), 1, 'een derde die er overheen gaat');
+
+    // De bug uit het potje van 13 september: de kop hield de hele tijd een
+    // gedeelde tussenstap aan, en daardoor telde vergelijken-met-de-vorige-
+    // ronde slechts één van de drie wissels. Elien, Tim, Sara.
+    const echt = [
+      [4, 7, 2], [8, 13, 4], [10, 19, 12], [16, 26, 14], [21, 31, 18],
+      [26, 32, 20], [25, 31, 22], [30, 30, 23], [35, 35, 25], [42, 40, 31],
+      [43, 43, 36], [42, 51, 34], [48, 50, 43], [56, 49, 47], [61, 51, 45],
+    ];
+    assert.equal(lc(echt), 3, 'Tim -> Elien (10) -> Tim (12) -> Elien (14)');
+
+    // Een gelijkspel mag de eigenaar niet witwassen: Bo pakt de kop, Ann komt
+    // gelijk, Bo loopt weer weg — dat is nul wissels, niet twee.
+    assert.equal(lc([[0, 3, 0], [3, 3, 0], [3, 6, 0]]), 0, 'gelijkspel witwast niet');
+    // ... maar gaat Ann er daarna wél overheen, dan is het er één.
+    assert.equal(lc([[0, 3, 0], [3, 3, 0], [7, 3, 0]]), 1, 'via gelijkspel overnemen');
+
+    // En het loopt door in de tekst van het hoogtepunt.
+    const game = play(NAMES, (r, cards) => (r < 2
+      ? { preds: [cards, 0, 0], acts: [cards, 0, 0] }
+      : { preds: [0, cards, 0], acts: [0, cards, 0] }));
+    const cum = logic.cumulativeTotals(game);
+    const texts = logic.enrich(game, [game]).highlights.map(h => h.text);
+    const n = lc(cum);
+    assert.ok(n >= 1, 'in dit potje wisselt de kop');
+    assert.ok(texts.includes('De kop wisselde ' + n + ' keer van eigenaar.'),
+      'hoogtepunt telt hetzelfde: ' + texts);
+    console.log('OK kopwisselingen (gedeelde kop witwast de eigenaar niet)');
+  }
+
   // --- wisselen van speler: wie speelde welke ronde ---
   {
     // Ann speelt de eerste zes rondes, daarna neemt Dee de stoel over.
