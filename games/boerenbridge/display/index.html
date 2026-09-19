@@ -682,9 +682,12 @@
       +'</div>'+trendHtml(g)+'</div></div>';
   }
 
+  // Enkelvoud/meervoud netjes: bij één slag verschil geen "slagen".
   function deltaInfo(total,cards){
-    if(total>cards) return {cls:'over',txt:(total-cards)+' te veel — er gaat iemand de boot in'};
-    if(total<cards) return {cls:'under',txt:(cards-total)+' te weinig — er blijven slagen over'};
+    const d=Math.abs(total-cards);
+    if(total>cards) return {cls:'over',txt:d+' te veel — er gaat iemand de boot in'};
+    if(total<cards) return {cls:'under',
+      txt:d+' te weinig — '+(d===1?'er blijft een slag over':'er blijven slagen over')};
     return {cls:'even',txt:'precies rond'};
   }
 
