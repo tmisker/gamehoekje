@@ -818,6 +818,9 @@
   function selTotal(){ return sel.reduce((a,v)=>a+(v||0),0); }
   function selMissing(){ return sel.filter(v=>v==null).length; }
 
+  // De 1-kaartronde bestaat, dus nooit "van 1 slagen".
+  const slagenTxt=n=>n+(n===1?' slag':' slagen');
+
   function showPredictForm(notice){
     const cards=game.roundInfo.cards;
     const sec=$('#inputSection');
@@ -834,7 +837,7 @@
     const okBtn=document.getElementById('predOk');
     function updateState(){
       const total=selTotal(), missing=selMissing();
-      $('#predSum').innerHTML='Samen voorspeld: <b>'+total+'</b> van '+cards+' slagen'
+      $('#predSum').innerHTML='Samen voorspeld: <b>'+total+'</b> van '+slagenTxt(cards)
         +(missing?' · nog '+missing+(missing===1?' speler':' spelers'):'');
       okBtn.disabled=missing>0;
     }
@@ -881,7 +884,7 @@
     const okBtn=document.getElementById('actOk');
     function updateState(){
       const total=selTotal(), missing=selMissing();
-      $('#actSum').innerHTML='Samen: <b>'+total+'</b> van '+cards+' slagen'
+      $('#actSum').innerHTML='Samen: <b>'+total+'</b> van '+slagenTxt(cards)
         +(missing?' · nog '+missing+(missing===1?' speler':' spelers'):'');
       okBtn.disabled=missing>0||total!==cards;
     }

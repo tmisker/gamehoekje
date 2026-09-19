@@ -173,6 +173,7 @@
   const nl=v=>(v==null?'–':String(v).replace('.',','));
   const sign=v=>(v>0?'+':'')+nl(v);
   const cardsTxt=c=>c+(c===1?' kaart':' kaarten');
+  const roundsTxt=r=>r+(r===1?' ronde':' rondes');   // een invaller kan er één hebben
 
   async function load(){
     const qs=exclude.map(n=>'exclude='+encodeURIComponent(n)).join('&');
@@ -242,7 +243,7 @@
       const sel=on.has(r.name.toLowerCase());
       return '<button class="prow'+(sel?' on':'')+'" data-name="'+esc(r.name)+'" aria-pressed="'+sel+'">'
         +'<span class="who"><span class="nm2">'+esc(r.name)+'</span>'
-          +'<span class="meta2">'+(r.games?r.games+(r.games===1?' potje':' potjes'):r.rounds+' rondes')+'</span></span>'
+          +'<span class="meta2">'+(r.games?r.games+(r.games===1?' potje':' potjes'):roundsTxt(r.rounds))+'</span></span>'
         +'<span class="kindbar"><i class="k-exact" style="width:'+r.exactPct+'%"></i>'
           +'<i class="k-over" style="width:'+r.overPct+'%"></i>'
           +'<i class="k-under" style="width:'+r.underPct+'%"></i></span>'
@@ -291,7 +292,7 @@
       : 'mist even vaak naar boven als naar beneden';
     return '<div class="pc">'
       +'<div class="top"><span class="nm">'+esc(r.name)+'</span>'
-      +'<span class="meta">'+(r.games?r.games+(r.games===1?' potje':' potjes')+' · ':'')+r.rounds+' rondes</span></div>'
+      +'<span class="meta">'+(r.games?r.games+(r.games===1?' potje':' potjes')+' · ':'')+roundsTxt(r.rounds)+'</span></div>'
       +'<div class="tag">'+(r.games?'':'Alleen ingevallen: rondes gespeeld, geen potje uitgespeeld. ')
         +neiging+', '+durf+'.</div>'
       +'<div class="kindbar"><i class="k-exact" style="width:'+e+'%"></i>'
