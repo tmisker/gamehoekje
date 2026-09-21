@@ -188,6 +188,11 @@ spelers uitsluiten.
 blijven staan waar je ze verwacht. Scrollen en slepen (wafelwoorden) werken
 gewoon.
 
+Zet je de site op je beginscherm (*Deel → Zet op beginscherm*), dan start hij
+zonder Safari-balken, als een app. Stond hij er al vóór deze wijziging op?
+Haal hem er dan één keer af en zet hem er opnieuw op — iOS onthoudt de oude
+instelling.
+
 ## Docker
 
 ```

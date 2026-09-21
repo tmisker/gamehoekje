@@ -342,6 +342,11 @@ klik op, en dan wist een tweede tik op dezelfde knop geen keuze meer. Houd
 invoervelden op `font-size:1rem` (16 px) — kleiner en iOS zoomt alsnog in zodra
 je een veld aantikt.
 
+De `apple-mobile-web-app-*`-meta's laten de site vanaf het beginscherm zonder
+Safari-balken starten — en pas in zo'n homescreen-app houdt iOS zich ook echt
+aan `user-scalable=no`. iOS onthoudt die keuze bij het toevoegen, dus na een
+wijziging moet je het icoon opnieuw aanmaken.
+
 ## Een spel toevoegen
 
 1. Maak `games/<naam>/index.html` als zelfstandige pagina. Zet bovenin een
