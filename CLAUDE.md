@@ -321,6 +321,27 @@ test de solver-integratie maar niet de worker zelf.
   trager). Zie de `buildTables`-aanpak in `kociemba.js`.
 - **`node_modules/`** staat in `.gitignore` (alleen `jsdom` voor tests). Niet committen.
 
+## Geen zoom (elke pagina)
+
+Onderaan elke pagina staat, vlak voor `</body>`, een identiek blokje
+`<style>` + `<script>` (herkenbaar aan de comment "Geen zoom"). Neem het
+letterlijk over in een nieuwe pagina; wijzig je het, wijzig het dan in
+**alle** pagina's tegelijk (en in `src/cube-solver/template.html`, niet in het
+gebouwde bestand). Het staat bewust niet in een gedeeld .js-bestand: losse
+pagina's moeten zonder server blijven werken.
+
+De viewport-meta staat overal op `maximum-scale=1.0, user-scalable=no`, maar
+iOS negeert dat in Safari zelf — alleen een app op het beginscherm houdt zich
+eraan. Daarom ook `html{touch-action:pan-x pan-y}` (weg met dubbeltik-zoom) en
+`preventDefault` op `gesturestart/change/end` plus `touchmove` met meer dan één
+vinger (weg met knijpen). Eén vinger blijft ongemoeid, anders zou wafelwoorden
+niet meer slepen.
+
+Blokkeer dubbeltikken **niet** via `touchend`: `preventDefault` daar eet de
+klik op, en dan wist een tweede tik op dezelfde knop geen keuze meer. Houd
+invoervelden op `font-size:1rem` (16 px) — kleiner en iOS zoomt alsnog in zodra
+je een veld aantikt.
+
 ## Een spel toevoegen
 
 1. Maak `games/<naam>/index.html` als zelfstandige pagina. Zet bovenin een
@@ -335,6 +356,7 @@ test de solver-integratie maar niet de worker zelf.
 - Nederlands in de UI; commit-berichten mogen Nederlands of Engels.
 - Self-contained pagina's, geen externe requests of CDN's. Requests naar de
   eigen server (relatieve `/api/...`-paden) zijn de enige uitzondering.
+- Nieuwe pagina? Neem het zoom-blokje van hierboven over.
 - Mobiel-eerst, donker thema. Homepage-accent `#5b8cff`; spel-accent groen.
 - Geen auth: bedoeld voor een vertrouwd thuisnetwerk (staat ook in README).
 - Commit & push alleen wanneer de gebruiker erom vraagt; ontwikkel op de

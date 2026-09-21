@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#0f0f12">
   <title>Tafeltennis – Toernooitracker</title>
   <style>
@@ -1018,6 +1018,30 @@
   });
 
   showStart();
+})();
+</script>
+<!-- Geen zoom. Zelfde blok op elke pagina; zie CLAUDE.md. -->
+<style>
+  /* Knijp- en dubbeltik-zoom eruit. Pagina's die zelf met gebaren werken
+     (wafelwoorden) zetten touch-action op hun eigen elementen strakker;
+     de browser neemt de strengste van de twee. */
+  html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%}
+</style>
+<script>
+(function(){
+  // In een homescreen-app is user-scalable=no genoeg, maar in Safari zelf
+  // negeert iOS dat sinds iOS 10. Dus ook met de hand: gesture* is de
+  // iOS-variant van knijpen, touchmove met twee vingers vangt de rest.
+  // Dubbeltik-zoom doet touch-action hierboven; die blijft uit het JS, omdat
+  // preventDefault op touchend de klik zelf zou opeten (twee keer dezelfde
+  // knop tikken wist bij boerenbridge een keuze).
+  const stop = e => e.preventDefault();
+  for (const type of ['gesturestart','gesturechange','gestureend']) {
+    document.addEventListener(type, stop, {passive:false});
+  }
+  document.addEventListener('touchmove', e => {
+    if (e.touches.length > 1) e.preventDefault();
+  }, {passive:false});
 })();
 </script>
 </body>

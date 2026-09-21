@@ -182,6 +182,12 @@ de poule weer uit is. Het klassement telt per speler toernooien, titels,
 podiumplaatsen en het winstpercentage over alle wedstrijden; ook hier kun je
 spelers uitsluiten.
 
+## Op de telefoon of tablet
+
+**Geen zoom.** Knijpen en dubbeltikken zoomen niet meer; teksten en knoppen
+blijven staan waar je ze verwacht. Scrollen en slepen (wafelwoorden) werken
+gewoon.
+
 ## Docker
 
 ```
