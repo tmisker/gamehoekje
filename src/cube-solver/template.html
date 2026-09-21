@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#121213">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Kubus Solver">
   <title>Kubus Solver</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
@@ -213,5 +217,29 @@
   <script id="solver-src">/*__SOLVER__*/</script>
   <script id="kociemba-src">/*__KOCIEMBA__*/</script>
   <script>/*__APP__*/</script>
+  <!-- Geen zoom. Zelfde blok op elke pagina; zie CLAUDE.md. -->
+  <style>
+    /* Knijp- en dubbeltik-zoom eruit. Pagina's die zelf met gebaren werken
+       (wafelwoorden) zetten touch-action op hun eigen elementen strakker;
+       de browser neemt de strengste van de twee. */
+    html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%}
+  </style>
+  <script>
+  (function(){
+    // In een homescreen-app is user-scalable=no genoeg, maar in Safari zelf
+    // negeert iOS dat sinds iOS 10. Dus ook met de hand: gesture* is de
+    // iOS-variant van knijpen, touchmove met twee vingers vangt de rest.
+    // Dubbeltik-zoom doet touch-action hierboven; die blijft uit het JS, omdat
+    // preventDefault op touchend de klik zelf zou opeten (twee keer dezelfde
+    // knop tikken wist bij boerenbridge een keuze).
+    const stop = e => e.preventDefault();
+    for (const type of ['gesturestart','gesturechange','gestureend']) {
+      document.addEventListener(type, stop, {passive:false});
+    }
+    document.addEventListener('touchmove', e => {
+      if (e.touches.length > 1) e.preventDefault();
+    }, {passive:false});
+  })();
+  </script>
 </body>
 </html>
