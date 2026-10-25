@@ -9,9 +9,9 @@ browser. Geen framework, geen npm-dependencies. Elke spelpagina is
 zelfstandige HTML/CSS/JS. Er is één minimale **Node-server**
 (`server/server.js`, alleen ingebouwde modules) die de site serveert én de
 spel-API's + SSE levert (boerenbridge, klaverjas, tafeltennis); de overige spellen doen
-geen enkele request en werken ook als los bestand. Deploy = Docker op de thuisserver (zie README;
-de compose-service staat in de aparte `manor`-repo). GitHub Pages wordt
-**niet** meer gebruikt.
+geen enkele request en werken ook als los bestand. Draait als Docker-container
+thuis; het uitrollen regelt de aparte `manor`-repo (zie "Uitrollen"). GitHub
+Pages wordt **niet** meer gebruikt.
 
 UI-teksten zijn in het **Nederlands**. Houd dat zo.
 
@@ -126,7 +126,10 @@ Dockerfile                     # node:22-alpine, geen npm install
   wissel pas de volgende ronde in: de voorspelling hoort bij wie hem deed. Een
   tweede wissel op dezelfde stoel in dezelfde ronde **corrigeert** de vorige
   (terug naar de oorspronkelijke naam wist hem helemaal), zodat een typefout te
-  herstellen is.
+  herstellen is. Het record "Vaste invaller" (`bb-stats.js`) telt alleen wie
+  de stoel van een ánder overneemt en er minstens een ronde op speelt —
+  terugkomen op je eigen stoel of een wissel vóór ronde 1 telt niet — en
+  verschijnt pas vanaf twee keer invallen.
 - **De tussenstand komt van de server.** `enrich` levert naast `totals` ook
   `cumulative` (`[ronde][speler]` = stand t/m die ronde; `getTotals` is de
   laatste rij), `positions` (plek in de stand, gelijke totalen delen een plek
@@ -291,6 +294,16 @@ UI end-to-end: `jsdom` is beschikbaar (`npm install jsdom --no-save`). Laad het
 **gebouwde** `games/cube-solver/index.html` met `runScripts:"dangerously"`. In
 jsdom bestaat er geen `Worker`, dus dan loopt de **main-thread fallback** — dat
 test de solver-integratie maar niet de worker zelf.
+
+## Uitrollen (regelt manor)
+
+Uitrollen gebeurt **niet vanuit deze repo**, maar in de `manor`-repo
+(`~/manor`, `stacks/spellenhoek/NOTES.md`). Daar staat altijd hoe het moet en
+op welke host spellenhoek draait. Kijk het daar elke keer na en zet hier geen
+host of commando neer: dat veroudert. De host is al eens gewisseld (van keeper
+naar porter, 2026-09-25). Wat wél vastligt: manor bouwt uit
+`tmisker/gamehoekje#main`, dus een wijziging gaat pas live na een merge naar
+`main` én een rebuild via manor.
 
 ## Valkuilen (echt gebeurd)
 

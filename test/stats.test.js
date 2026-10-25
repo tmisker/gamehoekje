@@ -132,6 +132,7 @@ function main() {
     assert.equal(rec('Snelste potje').text, '1 uur 15 min');
     assert.equal(rec('Langste potje').text, '1 uur 15 min');
     assert.match(rec('Ruimste winst').text, /^Ann — \d+ punten voorsprong$/);
+    assert.equal(rec('Grootste comeback'), undefined, 'de winnaar stond hier altijd voor');
 
     const notes = view.notes.map(n => n.text);
     assert.ok(notes.some(t => /koploper na de 1-kaartronde won 3 van de 3 potjes/.test(t)),
@@ -195,6 +196,19 @@ function main() {
     const wire = logic.enrich(A, [A]).highlights.map(h => h.text);
     assert.ok(!wire.some(t => /Kantelpunt|kwam terug/.test(t)));
     assert.ok(wire.some(t => /^Ann stond van begin tot eind aan kop\.$/.test(t)), 'wire-to-wire: ' + wire);
+
+    // Het record "Grootste comeback" meet hetzelfde als het hoogtepunt, maar
+    // over alle potjes: de 21 van `late` verslaat de 15 van `quick`.
+    const comeback = games => logic.statsView(games, []).records.find(r => r.title === 'Grootste comeback');
+    assert.equal(comeback([A, quick, late]).text, 'Bo — won na 21 punten achterstand (na ronde 3)');
+    // Na één ronde 1 punt achter (Bo raapt er 7 te veel) is geen comeback.
+    const narrow = play(NAMES, (r, cards) => (r === 0
+      ? { preds: [1, 0, 0], acts: [1, cards - 1, 0] }
+      : { preds: [cards, 0, 0], acts: [cards, 0, 0] }));
+    assert.deepEqual(narrow.winnerIdxs, [0], 'Ann wint toch');
+    assert.equal(logic.cumulativeTotals(narrow)[0][1] - logic.cumulativeTotals(narrow)[0][0], 1, 'Ann stond 1 achter');
+    assert.equal(comeback([A, narrow]), undefined, 'onder de 5 punten is het gewoon spelverloop');
+    assert.ok(!logic.enrich(narrow, [narrow]).highlights.some(h => /kwam terug/.test(h.text)), 'net als het hoogtepunt');
     console.log('OK hoogtepunten (comeback, kantelpunt, van start tot finish)');
   }
 
@@ -281,6 +295,57 @@ function main() {
     assert.ok(!lb.some(e => e.name === 'Ann'), 'Ann niet: zij maakte geen potje af');
     assert.equal(lb.find(e => e.name === 'Dee').exactPct, 100);
     console.log('OK wisselen van speler (rondes en potje apart toegewezen)');
+  }
+
+  // --- record: vaste invaller ---
+  {
+    // Potje uitspelen met wissels [ronde, stoel, naam] vlak voor de voorspelling.
+    const withSwaps = swaps => {
+      const game = logic.createGame(NAMES);
+      for (let r = 0; r < game.rounds.length; r++) {
+        for (const [at, seat, name] of swaps) if (at === r) logic.applySwap(game, r, seat, name);
+        const { preds, acts } = allToAnn(r, game.rounds[r].cards);
+        logic.applyPredictions(game, r, preds);
+        logic.applyActuals(game, r, acts);
+      }
+      return game;
+    };
+    const invaller = games => logic.statsView(games, []).records.find(r => r.title === 'Vaste invaller');
+
+    // Dee neemt ronde 4 t/m 9 van Ann over; daarna komt Ann terug.
+    const heenEnWeer = () => withSwaps([[3, 0, 'Dee'], [9, 0, 'Ann']]);
+    assert.equal(invaller([heenEnWeer()]), undefined, 'één keer invallen is nog geen record');
+    // Ann komt hier ook twee keer terug, met evenveel rondes — telde dat als
+    // invallen, dan deelde ze het record.
+    assert.equal(invaller([heenEnWeer(), heenEnWeer()]).text, 'Dee — 2 keer ingevallen voor Ann, 12 rondes');
+    // Uitspelen telt ook: ronde 11 t/m 15.
+    const uitspelen = withSwaps([[10, 0, 'Dee']]);
+    assert.equal(invaller([heenEnWeer(), uitspelen]).text, 'Dee — 2 keer ingevallen voor Ann, 11 rondes');
+    // Voor verschillende spelers: dan geen "voor".
+    const voorBo = withSwaps([[10, 1, 'Dee']]);
+    assert.equal(invaller([heenEnWeer(), voorBo]).text, 'Dee — 2 keer ingevallen, 11 rondes');
+    // Gelijk aantal keer en rondes: allebei genoemd.
+    const eef = () => withSwaps([[3, 2, 'Eef'], [9, 2, 'Cas']]);
+    assert.equal(invaller([heenEnWeer(), heenEnWeer(), eef(), eef()]).text,
+      'Dee en Eef — 2 keer ingevallen, 12 rondes');
+    // Bij een gelijk aantal keer wint wie de meeste rondes invalt.
+    assert.match(invaller([heenEnWeer(), uitspelen, eef(), eef()]).text, /^Eef — /);
+    // Een naam verbeteren vóór de eerste ronde is geen invallen.
+    const verbeterd = () => withSwaps([[0, 2, 'Eef']]);
+    assert.equal(invaller([verbeterd(), verbeterd()]), undefined, 'wissel vóór ronde 1 telt niet');
+    // Een wissel die pas na de laatste ronde ingaat ook niet: geen ronde gespeeld.
+    const teLaat = () => {
+      const game = logic.createGame(NAMES);
+      for (let r = 0; r < game.rounds.length; r++) {
+        const { preds, acts } = allToAnn(r, game.rounds[r].cards);
+        logic.applyPredictions(game, r, preds);
+        if (r === game.rounds.length - 1) logic.applySwap(game, r, 2, 'Eef');
+        logic.applyActuals(game, r, acts);
+      }
+      return game;
+    };
+    assert.equal(invaller([teLaat(), teLaat()]), undefined, 'nul rondes ingevallen telt niet');
+    console.log('OK record vaste invaller');
   }
 
   // --- een potje buiten de telling ---

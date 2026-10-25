@@ -195,6 +195,9 @@ instelling.
 
 ## Docker
 
+De Spellenhoek thuis wordt uitgerold vanuit de `manor`-repo
+(`stacks/spellenhoek/NOTES.md`); daar staat hoe. Zelf draaien kan zo:
+
 ```
 docker build -t spellenhoek .
 docker run -p 3000:3000 -v ./spellenhoek-data:/app/data spellenhoek

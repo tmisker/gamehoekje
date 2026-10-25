@@ -29,6 +29,8 @@ function emptyPlayer(name) {
     early: { rounds: 0, exact: 0 },  // als eerste aan de beurt om te voorspellen
     late: { rounds: 0, exact: 0 },   // als laatste (de deler)
     lastPlayed: 0,
+    subs: 0, subRounds: 0,           // ingevallen: hoe vaak, en hoeveel rondes samen
+    subFor: new Map(),               // nameKey -> naam van wie de stoel overgenomen werd
   };
 }
 
@@ -57,7 +59,7 @@ function collect(finished, rules) {
   const durations = [];
   const records = {
     topScore: null, lowScore: null, bestRound: null, worstRound: null,
-    widest: null, closest: null, longestStreak: null,
+    widest: null, closest: null, longestStreak: null, comeback: null,
   };
 
   for (const game of finished) {
@@ -82,6 +84,17 @@ function collect(finished, rules) {
       const entry = { margin, name: who, score: best, at, players: P.slice() };
       if (!records.widest || margin > records.widest.margin) records.widest = entry;
       if (!records.closest || margin < records.closest.margin) records.closest = entry;
+    }
+
+    // Comeback: de grootste achterstand op de koploper onderweg, van wie toch
+    // won. Zelfde maat als het hoogtepunt op het eindscherm (logic.highlights).
+    for (const w of winners) {
+      for (let r = 0; r < played - 1; r++) {
+        const deficit = Math.max(...cum[r]) - cum[r][w];
+        if (!records.comeback || deficit > records.comeback.deficit) {
+          records.comeback = { deficit, name: P[w], round: r + 1, at, players: P.slice() };
+        }
+      }
     }
 
     // Koploper na de 1-kaartronde: voorspelt die de winst?
@@ -161,6 +174,23 @@ function collect(finished, rules) {
       if (!records.topScore || scoreRec.score > records.topScore.score) records.topScore = scoreRec;
       if (!records.lowScore || scoreRec.score < records.lowScore.score) records.lowScore = scoreRec;
     });
+
+    // Invallen = de stoel van iemand anders overnemen en er minstens een ronde
+    // op spelen. Terugkomen op je eigen stoel is geen invallen, en een wissel
+    // vóór de eerste ronde (naam verbeterd) ook niet: dan is de nieuwe naam
+    // gewoon de bewoner van ronde 1.
+    const swaps = game.swaps || [];
+    for (const s of swaps) {
+      const original = rules.occupantAt(game, s.seat, 0);
+      if (nameKey(s.to) === nameKey(original)) continue;
+      const until = swaps.filter(t => t.seat === s.seat && t.round > s.round)
+        .reduce((end, t) => Math.min(end, t.round), played);
+      if (until <= s.round) continue;
+      const p = bucket(players, nameKey(s.to), () => emptyPlayer(s.to));
+      p.subs++;
+      p.subRounds += until - s.round;
+      p.subFor.set(nameKey(original), original);
+    }
 
     // Per ronde-type: hoeveel van de tafel zat goed, en vroeg de tafel te veel?
     for (let r = 0; r < played; r++) {
@@ -308,6 +338,23 @@ function recordRows(hist) {
   }
   if (r.widest) add('📏', 'Ruimste winst', r.widest.name + ' — ' + pointsTxt(r.widest.margin) + ' voorsprong');
   if (r.closest) add('😬', 'Nipste winst', r.closest.name + ' — ' + pointsTxt(r.closest.margin) + ' voorsprong');
+  // Pas vanaf 5 punten, net als het hoogtepunt: minder is gewoon spelverloop.
+  if (r.comeback && r.comeback.deficit >= 5) {
+    add('📈', 'Grootste comeback', r.comeback.name + ' — won na ' + pointsTxt(r.comeback.deficit)
+      + ' achterstand (na ronde ' + r.comeback.round + ')');
+  }
+  // Wie het vaakst invalt; bij een gelijk aantal beslissen de rondes. Eén keer
+  // invallen maakt je nog geen vaste invaller.
+  const subs = [...hist.players.values()].filter(p => p.subs >= 2)
+    .sort((a, b) => b.subs - a.subs || b.subRounds - a.subRounds);
+  if (subs.length) {
+    const top = subs.filter(p => p.subs === subs[0].subs && p.subRounds === subs[0].subRounds)
+      .sort((a, b) => a.name.localeCompare(b.name, 'nl'));
+    // Steeds voor dezelfde? Dan mag die erbij.
+    const only = top.length === 1 && top[0].subFor.size === 1 ? [...top[0].subFor.values()][0] : null;
+    add('🦸', 'Vaste invaller', joinNames(top.map(p => p.name)) + ' — ' + top[0].subs + ' keer ingevallen'
+      + (only ? ' voor ' + only : '') + ', ' + top[0].subRounds + ' rondes');
+  }
   const d = hist.durations;
   if (d.length >= 3) {
     const fast = d.reduce((a, b) => (b.ms < a.ms ? b : a));
