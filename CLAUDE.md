@@ -126,7 +126,10 @@ Dockerfile                     # node:22-alpine, geen npm install
   wissel pas de volgende ronde in: de voorspelling hoort bij wie hem deed. Een
   tweede wissel op dezelfde stoel in dezelfde ronde **corrigeert** de vorige
   (terug naar de oorspronkelijke naam wist hem helemaal), zodat een typefout te
-  herstellen is.
+  herstellen is. Het record "Vaste invaller" (`bb-stats.js`) telt alleen wie
+  de stoel van een ánder overneemt en er minstens een ronde op speelt —
+  terugkomen op je eigen stoel of een wissel vóór ronde 1 telt niet — en
+  verschijnt pas vanaf twee keer invallen.
 - **De tussenstand komt van de server.** `enrich` levert naast `totals` ook
   `cumulative` (`[ronde][speler]` = stand t/m die ronde; `getTotals` is de
   laatste rij), `positions` (plek in de stand, gelijke totalen delen een plek
