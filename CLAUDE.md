@@ -8,7 +8,7 @@ Korte, praktische uitleg over hoe deze repo werkt. Lees dit eerst.
 browser. Geen framework, geen npm-dependencies. Elke spelpagina is
 zelfstandige HTML/CSS/JS. Er is één minimale **Node-server**
 (`server/server.js`, alleen ingebouwde modules) die de site serveert én de
-spel-API's + SSE levert (boerenbridge, klaverjas, tafeltennis); de overige spellen doen
+spel-API's + SSE levert (boerenbridge, klaverjas, tafeltennis, yahtzee); de overige spellen doen
 geen enkele request en werken ook als los bestand. Draait als Docker-container
 thuis; het uitrollen regelt de aparte `manor`-repo (zie "Uitrollen"). GitHub
 Pages wordt **niet** meer gebruikt.
@@ -20,12 +20,13 @@ UI-teksten zijn in het **Nederlands**. Houd dat zo.
 ```
 index.html                     # homepage: overzicht met een kaartje per spel
 server/
-  server.js                    # statische site + /api/{boerenbridge,klaverjas,tafeltennis}/* + SSE
+  server.js                    # statische site + /api/{boerenbridge,klaverjas,tafeltennis,yahtzee}/* + SSE
   shared.js                    # gedeelde, spel-onafhankelijke helpers (klassement, httpError)
   logic.js                     # autoritatieve boerenbridge-logica (pure functies)
   bb-stats.js                  # statistiek over meerdere boerenbridge-potjes (puur)
   klaverjas.js                 # autoritatieve klaverjas-logica (pure functies)
   tafeltennis.js               # autoritatieve toernooilogica tafeltennis (pure functies)
+  yahtzee.js                   # autoritatieve yahtzee-telling (pure functies)
 games/
   boerenbridge/index.html      # invoerpagina (telefoon) — praat met het API
   boerenbridge/display/        # live scorebord (iPad/tweede scherm) — SSE
@@ -34,6 +35,8 @@ games/
   klaverjas/display/           # live scorebord (iPad/tweede scherm) — SSE
   tafeltennis/index.html       # toernooi-invoerpagina (telefoon) — praat met het API
   tafeltennis/display/         # live scorebord: tafels, stand/kruistabel, schema — SSE
+  yahtzee/index.html           # scoreblok + stenen + camera (telefoon) — API + SSE,
+                               #   met <script id="dice-vision"> (dobbelsteenherkenning)
   cube-solver/index.html       # GEBOUWD bestand — NIET met de hand bewerken
   wafelwoorden/index.html      # los, zelfstandig spel (met de hand bewerkbaar)
 src/
@@ -47,6 +50,8 @@ test/api.test.js               # end-to-end test van server + boerenbridge-API
 test/stats.test.js             # boerenbridge-statistiek + weetjes (puur, zonder server)
 test/klaverjas.test.js         # end-to-end test van het klaverjas-API
 test/tafeltennis.test.js       # end-to-end test van het tafeltennis-API
+test/yahtzee.test.js           # end-to-end test van het yahtzee-API
+test/yahtzee-vision.test.js    # dobbelsteenherkenning op synthetische beelden (puur)
 test/solver.test.js            # cube-solver op honderden scrambles (node test/solver.test.js)
 data/                          # spelgegevens (gitignored; Docker-volume)
 README.md                      # gebruikersgerichte uitleg
@@ -62,8 +67,9 @@ Dockerfile                     # node:22-alpine, geen npm install
 - **De server is autoritatief.** Alle spelregels (boerenbridge: rondeschema
   8→1→8, scoreformule, deler/beurtvolgorde; klaverjas: nat, roem, pit,
   16 rondes, twee fasen; tafeltennis: poule-indeling, game-validatie,
-  tiebreaks, schema/seeding) staan in `server/logic.js`, `server/klaverjas.js`
-  en `server/tafeltennis.js`.
+  tiebreaks, schema/seeding; yahtzee: vakjes, bonus, Yahtzee-bonus, joker)
+  staan in `server/logic.js`, `server/klaverjas.js`, `server/tafeltennis.js`
+  en `server/yahtzee.js`.
   De pagina's zijn pure renderers van het "verrijkte" game-object dat elke
   mutatie-POST teruggeeft (en bij boerenbridge ook via SSE wordt gebroadcast).
   Dupliceer spelregels nooit in de clients — de klaverjaspagina rekent
@@ -96,6 +102,49 @@ Dockerfile                     # node:22-alpine, geen npm install
   eindronde weg. De stand (`standings`) rangschikt recursief: winst → onderling
   (winst, game-, puntensaldo) → saldo over de hele poule → gedeelde plek.
   `.../draft` is de live tussenstand van één wedstrijd (niet-autoritatief).
+- **Yahtzee in het kort:** het potje ís een lijst zetten (`game.moves`, elk
+  `{player, column, category, value, bonus, dice}`); het scoreblok
+  (`buildSheets`) wordt daaruit afgeleid, dus undo = `pop`. `enrich` stuurt
+  de zetten zelf níét mee (alleen `sheets`, `lastMove`, …) — de snapshot gaat
+  bij elke mutatie naar alle telefoons. Meerdere rijtjes (`columns`, 1–6):
+  elk rijtje heeft eigen bonus (35 bij ≥ 63) en Yahtzee-bonus (+100, alleen
+  als het Yahtzee-vakje van **dat** rijtje 50 heeft). `POST .../score` neemt
+  óf `dice` (server rekent uit, inclusief bonus en jokerregel) óf `value`
+  (moet in `category.options` zitten; extra Yahtzee via `bonus: true`). Wie
+  aan de beurt is (`turn`) is afgeleid: de minst ingevulde speler, bij
+  gelijkspel de eerste. Er wordt niets op beurt afgedwongen — iedereen mag
+  elk leeg vakje vullen. Guards: vol vakje → 409, en `revision` (= aantal
+  zetten) op score/dice/undo. Highscores zijn per **rijtje** (eerlijk tussen
+  potjes met 1 of 6 rijtjes); winst telt alleen met tegenstanders.
+- **Yahtzee: de worp op tafel (`game.dice`)** is niet-autoritatief, zoals de
+  draft bij boerenbridge: `POST .../dice` (`{dice, source: 'hand'|'camera'}`,
+  `null` wist). `enrich` levert dan `preview[speler][rijtje]` = wat die worp in
+  elk leeg vakje oplevert; de pagina toont dat in de vakjes van wie aan de beurt
+  is en vult met één tik in (score mét `dice`). Elke zet wist de worp; undo van
+  een zet uit stenen legt die stenen terug.
+- **Yahtzee: `version` loopt bij elke mutatie op** (ook stenen). De
+  invoerpagina hoort het nieuws via drie wegen (eigen antwoord, SSE, refetch)
+  in willekeurige volgorde; `accept()` neemt alleen een stand over die niet
+  ouder is. Vergelijk nooit op `updatedAt`: twee zetten in dezelfde
+  milliseconde gebeurt echt (de browsertest liep er op vast).
+- **Yahtzee: de camera.** De herkenning (`DiceVision`) staat in de pagina in
+  `<script id="dice-vision">` — puur rekenwerk op ImageData, zodat
+  `test/yahtzee-vision.test.js` hem er in Node uit kan halen. Er gaan geen
+  beelden over de lijn, alleen vijf getallen. Werkwijze: lokale drempel
+  (helderheid min het gemiddelde in de buurt, tegen een lamp aan één kant) →
+  lichte vlakken = stenen → per steen de ogen als donkere vlekjes t.o.v. hun
+  directe omgeving (tegen schaduw over een steen) → te grote vlakken
+  (stenen tegen elkaar) splitsen met k-means. `createTracker` stuurt een worp
+  pas als het beeld een paar frames stilligt met steeds dezelfde vijf stenen,
+  en na een zet (`disarm`) pas weer na nieuwe beweging — anders komt dezelfde
+  worp twee keer binnen. Het camerabeeld is een vierkant uit het midden
+  (`object-fit: cover` op een 1:1-vlak) en de herkenning krijgt precies dat
+  vierkant (`PROC_SIZE`); houd die twee gelijk, anders kloppen de kaders niet
+  en telt wat naast de bak ligt mee. `getUserMedia` werkt alleen in een secure context:
+  via het https-adres wel, op een kaal `http://`-LAN-adres niet (de pagina
+  zegt dat). Getest op synthetische beelden en met Chromium's nep-camera,
+  **nog niet met echte stenen** — verwacht dat de drempels daar bijgesteld
+  moeten worden.
 - **Boerenbridge kent concept-invoer ("draft"):** de invoerpagina POST elke
   aangetikte keuze naar `.../draft` (`{round, phase, values}` met `null` voor
   "nog niet gekozen"). Dat is niet-autoritatief — het telt nergens in mee —
@@ -259,13 +308,17 @@ en als die `null` geeft → `solveCube`.
 
 ## Testen (doe dit, er is geen CI)
 
-**Server:** `node test/api.test.js` (boerenbridge), `node test/klaverjas.test.js`
-en `node test/tafeltennis.test.js` — alle drie spawnen de echte server met een
+**Server:** `node test/api.test.js` (boerenbridge), `node test/klaverjas.test.js`,
+`node test/tafeltennis.test.js` en `node test/yahtzee.test.js` — alle vier spawnen de echte server met een
 tijdelijke datamap en testen spelverloop, de scoreformule/stand (tegen een
 onafhankelijke herimplementatie in de test zelf), 409-guards, undo,
 klassement, SSE en persistentie; de boerenbridge-suite doet ook
-path-traversal. Draai **alle drie** na elke wijziging in `server/` —
+path-traversal. Draai **alle vier** na elke wijziging in `server/` —
 `shared.js` wordt door alle spellen gebruikt.
+
+**Dobbelsteenherkenning:** `node test/yahtzee-vision.test.js` (zonder server,
+~30 s; `N_VISION=60` voor meer beelden per scenario). Draai hem na elke
+wijziging in het `dice-vision`-blok van `games/yahtzee/index.html`.
 
 **Statistiek:** `node test/stats.test.js` draait zónder server. Het speelt drie
 potjes met een bekende uitkomst en rekent daar de spelersrijen, de tabellen per

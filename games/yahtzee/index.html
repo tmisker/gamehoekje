@@ -1,0 +1,1734 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f0f12">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Yahtzee">
+  <title>Yahtzee – Score bijhouden</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    :root{
+      --bg:#0f0f12;--card:#1b1b20;--card2:#232329;--line:#2e2e36;
+      --text:#f4f4f6;--muted:#9a9aa3;--accent:#4caf50;--accent-dim:rgba(76,175,80,.15);
+      --red:#e53935;--red-dim:rgba(229,57,53,.12);--gold:#ffd600;
+    }
+    html{height:100%}
+    body{
+      min-height:100%;background:var(--bg);color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+      display:flex;flex-direction:column;align-items:center;padding:16px 10px 60px;
+    }
+    a.backlink{
+      align-self:flex-start;color:var(--muted);text-decoration:none;font-size:.9rem;
+      margin-bottom:12px;
+    }
+    a.backlink:hover{color:var(--accent)}
+    h1{font-size:1.5rem;margin-bottom:4px;text-align:center}
+    .sub{color:var(--muted);font-size:.85rem;margin-bottom:16px;text-align:center}
+
+    /* Start / setup */
+    #start{max-width:440px;width:100%;display:flex;flex-direction:column;gap:14px}
+    .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+    .panel h2{font-size:1rem;margin-bottom:12px}
+    .panel label{display:block;margin-bottom:6px;font-weight:600;font-size:.95rem}
+    .player-inputs{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+    .player-inputs .seat{display:flex;align-items:center;gap:8px}
+    .player-inputs .seat .num{
+      width:26px;height:26px;flex:none;border-radius:50%;font-size:.78rem;font-weight:700;
+      display:flex;align-items:center;justify-content:center;background:var(--card2);
+      border:1px solid var(--line);color:var(--muted);
+    }
+    .player-inputs input{
+      flex:1;min-width:0;padding:10px;border:1px solid var(--line);border-radius:8px;
+      background:var(--card2);color:var(--text);font-size:1rem;
+    }
+    .player-inputs .rm{
+      width:32px;height:32px;flex:none;padding:0;border-radius:8px;background:var(--card2);
+      border:1px solid var(--line);color:var(--muted);font-size:1rem;
+    }
+    .player-inputs .rm:hover{border-color:var(--red);color:var(--text)}
+    .hint{color:var(--muted);font-size:.8rem;line-height:1.4}
+    button{
+      padding:10px 20px;border:none;border-radius:10px;font-size:1rem;font-weight:700;
+      cursor:pointer;transition:background .15s,transform .1s;color:#fff;
+    }
+    button:active{transform:scale(.96)}
+    button:disabled{opacity:.5;cursor:default}
+    .btn-primary{background:var(--accent);width:100%}
+    .btn-primary:hover{background:#43a047}
+    .btn-small{padding:7px 14px;font-size:.85rem;border-radius:8px;background:#3a3a3c}
+    .btn-small:hover{background:#555}
+    .btn-danger{background:var(--red)}
+    .btn-danger:hover{background:#c62828}
+    .btn-ghost{background:transparent;border:1px dashed var(--line);color:var(--muted);font-size:.85rem;padding:8px 12px;width:100%}
+    .btn-ghost:hover{border-color:var(--accent);color:var(--text)}
+    .field{margin:16px 0}
+    .pick{display:flex;gap:6px}
+    .pick button{
+      flex:1;min-width:0;background:var(--card2);border:1px solid var(--line);color:var(--muted);
+      font-size:1rem;padding:10px 4px;
+    }
+    .pick button.on{background:var(--accent-dim);border-color:var(--accent);color:var(--text)}
+
+    .resume-item{
+      display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;
+      background:var(--card2);border:1px solid var(--line);border-radius:10px;
+      padding:12px;margin-bottom:8px;font-weight:400;
+    }
+    .resume-item:hover{border-color:var(--accent)}
+    .resume-item .who{font-weight:700;line-height:1.35}
+    .resume-item .meta{color:var(--muted);font-size:.82rem}
+    details.lb summary{cursor:pointer;font-weight:700;font-size:1rem;list-style:none}
+    details.lb summary::-webkit-details-marker{display:none}
+    details.lb summary::after{content:' ▸';color:var(--muted)}
+    details.lb[open] summary::after{content:' ▾'}
+    details.lb table{margin-top:10px}
+    .lb-filter{margin-top:12px}
+    .lb-filter .hint{margin-bottom:6px}
+    .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+    .chip{
+      padding:5px 11px;border:1px solid var(--line);border-radius:999px;background:var(--card2);
+      color:var(--muted);font-size:.82rem;font-weight:600;width:auto;
+    }
+    .chip.on{background:var(--red-dim);border-color:var(--red);color:var(--text)}
+    .chip.used{background:var(--accent-dim);border-color:var(--accent);color:var(--text)}
+    .lb-count{color:var(--muted);font-size:.8rem;margin-top:10px}
+    table.list{width:100%;border-collapse:collapse;font-size:.85rem;white-space:nowrap}
+    table.list th,table.list td{padding:6px 8px;text-align:center;border-bottom:1px solid var(--line)}
+    table.list th{color:var(--muted);font-weight:600}
+    table.list .l{text-align:left}
+    table.list .rank{color:var(--muted)}
+    table.list tr.top td{color:var(--gold);font-weight:700}
+
+    /* Spel */
+    #game{width:100%;max-width:640px;display:none;flex-direction:column;gap:12px}
+    #game > :empty{display:none}
+    .turn-header{
+      text-align:center;background:var(--card);border:1px solid var(--line);
+      border-radius:12px;padding:12px;
+    }
+    .turn-header .who{font-size:1.15rem;font-weight:700}
+    .turn-header .step{color:var(--muted);font-size:.85rem;margin-top:3px}
+    .strip{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+    .strip button{
+      flex:1 0 auto;min-width:72px;background:var(--card);border:1px solid var(--line);border-radius:12px;
+      padding:8px 10px;color:var(--text);font-weight:400;text-align:center;
+    }
+    .strip button.turn{border-color:var(--accent)}
+    .strip button.shown{background:var(--accent-dim)}
+    .strip .n{font-size:.8rem;color:var(--muted);font-weight:600;max-width:110px;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .strip button.turn .n{color:var(--accent)}
+    .strip .t{font-size:1.35rem;font-weight:800;margin-top:1px}
+    .follow{font-size:.8rem;color:var(--muted);text-align:center}
+    .follow button{padding:3px 10px;font-size:.78rem;margin-left:6px;background:#3a3a3c;border-radius:7px}
+    .notice{
+      background:var(--accent-dim);border:1px solid var(--accent);border-radius:10px;
+      padding:10px;font-size:.88rem;text-align:center;
+    }
+    .notice.bad{background:var(--red-dim);border-color:var(--red)}
+    .conn-banner{
+      display:none;background:var(--red-dim);border:1px solid var(--red);border-radius:10px;
+      padding:10px;text-align:center;font-size:.9rem;
+    }
+    .conn-banner button{margin-top:8px}
+    .btn-row{display:flex;gap:8px;justify-content:center;margin-top:6px;flex-wrap:wrap}
+    .error{color:var(--red);font-size:.82rem;text-align:center;margin-top:8px}
+
+    /* Stenen */
+    .box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+    .dice-head{display:flex;justify-content:space-between;align-items:center;gap:8px;
+      font-size:.85rem;color:var(--muted);font-weight:600;margin-bottom:10px}
+    .dice-head .x{padding:4px 10px;font-size:.85rem;background:#3a3a3c;border-radius:7px}
+    .dice-row{display:flex;gap:8px;justify-content:center}
+    .die-btn{padding:0;background:none;border-radius:10px}
+    .die{
+      width:48px;height:48px;border-radius:10px;background:#f4f1ea;display:grid;
+      grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:6px;
+      box-shadow:inset 0 -3px 0 rgba(0,0,0,.18);
+    }
+    .die i{width:9px;height:9px;border-radius:50%;margin:auto;background:transparent}
+    .die i.on{background:#1b1b20}
+    .die.slot{background:transparent;border:2px dashed var(--line);box-shadow:none}
+    .keypad{display:flex;gap:6px;justify-content:center;margin-top:12px}
+    .keypad button{padding:0;background:none}
+    .keypad .die{width:40px;height:40px;padding:5px}
+    .keypad .die i{width:7px;height:7px}
+    .dice-info{text-align:center;font-size:.85rem;color:var(--muted);margin-top:10px;line-height:1.4}
+    .dice-info b{color:var(--text)}
+    .dice-info .yz{color:var(--gold);font-weight:800}
+    .tools{display:flex;gap:8px}
+    .tools button{flex:1;background:var(--card);border:1px solid var(--line);color:var(--text);font-size:.9rem;padding:10px 6px}
+    .tools button.on{border-color:var(--accent);background:var(--accent-dim)}
+
+    /* Camera */
+    /* Vierkant uit het midden van het camerabeeld: alleen de bak, niet de
+       halve tafel. De herkenning kijkt naar precies hetzelfde vierkant. */
+    .cam-view{position:relative;width:100%;max-width:min(100%,60vh);aspect-ratio:1/1;margin:0 auto;
+      border-radius:10px;overflow:hidden;background:#000}
+    .cam-view video{display:block;width:100%;height:100%;object-fit:cover}
+    .cam-view canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+    .cam-status{font-size:.88rem;text-align:center;margin-top:8px;font-weight:600}
+    .cam-status.bad{color:#ff8a85}
+    .cam-status.ok{color:var(--accent)}
+    .cam .hint{margin-top:6px;text-align:center}
+    .cam .btn-row{margin-top:8px}
+
+    /* Scoreblok */
+    .sheet-wrap{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px;overflow-x:auto}
+    table.sheet{width:100%;border-collapse:collapse;font-size:.92rem}
+    .sheet th,.sheet td{border-bottom:1px solid var(--line);text-align:center;height:36px;padding:0 4px}
+    .sheet th.cat{text-align:left;font-weight:600;white-space:nowrap;padding-left:6px;color:var(--text)}
+    .sheet th.cat small{display:block;color:var(--muted);font-weight:400;font-size:.7rem;line-height:1.1}
+    .sheet th.cat .glyph{font-size:1.15rem;margin-right:4px;color:var(--muted)}
+    .sheet thead th{color:var(--muted);font-size:.8rem;font-weight:700;height:30px;
+      max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .sheet thead th.turn{color:var(--accent)}
+    .sheet td{min-width:42px;font-weight:700;font-variant-numeric:tabular-nums}
+    .sheet td.first,.sheet th.first{border-left:1px solid var(--line)}
+    .sheet td.open{cursor:pointer;background:rgba(255,255,255,.025)}
+    .sheet td.open:active{background:var(--accent-dim)}
+    .sheet td.zero{color:var(--muted);font-weight:400}
+    .sheet td.last{box-shadow:inset 0 0 0 2px var(--accent)}
+    .sheet .pv{color:var(--accent);font-weight:600;opacity:.8}
+    .sheet .pv.z{color:var(--muted);opacity:.5}
+    .sheet tr.sum th,.sheet tr.sum td{background:var(--card2);font-size:.85rem}
+    .sheet tr.sum td{font-weight:700}
+    .sheet td .par{display:block;font-size:.68rem;font-weight:600;color:var(--muted);line-height:1}
+    .sheet td .par.plus{color:var(--accent)}
+    .sheet td .par.min{color:#ff8a85}
+    .sheet td.bonus-yes{color:var(--gold)}
+    .sheet td.need{color:var(--muted);font-weight:400;font-size:.78rem}
+    .sheet tr.total th,.sheet tr.total td{font-size:1.05rem;font-weight:800;border-top:2px solid var(--line);border-bottom:none}
+    .sheet tr.grand th,.sheet tr.grand td{font-size:1.05rem;font-weight:800;color:var(--accent)}
+    .sheet-legend{color:var(--muted);font-size:.75rem;margin:6px 4px 2px;line-height:1.45}
+    .undo-row{display:flex;align-items:center;gap:10px;justify-content:space-between;
+      background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+    .undo-row .lm{font-size:.82rem;color:var(--muted);min-width:0;line-height:1.35}
+    .undo-row .lm b{color:var(--text)}
+    .undo-row button{flex:none}
+
+    .winner-banner{
+      text-align:center;padding:20px;background:var(--card);border:2px solid var(--gold);
+      border-radius:14px;
+    }
+    .winner-banner .trophy{font-size:3rem}
+    .winner-banner .name{font-size:1.3rem;font-weight:800;color:var(--gold);margin-top:6px}
+    .winner-banner .score{color:var(--muted);margin-top:4px}
+    .winner-banner .rec{margin-top:12px;font-size:.92rem;line-height:1.6}
+    .winner-banner .stand{margin-top:12px;font-size:.88rem;color:var(--muted);line-height:1.6}
+
+    /* Keuzevenster bij een vakje */
+    .picker{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center;z-index:10}
+    .picker[hidden]{display:none}
+    .picker-card{
+      width:100%;max-width:480px;background:var(--card);border:1px solid var(--line);border-bottom:none;
+      border-radius:16px 16px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));
+      max-height:85vh;overflow-y:auto;
+    }
+    .picker-title{font-size:1.1rem;font-weight:800}
+    .picker-card .hint{margin:2px 0 14px}
+    .opts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .opts.sums{grid-template-columns:repeat(6,1fr);gap:6px}
+    .opts button{background:var(--card2);border:1px solid var(--line);padding:12px 4px;font-size:1.15rem;line-height:1.1}
+    .opts.sums button{padding:11px 0;font-size:1rem}
+    .opts button small{display:block;font-size:.72rem;color:var(--muted);font-weight:600;margin-top:3px}
+    .opts button:hover{border-color:var(--accent)}
+    .opts button.big{grid-column:1/-1;font-size:1.6rem;padding:16px;background:var(--accent-dim);border-color:var(--accent)}
+    .opts button.scratch{grid-column:1/-1;font-size:.95rem;color:var(--muted)}
+    .bonus-toggle{display:flex;align-items:center;gap:10px;margin-top:14px;padding:10px 12px;
+      background:var(--card2);border:1px solid var(--line);border-radius:10px;width:100%;color:var(--text);font-size:.92rem;text-align:left}
+    .bonus-toggle.on{border-color:var(--gold);background:rgba(255,214,0,.12)}
+    .bonus-toggle .box2{width:22px;height:22px;border-radius:6px;border:2px solid var(--muted);flex:none;
+      display:flex;align-items:center;justify-content:center;font-size:.9rem}
+    .bonus-toggle.on .box2{border-color:var(--gold);color:var(--gold)}
+    .picker-card .cancel{width:100%;margin-top:14px}
+
+    /* Feestje bij een Yahtzee */
+    #fx{position:fixed;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center;z-index:20}
+    #fx .burst{position:absolute;white-space:nowrap;font-size:min(3rem,11vw);font-weight:900;color:var(--gold);
+      text-shadow:0 4px 24px rgba(0,0,0,.6);animation:burst 1.8s ease-out forwards}
+    @keyframes burst{
+      0%{transform:scale(.3);opacity:0}
+      20%{transform:scale(1.15);opacity:1}
+      70%{transform:scale(1);opacity:1}
+      100%{transform:scale(1.4);opacity:0}
+    }
+    @media (prefers-reduced-motion: reduce){ #fx{display:none} }
+
+    @media(max-width:400px){
+      .sheet{font-size:.85rem}
+      .sheet td{min-width:36px}
+      .die{width:42px;height:42px;padding:5px}
+      .die i{width:8px;height:8px}
+    }
+  </style>
+</head>
+<body>
+  <a class="backlink" href="../../index.html">← Alle spellen</a>
+  <h1>🎲 Yahtzee</h1>
+  <p class="sub">Scoreblok · meerdere rijtjes · highscores</p>
+
+  <!-- START -->
+  <div id="start">
+    <div class="conn-banner" id="startConn">
+      Geen verbinding met de server
+      <button class="btn-small" id="startRetry">Opnieuw proberen</button>
+    </div>
+    <div class="panel" id="resumePanel" style="display:none">
+      <h2>Verder spelen of meedoen</h2>
+      <div id="resumeList"></div>
+      <p class="hint">Op meerdere telefoons tegelijk? Kies hier hetzelfde potje; alles loopt live mee.</p>
+    </div>
+    <div class="panel">
+      <h2>Nieuw potje</h2>
+      <label>Spelers — op volgorde van gooien</label>
+      <div class="player-inputs" id="nameInputs"></div>
+      <datalist id="knownNames"></datalist>
+      <div id="nameSuggest"></div>
+      <button class="btn-ghost" id="addPlayerBtn">+ Speler toevoegen</button>
+      <div class="field">
+        <label>Rijtjes per speler</label>
+        <div class="pick" id="colPick"></div>
+        <p class="hint" style="margin-top:8px">Met meer rijtjes kies je elke beurt zelf in welk rijtje je worp komt. Elk rijtje heeft zijn eigen bonus en telt apart voor de highscores.</p>
+      </div>
+      <div id="startWarn"></div>
+      <button class="btn-primary" id="startBtn">Starten</button>
+    </div>
+    <div class="panel">
+      <h2>🏅 Highscores</h2>
+      <div id="hsArea" style="overflow-x:auto"></div>
+    </div>
+    <div class="panel">
+      <details class="lb" id="lbDetails">
+        <summary>🏆 Klassement</summary>
+        <div class="lb-filter" id="lbFilter"></div>
+        <div id="lbArea" style="overflow-x:auto"></div>
+        <div class="lb-count" id="lbCount"></div>
+      </details>
+    </div>
+  </div>
+
+  <!-- SPEL -->
+  <div id="game">
+    <div class="turn-header">
+      <div class="who" id="turnWho"></div>
+      <div class="step" id="turnStep"></div>
+    </div>
+    <div id="winnerArea"></div>
+    <div class="strip" id="strip"></div>
+    <div class="follow" id="followArea"></div>
+
+    <div class="conn-banner" id="gameConn">
+      Geen verbinding met de server
+      <button class="btn-small" id="gameRetry">Opnieuw proberen</button>
+    </div>
+    <div id="noticeArea"></div>
+
+    <div class="box cam" id="camArea" style="display:none">
+      <div class="cam-view" id="camView">
+        <video id="camVideo" playsinline muted autoplay></video>
+        <canvas id="camOverlay"></canvas>
+      </div>
+      <div class="cam-status" id="camStatus"></div>
+      <p class="hint">Hang de telefoon recht boven de bak, met alle vijf stenen in het vierkant — ook de stenen die je vasthoudt. Werkt het best met witte stenen met zwarte ogen op een donkere ondergrond.</p>
+      <div class="btn-row"><button class="btn-small" id="camRetry">Opnieuw lezen</button></div>
+    </div>
+    <div class="box" id="diceArea" style="display:none"></div>
+    <div class="tools" id="tools">
+      <button id="diceBtn">🎲 Stenen intikken</button>
+      <button id="camBtn">📷 Camera</button>
+    </div>
+
+    <div class="sheet-wrap">
+      <table class="sheet" id="sheet"></table>
+      <div class="sheet-legend" id="sheetLegend"></div>
+    </div>
+    <div class="undo-row" id="undoRow"></div>
+
+    <div class="btn-row">
+      <button class="btn-small" id="backToStartBtn">↩ Naar overzicht</button>
+      <button class="btn-small btn-danger" id="abandonBtn">Potje afbreken</button>
+    </div>
+  </div>
+
+  <!-- Keuzevenster: welke score komt in dit vakje? -->
+  <div class="picker" id="picker" hidden>
+    <div class="picker-card">
+      <div class="picker-title" id="pickTitle"></div>
+      <p class="hint" id="pickHint"></p>
+      <div id="pickOptions"></div>
+      <div id="pickBonus"></div>
+      <button class="btn-small cancel" id="pickCancel">Annuleren</button>
+    </div>
+  </div>
+  <div id="fx" aria-hidden="true"></div>
+
+<script id="dice-vision">
+// Dobbelsteenherkenning: telt de ogen van witte stenen op een donkere
+// ondergrond. Puur rekenwerk op ImageData-achtige objecten
+// ({data, width, height}, RGBA), zonder libraries — draait in de browser én
+// in Node (test/yahtzee-vision.test.js haalt dit blok uit de pagina).
+//
+// Aanpak: grijswaarden → drempel (Otsu) → lichte vlakken zijn stenen, donkere
+// gaten daarbinnen zijn ogen. Raken twee stenen elkaar, dan is het vlak twee
+// keer zo groot; dan splitsen we het met k-means en delen de ogen toe aan de
+// dichtstbijzijnde helft.
+const DiceVision = (function () {
+  'use strict';
+
+  const N_DICE = 5;
+
+  // Grijswaarden met een 3×3-vervaging tegen sensorruis.
+  function grayOf(img) {
+    const { data, width: w, height: h } = img;
+    const g = new Uint8Array(w * h);
+    for (let i = 0, j = 0; j < g.length; i += 4, j++) {
+      g[j] = (data[i] * 77 + data[i + 1] * 150 + data[i + 2] * 29) >> 8;
+    }
+    const tmp = new Uint16Array(w * h);
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      for (let x = 0; x < w; x++) {
+        tmp[row + x] = g[row + (x ? x - 1 : x)] + g[row + x] + g[row + (x < w - 1 ? x + 1 : x)];
+      }
+    }
+    for (let y = 0; y < h; y++) {
+      const up = (y ? y - 1 : y) * w, row = y * w, down = (y < h - 1 ? y + 1 : y) * w;
+      for (let x = 0; x < w; x++) g[row + x] = (tmp[up + x] + tmp[row + x] + tmp[down + x]) / 9;
+    }
+    return g;
+  }
+
+  // Helderheid ten opzichte van het gemiddelde in een vierkant van 2r+1
+  // eromheen (via een integraalbeeld), verschoven naar 128 = gemiddeld.
+  function relativeTo(g, w, h, r) {
+    const W = w + 1;
+    const sum = new Float64Array(W * (h + 1));
+    for (let y = 0; y < h; y++) {
+      let row = 0;
+      for (let x = 0; x < w; x++) {
+        row += g[y * w + x];
+        sum[(y + 1) * W + x + 1] = sum[y * W + x + 1] + row;
+      }
+    }
+    const out = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) {
+      const y0 = Math.max(0, y - r), y1 = Math.min(h, y + r + 1);
+      for (let x = 0; x < w; x++) {
+        const x0 = Math.max(0, x - r), x1 = Math.min(w, x + r + 1);
+        const s = sum[y1 * W + x1] - sum[y0 * W + x1] - sum[y1 * W + x0] + sum[y0 * W + x0];
+        const v = g[y * w + x] - s / ((x1 - x0) * (y1 - y0)) + 128;
+        out[y * w + x] = v < 0 ? 0 : v > 255 ? 255 : v;
+      }
+    }
+    return out;
+  }
+
+  // Drempel die de histogram het best in twee groepen splitst.
+  function otsu(g) {
+    const hist = new Float64Array(256);
+    for (let i = 0; i < g.length; i++) hist[g[i]]++;
+    return otsuHist(hist);
+  }
+  function otsuHist(hist) {
+    let n = 0, sumAll = 0;
+    for (let t = 0; t < 256; t++) n += hist[t];
+    for (let t = 0; t < 256; t++) sumAll += t * hist[t];
+    let wB = 0, sumB = 0, best = 0, bestT = 127;
+    for (let t = 0; t < 256; t++) {
+      wB += hist[t];
+      if (!wB) continue;
+      const wF = n - wB;
+      if (!wF) break;
+      sumB += t * hist[t];
+      const mB = sumB / wB, mF = (sumAll - sumB) / wF;
+      const between = wB * wF * (mB - mF) * (mB - mF);
+      if (between > best) { best = between; bestT = t; }
+    }
+    return bestT;
+  }
+
+  // Samenhangende vlakken met waarde `want` in `mask`. Licht 4-verbonden,
+  // donker 8-verbonden: zo kan een gat niet diagonaal "ontsnappen" door een
+  // rand die wel dicht is.
+  function label(mask, w, h, want, conn8) {
+    const labels = new Int32Array(w * h).fill(-1);
+    const stack = new Int32Array(w * h);
+    const comps = [];
+    for (let start = 0; start < w * h; start++) {
+      if (mask[start] !== want || labels[start] !== -1) continue;
+      const c = { id: comps.length, area: 0, minX: w, minY: h, maxX: 0, maxY: 0,
+        sx: 0, sy: 0, sxx: 0, syy: 0, sxy: 0, border: false };
+      let sp = 0;
+      stack[sp++] = start;
+      labels[start] = c.id;
+      while (sp) {
+        const p = stack[--sp];
+        const x = p % w, y = (p - x) / w;
+        c.area++; c.sx += x; c.sy += y; c.sxx += x * x; c.syy += y * y; c.sxy += x * y;
+        if (x < c.minX) c.minX = x;
+        if (x > c.maxX) c.maxX = x;
+        if (y < c.minY) c.minY = y;
+        if (y > c.maxY) c.maxY = y;
+        if (!x || !y || x === w - 1 || y === h - 1) c.border = true;
+        for (let dy = -1; dy <= 1; dy++) {
+          const ny = y + dy;
+          if (ny < 0 || ny >= h) continue;
+          for (let dx = -1; dx <= 1; dx++) {
+            if (!dx && !dy) continue;
+            if (!conn8 && dx && dy) continue;
+            const nx = x + dx;
+            if (nx < 0 || nx >= w) continue;
+            const q = ny * w + nx;
+            if (mask[q] === want && labels[q] === -1) { labels[q] = c.id; stack[sp++] = q; }
+          }
+        }
+      }
+      comps.push(c);
+    }
+    return { labels, comps };
+  }
+
+  // Hoe langgerekt een vlak is (1 = rond). Twee samengesmolten ogen ≈ 2.
+  function elongation(c) {
+    const mx = c.sx / c.area, my = c.sy / c.area;
+    const a = c.sxx / c.area - mx * mx, b = c.syy / c.area - my * my, d = c.sxy / c.area - mx * my;
+    const tr = a + b, disc = Math.sqrt(Math.max(0, (a - b) * (a - b) / 4 + d * d));
+    const l1 = tr / 2 + disc, l2 = Math.max(tr / 2 - disc, 1e-6);
+    return Math.sqrt(l1 / l2);
+  }
+
+  const median = arr => {
+    const s = arr.slice().sort((a, b) => a - b);
+    return s.length ? s[(s.length - 1) >> 1] : 0;
+  };
+
+  // k-means op punten [x, y]; geeft {centers, inertia}.
+  function kmeans(pts, centers) {
+    centers = centers.map(c => c.slice());
+    let inertia = 0;
+    for (let it = 0; it < 12; it++) {
+      const acc = centers.map(() => [0, 0, 0]);
+      inertia = 0;
+      for (const p of pts) {
+        let bi = 0, bd = Infinity;
+        for (let i = 0; i < centers.length; i++) {
+          const d = (centers[i][0] - p[0]) ** 2 + (centers[i][1] - p[1]) ** 2;
+          if (d < bd) { bd = d; bi = i; }
+        }
+        inertia += bd;
+        acc[bi][0] += p[0]; acc[bi][1] += p[1]; acc[bi][2]++;
+      }
+      acc.forEach((a, i) => { if (a[2]) centers[i] = [a[0] / a[2], a[1] / a[2]]; });
+    }
+    return { centers, inertia };
+  }
+
+  // Waar liggen de k stenen in één vlak? Twee startposities proberen: op een
+  // rij langs de lengteas (stenen naast elkaar) en zo ver mogelijk uit elkaar
+  // (een hoekje of een kluitje); de beste wint.
+  function splitCenters(pts, k) {
+    const n = pts.length;
+    let mx = 0, my = 0;
+    for (const p of pts) { mx += p[0]; my += p[1]; }
+    mx /= n; my /= n;
+    let a = 0, b = 0, d = 0;
+    for (const p of pts) {
+      const dx = p[0] - mx, dy = p[1] - my;
+      a += dx * dx; b += dy * dy; d += dx * dy;
+    }
+    const ang = 0.5 * Math.atan2(2 * d, a - b);
+    const ux = Math.cos(ang), uy = Math.sin(ang);
+    let lo = Infinity, hi = -Infinity;
+    for (const p of pts) {
+      const t = (p[0] - mx) * ux + (p[1] - my) * uy;
+      if (t < lo) lo = t;
+      if (t > hi) hi = t;
+    }
+    const row = [];
+    for (let i = 0; i < k; i++) {
+      const t = lo + (hi - lo) * (i + 0.5) / k;
+      row.push([mx + t * ux, my + t * uy]);
+    }
+    const far = [pts[0]];
+    while (far.length < k) {
+      let best = null, bestD = -1;
+      for (const p of pts) {
+        let dmin = Infinity;
+        for (const c of far) dmin = Math.min(dmin, (c[0] - p[0]) ** 2 + (c[1] - p[1]) ** 2);
+        if (dmin > bestD) { bestD = dmin; best = p; }
+      }
+      far.push(best);
+    }
+    const r1 = kmeans(pts, row), r2 = kmeans(pts, far);
+    return (r1.inertia <= r2.inertia ? r1 : r2).centers;
+  }
+
+  // Ogen binnen één steen: donkere vlekjes ten opzichte van hun directe
+  // omgeving op de steen zelf. Een vaste drempel zou een half beschaduwde
+  // steen als één groot oog zien; zo tellen ook flauwe of wat onscherpe ogen.
+  function findPips(g, w, region, box, filled) {
+    const bw = box.maxX - box.minX + 3, bh = box.maxY - box.minY + 3;
+    // Lokaal raster met een rand van één pixel buiten de steen.
+    const inR = new Uint8Array(bw * bh);
+    const val = new Float32Array(bw * bh);
+    const hist = new Float64Array(256);
+    for (let y = box.minY; y <= box.maxY; y++) {
+      for (let x = box.minX; x <= box.maxX; x++) {
+        const p = y * w + x;
+        if (!region(p)) continue;
+        const i = (y - box.minY + 1) * bw + (x - box.minX + 1);
+        inR[i] = 1; val[i] = g[p]; hist[g[p]]++;
+      }
+    }
+    const pct = q => {
+      let acc = 0;
+      for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= q * filled) return v; }
+      return 255;
+    };
+    const spread = pct(0.95) - pct(0.01);
+    if (spread < 30) return [];
+    // Gemiddelde over alleen de steenpixels in een venster van ~40% van de zijde.
+    const r = Math.max(2, Math.round(0.2 * Math.sqrt(filled)));
+    const W = bw + 1;
+    const sv = new Float64Array(W * (bh + 1)), sn = new Float64Array(W * (bh + 1));
+    for (let y = 0; y < bh; y++) {
+      let rv = 0, rn = 0;
+      for (let x = 0; x < bw; x++) {
+        rv += val[y * bw + x]; rn += inR[y * bw + x];
+        sv[(y + 1) * W + x + 1] = sv[y * W + x + 1] + rv;
+        sn[(y + 1) * W + x + 1] = sn[y * W + x + 1] + rn;
+      }
+    }
+    const cut = 0.3 * spread;
+    const local = new Uint8Array(bw * bh); // 0 = buiten, 1 = oog, 2 = vlak
+    for (let y = 0; y < bh; y++) {
+      const y0 = Math.max(0, y - r), y1 = Math.min(bh, y + r + 1);
+      for (let x = 0; x < bw; x++) {
+        const i = y * bw + x;
+        if (!inR[i]) continue;
+        const x0 = Math.max(0, x - r), x1 = Math.min(bw, x + r + 1);
+        const n = sn[y1 * W + x1] - sn[y0 * W + x1] - sn[y1 * W + x0] + sn[y0 * W + x0];
+        const m = (sv[y1 * W + x1] - sv[y0 * W + x1] - sv[y1 * W + x0] + sv[y0 * W + x0]) / n;
+        local[i] = val[i] < m - cut ? 1 : 2;
+      }
+    }
+    const { labels, comps } = label(local, bw, bh, 1, true);
+    // Donker dat de buitenrand raakt is de afgeronde rand van de steen, geen oog.
+    const edge = new Uint8Array(comps.length);
+    for (let i = 0; i < local.length; i++) {
+      if (local[i] !== 1) continue;
+      if (!local[i - 1] || !local[i + 1] || !local[i - bw] || !local[i + bw]) edge[labels[i]] = 1;
+    }
+    return comps
+      .filter((c, i) => !edge[i])
+      .filter(c => c.area >= Math.max(3, 0.004 * filled) && c.area <= 0.2 * filled)
+      .filter(c => c.area / ((c.maxX - c.minX + 1) * (c.maxY - c.minY + 1)) >= 0.35)
+      .map(c => ({ x: c.sx / c.area + box.minX - 1, y: c.sy / c.area + box.minY - 1,
+        area: c.area, long: elongation(c) }));
+  }
+
+  // Hoofdfunctie. Geeft {dice: [{x, y, size, value}], problem, threshold, thumb}.
+  // value = null als de ogen van die steen niet te tellen waren.
+  function detect(img) {
+    const w = img.width, h = img.height;
+    const g = grayOf(img);
+    const thumb = thumbOf(g, w, h);
+    // Lokaal i.p.v. globaal: een lamp aan één kant maakt de bak daar lichter,
+    // en de stenen beslaan maar een paar procent van het beeld. Dus eerst het
+    // gemiddelde van de omgeving eraf, en dán de drempel.
+    const rel = relativeTo(g, w, h, Math.round(Math.max(w, h) / 8));
+    // Halverwege de omgeving (128) en de Otsu-drempel: ruim genoeg om een
+    // steen als geheel te pakken, ook met flauwe ogen vlak bij de rand. De
+    // ogen zelf telt findPips per steen.
+    const t = Math.round(128 + (otsu(rel) - 128) / 2);
+    const mask = new Uint8Array(w * h);
+    for (let i = 0; i < mask.length; i++) mask[i] = rel[i] > t ? 1 : 0;
+    const bright = label(mask, w, h, 1, false);
+    const out = { dice: [], problem: null, threshold: t, thumb, width: w, height: h };
+    if (bright.comps.some(c => c.border && c.area > 0.3 * w * h)) {
+      out.problem = 'light';
+      return out;
+    }
+    const dark = label(mask, w, h, 0, true);
+
+    // Welke donkere vlakken liggen helemaal binnen één licht vlak? Dat zijn
+    // ogen die de eerste drempel al zag; die horen bij de steen.
+    const owner = new Int32Array(dark.comps.length).fill(-1);
+    const multi = new Uint8Array(dark.comps.length);
+    const touch = (d, b) => {
+      if (owner[d] === -1) owner[d] = b;
+      else if (owner[d] !== b) multi[d] = 1;
+    };
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const p = y * w + x;
+        if (x < w - 1 && mask[p] !== mask[p + 1]) {
+          if (mask[p]) touch(dark.labels[p + 1], bright.labels[p]);
+          else touch(dark.labels[p], bright.labels[p + 1]);
+        }
+        if (y < h - 1 && mask[p] !== mask[p + w]) {
+          if (mask[p]) touch(dark.labels[p + w], bright.labels[p]);
+          else touch(dark.labels[p], bright.labels[p + w]);
+        }
+      }
+    }
+    const holeOf = new Int32Array(dark.comps.length).fill(-1);
+    dark.comps.forEach((d, i) => {
+      if (!d.border && !multi[i] && owner[i] !== -1) holeOf[i] = owner[i];
+    });
+    const holeArea = new Float64Array(bright.comps.length);
+    dark.comps.forEach((d, i) => { if (holeOf[i] !== -1) holeArea[holeOf[i]] += d.area; });
+
+    // Kandidaat-stenen: lichte vlakken van een redelijke maat, met ogen.
+    const minArea = Math.max(30, 0.0002 * w * h);
+    const cands = [];
+    for (const b of bright.comps) {
+      if (b.border || b.area < minArea || b.area > 0.1 * w * h) continue;
+      const filled = b.area + holeArea[b.id];
+      const region = p => bright.labels[p] === b.id || (!mask[p] && holeOf[dark.labels[p]] === b.id);
+      const pips = findPips(g, w, region, b, filled);
+      if (!pips.length) continue;
+      cands.push({ comp: b, filled, pips, region });
+    }
+    if (!cands.length) return out;
+
+    // Maat van één steen: het onderste derde (een paar tegen elkaar liggende
+    // stenen mag de schatting niet opblazen).
+    const areas = cands.map(c => c.filled).sort((a, b) => a - b);
+    const single = areas[Math.floor((areas.length - 1) / 3)];
+    // Maat van één oog, over alle stenen: om samengesmolten ogen te herkennen.
+    const pipArea = median(cands.flatMap(c => c.pips.map(p => p.area)));
+    // Samengesmolten ogen (langgerekt én groot) tellen dubbel of driedubbel;
+    // kleine of dunne vlekjes (een kiertje, een naad) tellen niet.
+    const pipCount = p => {
+      if (p.area < 0.35 * pipArea || (p.long >= 2 && p.area < 0.8 * pipArea)) return 0;
+      return p.long >= 1.5 && p.area > 1.5 * pipArea
+        ? Math.min(3, Math.max(2, Math.round(p.area / pipArea))) : 1;
+    };
+    const valueOf = n => (n >= 1 && n <= 6 ? n : null);
+
+    for (const c of cands) {
+      if (c.filled < 0.4 * single) continue;
+      const b = c.comp;
+      const k = Math.max(1, Math.round(c.filled / single));
+      const size = Math.sqrt(c.filled / k);
+      if (k === 1) {
+        // Eén steen is ongeveer vierkant, ook scheef: niet langgerekt, en
+        // hij vult zijn omhullende rechthoek voor minstens de helft.
+        const box = (b.maxX - b.minX + 1) * (b.maxY - b.minY + 1);
+        if (elongation(b) > 1.6 || c.filled / box < 0.4) continue;
+        const n = c.pips.reduce((a, p) => a + pipCount(p), 0);
+        out.dice.push({ x: b.sx / b.area, y: b.sy / b.area, size, value: valueOf(n) });
+        continue;
+      }
+      const pts = [];
+      const step = Math.max(1, Math.round(Math.sqrt(c.filled / 600)));
+      for (let y = b.minY; y <= b.maxY; y += step) {
+        for (let x = b.minX; x <= b.maxX; x += step) if (c.region(y * w + x)) pts.push([x, y]);
+      }
+      const centers = splitCenters(pts, k);
+      const counts = centers.map(() => 0);
+      for (const p of c.pips) {
+        const d = centers.map(ct => Math.hypot(ct[0] - p.x, ct[1] - p.y));
+        const order = d.map((_, i) => i).sort((i, j) => d[i] - d[j]);
+        // Een echt oog ligt dicht bij het midden van zijn eigen steen en ver
+        // van de buursteen; wat op de naad ligt is de naad.
+        if (d[order[0]] > 0.75 * d[order[1]] || d[order[0]] > 0.55 * size) continue;
+        counts[order[0]] += pipCount(p);
+      }
+      centers.forEach((ct, i) => out.dice.push({ x: ct[0], y: ct[1], size, merged: true,
+        value: valueOf(counts[i]) }));
+    }
+    out.dice.sort((a, b) => a.x - b.x);
+    return out;
+  }
+
+  // Klein grijs plaatje (80 breed) om beweging te zien.
+  function thumbOf(g, w, h) {
+    const tw = Math.min(80, w), th = Math.max(1, Math.round(h * tw / w));
+    const out = new Uint8Array(tw * th);
+    for (let y = 0; y < th; y++) {
+      for (let x = 0; x < tw; x++) out[y * tw + x] = g[Math.floor(y * h / th) * w + Math.floor(x * w / tw)];
+    }
+    return out;
+  }
+
+  // Aandeel pixels dat flink veranderde tussen twee thumbs (0..1).
+  function motion(a, b) {
+    if (!a || !b || a.length !== b.length) return 1;
+    let n = 0;
+    for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > 40) n++;
+    return n / a.length;
+  }
+
+  // Wanneer is een worp "klaar"? Pas als het beeld een paar frames stilligt
+  // én er steeds dezelfde vijf stenen te zien zijn. Na een vuurmoment wacht de
+  // tracker op nieuwe beweging (iemand pakt de stenen) — anders zou dezelfde
+  // worp na het invullen nóg een keer binnenkomen.
+  function createTracker(opts) {
+    const o = Object.assign({ frames: 3, still: 0.0025 }, opts);
+    let prev = null, key = null, streak = 0, armed = true;
+    return {
+      push(result) {
+        const m = motion(prev, result.thumb);
+        prev = result.thumb;
+        const values = result.dice.map(d => d.value).filter(Boolean).sort((a, b) => a - b);
+        const complete = result.dice.length === N_DICE && values.length === N_DICE;
+        if (m > o.still) {
+          armed = true; streak = 0; key = null;
+          return { state: 'moving', values, fire: false };
+        }
+        const k = complete ? values.join('') : null;
+        if (k && k === key) streak++;
+        else { key = k; streak = k ? 1 : 0; }
+        if (k && streak >= o.frames && armed) {
+          armed = false;
+          return { state: 'stable', values, fire: true };
+        }
+        return { state: k ? (armed ? 'settling' : 'stable') : 'incomplete', values, fire: false };
+      },
+      disarm() { armed = false; },
+      arm() { armed = true; key = null; streak = 0; },
+    };
+  }
+
+  return { detect, motion, createTracker, otsu, N_DICE };
+})();
+if (typeof module !== 'undefined') module.exports = DiceVision;
+</script>
+<script>
+(function(){
+  const API = '../../api/yahtzee';
+  const N_DICE = 5;
+  // Zij-aan-zij past op een telefoon tot zoveel kolommen; daarboven één speler tegelijk.
+  const MAX_SIDE_BY_SIDE = 6;
+  const GLYPH = ['','⚀','⚁','⚂','⚃','⚄','⚅'];
+  const PIPS = {1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
+
+  let game = null;        // verrijkt serverobject; de server is autoritatief
+  let options = null;
+  let lastFailed = null;
+  let viewPlayer = null;  // één-speler-weergave: null = volg de beurt
+  let diceEdit = null;    // stenen die je met de hand aan het intikken bent
+  let diceEditBase = null;
+  let diceOpen = false;
+  let picking = null;     // {player, column, category, bonus}
+  let renderedMove = null;
+  let prevFx = null;
+  const LB_KEY = 'yt-klassement-zonder';
+  const SETUP_KEY = 'yt-setup';
+  let lbExclude = [];
+  try{ lbExclude = JSON.parse(localStorage.getItem(LB_KEY)) || []; }catch(e){}
+  if(!Array.isArray(lbExclude)) lbExclude = [];
+  let setup = {columns:1};
+  try{ Object.assign(setup, JSON.parse(localStorage.getItem(SETUP_KEY))||{}); }catch(e){}
+
+  const $=s=>document.querySelector(s);
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+  // ---- API-helper ----
+  async function api(method, path, body){
+    const res = await fetch(API + path, {
+      method,
+      headers: body ? {'Content-Type':'application/json'} : {},
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    let data = null;
+    try{ data = await res.json(); }catch(e){}
+    if(!res.ok){
+      const err = new Error((data && data.error) || 'Serverfout');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
+  // Voert een actie uit; bij netwerk/serverfout → banner + retry, bij 409 → refetch.
+  async function attempt(run, connBannerId){
+    lastFailed = null;
+    $('#startConn').style.display='none';
+    $('#gameConn').style.display='none';
+    try{
+      await run();
+    }catch(err){
+      if(err.status === 409 && game){
+        const fresh = await api('GET','/games/'+game.id).catch(()=>null);
+        if(fresh){ accept(fresh); renderGame({text:err.message, bad:true}); }
+        else showStart();
+        return;
+      }
+      if(err.status === 404 && game){ game=null; showStart(); return; }
+      if(err.status && err.status < 500){
+        if(game) renderGame({text:err.message, bad:true});
+        else $('#startWarn').innerHTML = '<p class="error">'+esc(err.message)+'</p>';
+        return;
+      }
+      lastFailed = run;
+      $(connBannerId).style.display='block';
+    }
+  }
+  $('#startRetry').addEventListener('click',()=>{ if(lastFailed) attempt(lastFailed,'#startConn'); });
+  $('#gameRetry').addEventListener('click',()=>{ if(lastFailed) attempt(lastFailed,'#gameConn'); });
+
+  function dieHtml(v, extra){
+    let h='<span class="die'+(extra?' '+extra:'')+'">';
+    for(let i=0;i<9;i++) h+='<i'+(v && PIPS[v].includes(i)?' class="on"':'')+'></i>';
+    return h+'</span>';
+  }
+
+  // ---- startscherm ----
+  const nameDiv=$('#nameInputs');
+  const seatInputs=()=>[...nameDiv.querySelectorAll('input')];
+  const seatNames=()=>seatInputs().map(inp=>inp.value.trim()).filter(Boolean);
+
+  function addSeat(value){
+    const row=document.createElement('div');
+    row.className='seat';
+    const num=document.createElement('span');
+    num.className='num';
+    row.appendChild(num);
+    const inp=document.createElement('input');
+    inp.placeholder='Naam';
+    inp.setAttribute('list','knownNames');
+    inp.value=value||'';
+    inp.addEventListener('input',renderNameSuggest);
+    row.appendChild(inp);
+    const rm=document.createElement('button');
+    rm.type='button';
+    rm.className='rm';
+    rm.textContent='×';
+    rm.title='Speler weghalen';
+    rm.addEventListener('click',()=>{
+      if(nameDiv.children.length<=1){ inp.value=''; }
+      else row.remove();
+      renumber(); renderNameSuggest();
+    });
+    row.appendChild(rm);
+    nameDiv.appendChild(row);
+    renumber();
+    return inp;
+  }
+  function renumber(){
+    [...nameDiv.children].forEach((row,i)=>{ row.querySelector('.num').textContent=i+1; });
+    $('#addPlayerBtn').disabled = !!options && nameDiv.children.length>=options.maxPlayers;
+  }
+  for(let i=0;i<2;i++) addSeat('');
+  $('#addPlayerBtn').addEventListener('click',()=>{ addSeat('').focus(); });
+
+  // Tikbare naamsuggesties (server sorteert op vaakst-meespelend).
+  let knownNames=[];
+  let namesOpen=false;
+  const NAME_LIMIT=12;
+
+  function renderNameSuggest(){
+    const box=$('#nameSuggest');
+    box.innerHTML='';
+    if(!knownNames.length) return;
+    const used=new Set(seatInputs().map(inp=>inp.value.trim().toLowerCase()).filter(Boolean));
+    const chips=document.createElement('div');
+    chips.className='chips';
+    (namesOpen?knownNames:knownNames.slice(0,NAME_LIMIT)).forEach(name=>{
+      const btn=document.createElement('button');
+      btn.type='button';
+      btn.className='chip'+(used.has(name.toLowerCase())?' used':'');
+      btn.textContent=name;
+      btn.addEventListener('click',()=>toggleName(name));
+      chips.appendChild(btn);
+    });
+    if(knownNames.length>NAME_LIMIT){
+      const more=document.createElement('button');
+      more.type='button';
+      more.className='chip';
+      more.textContent=namesOpen?'minder':'+'+(knownNames.length-NAME_LIMIT)+' meer';
+      more.addEventListener('click',()=>{ namesOpen=!namesOpen; renderNameSuggest(); });
+      chips.appendChild(more);
+    }
+    box.appendChild(chips);
+  }
+
+  function toggleName(name){
+    const inputs=seatInputs();
+    const key=name.toLowerCase();
+    const has=inputs.find(inp=>inp.value.trim().toLowerCase()===key);
+    if(has) has.value='';
+    else{
+      const empty=inputs.find(inp=>!inp.value.trim());
+      if(empty) empty.value=name;
+      else if(!options || inputs.length<options.maxPlayers) addSeat(name);
+      else return;
+    }
+    renderNameSuggest();
+  }
+
+  function renderColPick(){
+    const box=$('#colPick');
+    box.innerHTML='';
+    if(!options) return;
+    if(setup.columns>options.maxColumns) setup.columns=1;
+    for(let n=1;n<=options.maxColumns;n++){
+      const btn=document.createElement('button');
+      btn.type='button';
+      btn.textContent=n;
+      if(setup.columns===n) btn.className='on';
+      btn.addEventListener('click',()=>{
+        setup.columns=n;
+        try{ localStorage.setItem(SETUP_KEY, JSON.stringify(setup)); }catch(e){}
+        renderColPick();
+      });
+      box.appendChild(btn);
+    }
+  }
+
+  function showStart(){
+    camStop();
+    closePicker();
+    $('#fx').innerHTML='';
+    game=null; diceEdit=null; diceOpen=false; viewPlayer=null;
+    $('#game').style.display='none';
+    $('#start').style.display='flex';
+    $('#startWarn').innerHTML='';
+    attempt(loadStartData,'#startConn');
+  }
+
+  async function loadStartData(){
+    const [list, opts] = await Promise.all([
+      api('GET','/games?status=active'),
+      options ? Promise.resolve(options) : api('GET','/options'),
+      loadLeaderboard(),
+    ]);
+    options = opts;
+    renumber();
+    renderColPick();
+    const panel=$('#resumePanel'), listDiv=$('#resumeList');
+    listDiv.innerHTML='';
+    panel.style.display = list.games.length ? '' : 'none';
+    list.games.forEach(g=>{
+      const btn=document.createElement('button');
+      btn.className='resume-item';
+      const date=new Date(g.createdAt).toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
+      const turn = g.turn ? esc(g.players[g.turn.player])+' is aan de beurt · ' : '';
+      btn.innerHTML='<span class="who">'+g.players.map((n,i)=>esc(n)+' '+g.totals[i]).join(' · ')+'</span>'
+        +'<span class="meta">'+turn+(g.columns>1?g.columns+' rijtjes · ':'')+date+'</span>';
+      btn.addEventListener('click',()=>openGame(g.id));
+      listDiv.appendChild(btn);
+    });
+  }
+
+  function openGame(id){
+    attempt(async()=>{
+      game = null;
+      accept(await api('GET','/games/'+id));
+      prevFx = null;
+      try{ const v = localStorage.getItem('yt-view-'+id); viewPlayer = v===null ? null : +v; }catch(e){ viewPlayer=null; }
+      renderGame();
+    },'#startConn');
+  }
+
+  async function loadLeaderboard(){
+    const qs = lbExclude.map(n=>'exclude='+encodeURIComponent(n)).join('&');
+    const lb = await api('GET','/leaderboard'+(qs?'?'+qs:''));
+    // Bekende namen komen uit de volledige spelerslijst, niet uit de
+    // gefilterde rijen — anders verdwijnen ze uit de suggesties.
+    const dl=$('#knownNames');
+    dl.innerHTML='';
+    lb.players.forEach(name=>{
+      const opt=document.createElement('option');
+      opt.value=name;
+      dl.appendChild(opt);
+    });
+    knownNames = lb.suggestions || [];
+    renderNameSuggest();
+    renderLbFilter(lb);
+    renderHighscores(lb);
+    renderLeaderboard(lb);
+    $('#lbCount').textContent = lb.excluded.length
+      ? lb.gamesCounted+' van '+lb.gamesTotal+' potjes tellen mee'
+      : '';
+  }
+
+  // Chips om spelers uit te sluiten; klik = potjes met die speler weglaten.
+  function renderLbFilter(lb){
+    const box=$('#lbFilter');
+    box.innerHTML='';
+    if(!lb.players.length) return;
+    const hint=document.createElement('div');
+    hint.className='hint';
+    hint.textContent='Potjes weglaten waarin deze spelers meededen (geldt ook voor de highscores):';
+    const chips=document.createElement('div');
+    chips.className='chips';
+    const off = new Set(lb.excluded.map(n=>n.toLowerCase()));
+    lb.players.forEach(name=>{
+      const btn=document.createElement('button');
+      btn.className='chip'+(off.has(name.toLowerCase())?' on':'');
+      btn.textContent=name;
+      btn.addEventListener('click',()=>toggleExclude(name));
+      chips.appendChild(btn);
+    });
+    box.appendChild(hint);
+    box.appendChild(chips);
+  }
+
+  function toggleExclude(name){
+    const key=name.toLowerCase();
+    lbExclude = lbExclude.some(n=>n.toLowerCase()===key)
+      ? lbExclude.filter(n=>n.toLowerCase()!==key)
+      : lbExclude.concat(name);
+    try{ localStorage.setItem(LB_KEY, JSON.stringify(lbExclude)); }catch(e){}
+    attempt(loadLeaderboard,'#startConn');
+  }
+
+  function renderHighscores(lb){
+    const area=$('#hsArea'), rows=lb.highscores;
+    if(!rows.length){
+      area.innerHTML='<p class="hint">Nog geen afgeronde potjes. De beste rijtjes ooit komen hier.</p>';
+      return;
+    }
+    let html='<table class="list"><thead><tr><th>#</th><th class="l">Speler</th><th>Score</th><th>Datum</th></tr></thead><tbody>';
+    let rank=0;
+    rows.forEach((e,i)=>{
+      if(!i || e.score<rows[i-1].score) rank=i+1;
+      const date=new Date(e.at).toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'2-digit'});
+      html+='<tr'+(rank===1?' class="top"':'')+'><td class="rank">'+rank+'</td><td class="l">'+esc(e.name)+'</td><td>'+e.score+'</td><td class="rank">'+date+'</td></tr>';
+    });
+    area.innerHTML=html+'</tbody></table>';
+  }
+
+  function renderLeaderboard(lb){
+    const area=$('#lbArea'), rows=lb.leaderboard;
+    if(!rows.length){
+      const msg = lb.excluded.length
+        ? 'Geen potjes zonder '+lb.excluded.join(', ')+'.'
+        : 'Nog geen afgeronde potjes.';
+      area.innerHTML='<p class="hint" style="margin-top:10px">'+esc(msg)+'</p>';
+      return;
+    }
+    let html='<table class="list"><thead><tr><th class="l">Speler</th><th>Potjes</th><th>Gewonnen</th><th>Gem. rijtje</th><th>Beste</th><th>Yahtzees</th><th>Bonus</th></tr></thead><tbody>';
+    rows.forEach(e=>{
+      html+='<tr><td class="l">'+esc(e.name)+'</td><td>'+e.gamesPlayed+'</td><td>'+e.wins+'</td><td>'+e.avgColumn+'</td><td>'+e.bestColumn+'</td><td>'+e.yahtzees+'</td><td>'+e.bonusPct+'%</td></tr>';
+    });
+    area.innerHTML=html+'</tbody></table>'
+      +'<p class="hint" style="margin-top:8px">Gewonnen telt alleen met tegenstanders. Bonus = hoe vaak de 35 van het bovenste deel binnenkwam.</p>';
+  }
+
+  $('#startBtn').addEventListener('click',()=>{
+    const names=seatNames();
+    $('#startWarn').innerHTML='';
+    attempt(async()=>{
+      game = null;
+      accept(await api('POST','/games',{players:names, columns:setup.columns}));
+      prevFx = null; viewPlayer = null;
+      renderGame();
+    },'#startConn');
+  });
+
+  // ---- spelscherm ----
+  // Eén ingang voor een nieuwe stand: eigen antwoord, SSE of refetch kunnen
+  // in willekeurige volgorde binnenkomen, en een oudere mag een nieuwere
+  // niet overschrijven.
+  function accept(g){
+    if(game && g.id===game.id && g.version<game.version) return false;
+    game=g;
+    return true;
+  }
+  const catById = id => game.categories.find(c=>c.id===id);
+  const sideBySide = () => game.players.length * game.columns <= MAX_SIDE_BY_SIDE;
+  const turnPlayer = () => (game.turn ? game.turn.player : -1);
+  function shownPlayers(){
+    if(sideBySide()) return game.players.map((_,i)=>i);
+    if(viewPlayer!==null && viewPlayer<game.players.length) return [viewPlayer];
+    return [game.turn ? game.turn.player : 0];
+  }
+
+  function renderGame(notice){
+    $('#start').style.display='none';
+    $('#game').style.display='flex';
+    $('#gameConn').style.display='none';
+    $('#noticeArea').innerHTML = notice
+      ? '<div class="notice'+(notice.bad?' bad':'')+'">'+esc(notice.text)+'</div>' : '';
+    // Nieuwe zet (hier of op een ander toestel): de worp is op, dus het
+    // intikken ook. En kwam er intussen een andere worp binnen (camera, ander
+    // toestel), dan vervalt wat je hier half had ingetikt.
+    const moveKey=game.id+':'+game.revision;
+    if(moveKey!==renderedMove){ renderedMove=moveKey; diceEdit=null; diceOpen=false; }
+    if(diceEdit && (game.dice ? game.dice.at : null)!==diceEditBase) diceEdit=null;
+    const active = game.status==='active';
+    if(!active){ diceEdit=null; diceOpen=false; camStop(); }
+    renderHeader();
+    renderStrip();
+    renderDice();
+    $('#tools').style.display = active ? '' : 'none';
+    $('#diceBtn').style.display = game.dice || diceEdit || diceOpen ? 'none' : '';
+    $('#camBtn').classList.toggle('on', cam.on);
+    renderSheet();
+    renderUndo();
+    renderWinner();
+    $('#abandonBtn').textContent = active ? 'Potje afbreken' : 'Naar overzicht';
+    if(picking) renderPicker();
+    fxCheck();
+  }
+
+  function renderHeader(){
+    if(game.status==='finished'){
+      $('#turnWho').textContent='Potje afgelopen!';
+      $('#turnStep').textContent='';
+      return;
+    }
+    if(game.status==='abandoned'){
+      $('#turnWho').textContent='Potje afgebroken';
+      $('#turnStep').textContent='';
+      return;
+    }
+    const t=game.turn;
+    $('#turnWho').textContent = game.players.length>1
+      ? game.players[t.player]+' is aan de beurt' : 'Beurt '+t.number;
+    $('#turnStep').textContent = 'Beurt '+t.number+' van '+t.of
+      +(game.columns>1?' · '+game.columns+' rijtjes':'');
+  }
+
+  function renderStrip(){
+    const strip=$('#strip');
+    strip.innerHTML='';
+    const shown = new Set(sideBySide() ? [] : shownPlayers());
+    const tp = turnPlayer();
+    game.players.forEach((name,i)=>{
+      const btn=document.createElement('button');
+      btn.className=(i===tp?'turn ':'')+(shown.has(i)?'shown':'');
+      const medal = game.status==='finished' && game.positions[i]===1 ? '🏆 ' : '';
+      btn.innerHTML='<div class="n">'+medal+esc(name)+'</div><div class="t">'+game.totals[i]+'</div>';
+      // In de één-speler-weergave kies je hier wiens blok je ziet. De speler
+      // die aan de beurt is aantikken = weer de beurt volgen.
+      if(!sideBySide()) btn.addEventListener('click',()=>{
+        setView(i===tp && game.status==='active' ? null : i);
+      });
+      strip.appendChild(btn);
+    });
+    const follow=$('#followArea');
+    follow.innerHTML='';
+    if(sideBySide() || game.status!=='active') return;
+    if(viewPlayer===null){
+      follow.textContent='Volgt de beurt — tik een naam om een ander blok te zien';
+    }else{
+      follow.innerHTML='Blok van '+esc(game.players[viewPlayer])+' ';
+      const b=document.createElement('button');
+      b.textContent='Volg de beurt';
+      b.addEventListener('click',()=>setView(null));
+      follow.appendChild(b);
+    }
+  }
+
+  function setView(p){
+    viewPlayer=p;
+    try{
+      if(p===null) localStorage.removeItem('yt-view-'+game.id);
+      else localStorage.setItem('yt-view-'+game.id, String(p));
+    }catch(e){}
+    renderGame();
+  }
+
+  // ---- het scoreblok ----
+  function renderSheet(){
+    const cats=game.categories;
+    const players=shownPlayers();
+    const cols=[...Array(game.columns).keys()];
+    const tp=turnPlayer();
+    const active=game.status==='active';
+    const pv=game.preview;
+    const lm=game.lastMove;
+    const first = c => (c===0?' first':'');
+    const each = fn => players.map(p=>cols.map(c=>fn(p,c,game.sheets[p][c])).join('')).join('');
+
+    let html='<thead><tr><th class="cat"></th>'
+      +players.map(p=>'<th colspan="'+cols.length+'" class="first'+(p===tp?' turn':'')+'">'+esc(game.players[p])+'</th>').join('')
+      +'</tr>';
+    if(cols.length>1){
+      html+='<tr><th class="cat"></th>'+each((p,c)=>'<th class="'+first(c).trim()+'">'+(c+1)+'</th>')+'</tr>';
+    }
+    html+='</thead><tbody>';
+
+    const catRow = cat => {
+      const label = cat.face
+        ? '<span class="glyph">'+GLYPH[cat.face]+'</span>'+esc(cat.name)
+        : esc(cat.name);
+      return '<tr><th class="cat">'+label+'</th>'+each((p,c,s)=>{
+        const v=s.cells[cat.id];
+        if(v!==null){
+          const last = lm && lm.player===p && lm.column===c && lm.category===cat.id;
+          return '<td class="'+(v===0?'zero':'')+(last?' last':'')+first(c)+'">'+v+'</td>';
+        }
+        if(!active) return '<td class="'+first(c).trim()+'"></td>';
+        let inner='';
+        if(pv && p===tp){
+          const x=pv[p][c].values[cat.id];
+          inner='<span class="pv'+(x===0?' z':'')+'">'+x+'</span>';
+        }
+        return '<td class="open'+first(c)+'" data-p="'+p+'" data-c="'+c+'" data-cat="'+cat.id+'">'+inner+'</td>';
+      })+'</tr>';
+    };
+
+    cats.filter(c=>c.section==='upper').forEach(cat=>{ html+=catRow(cat); });
+    html+='<tr class="sum"><th class="cat">Subtotaal<small>op schema: 3 van elk</small></th>'+each((p,c,s)=>{
+      const par = s.par>0 ? '<span class="par plus">+'+s.par+'</span>'
+        : s.par<0 ? '<span class="par min">−'+(-s.par)+'</span>' : '';
+      return '<td class="'+first(c).trim()+'">'+s.upper+par+'</td>';
+    })+'</tr>';
+    html+='<tr class="sum"><th class="cat">Bonus<small>'+game.rules.upperBonusAt+' of meer: +'+game.rules.upperBonus+'</small></th>'+each((p,c,s)=>{
+      if(s.bonus===null) return '<td class="need'+first(c)+'">nog '+s.upperNeeded+'</td>';
+      return '<td class="'+(s.bonus?'bonus-yes':'zero')+first(c)+'">'+s.bonus+'</td>';
+    })+'</tr>';
+    cats.filter(c=>c.section==='lower').forEach(cat=>{ html+=catRow(cat); });
+    html+='<tr class="sum"><th class="cat">Yahtzee-bonus<small>+'+game.rules.yahtzeeBonus+' per extra Yahtzee</small></th>'+each((p,c,s)=>
+      '<td class="'+(s.yahtzeeBonuses?'bonus-yes':'')+first(c)+'">'+(s.yahtzeeBonuses?s.yahtzeeBonus:'')+'</td>'
+    )+'</tr>';
+    html+='<tr class="total"><th class="cat">Totaal</th>'+each((p,c,s)=>'<td class="'+first(c).trim()+'">'+s.total+'</td>')+'</tr>';
+    if(cols.length>1){
+      html+='<tr class="grand"><th class="cat">Alle rijtjes</th>'
+        +players.map(p=>'<td colspan="'+cols.length+'" class="first">'+game.totals[p]+'</td>').join('')+'</tr>';
+    }
+    html+='</tbody>';
+    $('#sheet').innerHTML=html;
+
+    let legend='';
+    if(active){
+      legend = pv
+        ? 'In de groene getallen staat wat deze worp in dat vakje oplevert — tik het vakje aan om in te vullen.'
+        : 'Tik een leeg vakje aan om de score in te vullen.';
+    }
+    $('#sheetLegend').textContent=legend;
+  }
+
+  $('#sheet').addEventListener('click',e=>{
+    const td=e.target.closest('td.open');
+    if(!td || !game || game.status!=='active') return;
+    const p=+td.dataset.p, c=+td.dataset.c, cat=td.dataset.cat;
+    // Liggen er stenen op tafel, dan is één tik genoeg voor wie aan de beurt
+    // is: de server rekent de score uit die stenen uit.
+    if(game.dice && p===turnPlayer()){
+      score({player:p, column:c, category:cat, dice:game.dice.values});
+      return;
+    }
+    openPicker(p,c,cat);
+  });
+
+  function score(body){
+    attempt(async()=>{
+      accept(await api('POST','/games/'+game.id+'/score', Object.assign({revision:game.revision}, body)));
+      diceEdit=null; diceOpen=false;
+      renderGame();
+    },'#gameConn');
+  }
+
+  function renderUndo(){
+    const row=$('#undoRow');
+    const lm=game.lastMove;
+    if(!lm || game.status==='abandoned'){ row.style.display='none'; return; }
+    row.style.display='';
+    const where = game.columns>1 ? ' (rijtje '+(lm.column+1)+')' : '';
+    row.innerHTML='<div class="lm">Laatst: <b>'+esc(game.players[lm.player])+'</b> · '+esc(lm.categoryName)+where
+      +' · <b>'+lm.value+'</b>'+(lm.bonus?' + Yahtzee-bonus':'')+'</div>';
+    const btn=document.createElement('button');
+    btn.className='btn-small';
+    btn.textContent='↶ Ongedaan';
+    btn.addEventListener('click',()=>attempt(async()=>{
+      accept(await api('POST','/games/'+game.id+'/undo',{revision:game.revision}));
+      diceEdit=null;
+      renderGame();
+    },'#gameConn'));
+    row.appendChild(btn);
+  }
+
+  function renderWinner(){
+    const area=$('#winnerArea');
+    if(game.status!=='finished'){ area.innerHTML=''; return; }
+    const max=Math.max(...game.totals);
+    const winners=(game.winners||[]).map(i=>esc(game.players[i]));
+    const solo=game.players.length<2;
+    let html='<div class="winner-banner"><div class="trophy">🏆</div>';
+    if(solo) html+='<div class="name">'+max+' punten</div>';
+    else html+='<div class="name">'+(winners.length>1?'Gelijkspel: '+winners.join(' en '):winners[0]+' wint!')+'</div>'
+      +'<div class="score">'+max+' punten</div>';
+    if(game.records && game.records.length){
+      html+='<div class="rec">'+game.records.map(r=>{
+        const where = game.columns>1 ? ' (rijtje '+(r.column+1)+')' : '';
+        const what = r.rank===1 ? 'de beste ooit!' : 'plek '+r.rank+' in de highscores';
+        return '🏅 '+esc(game.players[r.player])+where+': '+r.score+' — '+what;
+      }).join('<br>')+'</div>';
+    }
+    if(!solo){
+      const order=game.players.map((n,i)=>i).sort((a,b)=>game.positions[a]-game.positions[b]);
+      html+='<div class="stand">'+order.map(i=>game.positions[i]+'. '+esc(game.players[i])+' — '+game.totals[i]).join('<br>')+'</div>';
+    }
+    area.innerHTML=html+'</div>';
+  }
+
+  // ---- keuzevenster ----
+  function openPicker(p,c,cat){
+    picking={player:p, column:c, category:cat, bonus:false};
+    renderPicker();
+  }
+  function closePicker(){
+    picking=null;
+    $('#picker').hidden=true;
+  }
+  function renderPicker(){
+    const cat=catById(picking.category);
+    const s=game.sheets[picking.player][picking.column];
+    if(game.status!=='active' || s.cells[cat.id]!==null){ closePicker(); return; }
+    $('#picker').hidden=false;
+    $('#pickTitle').textContent=game.players[picking.player]+' · '+cat.name
+      +(game.columns>1?' · rijtje '+(picking.column+1):'');
+    $('#pickHint').textContent=cat.hint;
+    const opts=cat.options;
+    let html;
+    if(cat.face){
+      html='<div class="opts">'+opts.map(v=>{
+        const n=v/cat.face;
+        return '<button data-v="'+v+'">'+v+'<small>'+(n?n+'× '+GLYPH[cat.face]:'streep')+'</small></button>';
+      }).join('')+'</div>';
+    }else if(opts.filter(v=>v).length>1){
+      html='<div class="opts sums">'+opts.filter(v=>v).map(v=>'<button data-v="'+v+'">'+v+'</button>').join('')
+        +(opts.includes(0)?'<button class="scratch" data-v="0">Streep (0)</button>':'')+'</div>';
+    }else{
+      const v=opts.find(x=>x);
+      html='<div class="opts"><button class="big" data-v="'+v+'">'+v+'</button>'
+        +'<button class="scratch" data-v="0">Streep (0)</button></div>';
+    }
+    $('#pickOptions').innerHTML=html;
+    const bonusBox=$('#pickBonus');
+    bonusBox.innerHTML='';
+    // Extra Yahtzee gegooid? Dan komt er +100 bij, waar je hem ook invult.
+    if(s.yahtzeeBonusOpen && cat.id!=='yahtzee'){
+      const b=document.createElement('button');
+      b.className='bonus-toggle'+(picking.bonus?' on':'');
+      b.innerHTML='<span class="box2">'+(picking.bonus?'✓':'')+'</span><span>Dit is een extra Yahtzee (+'+game.rules.yahtzeeBonus+')</span>';
+      b.addEventListener('click',()=>{ picking.bonus=!picking.bonus; renderPicker(); });
+      bonusBox.appendChild(b);
+    }
+  }
+  $('#pickOptions').addEventListener('click',e=>{
+    const b=e.target.closest('button[data-v]');
+    if(!b || !picking) return;
+    const body={player:picking.player, column:picking.column, category:picking.category,
+      value:+b.dataset.v, bonus:picking.bonus};
+    closePicker();
+    score(body);
+  });
+  $('#pickCancel').addEventListener('click',closePicker);
+  $('#picker').addEventListener('click',e=>{ if(e.target.id==='picker') closePicker(); });
+
+  // ---- stenen ----
+  function renderDice(){
+    const area=$('#diceArea');
+    const shown = diceEdit || (game.dice ? game.dice.values : null);
+    if(game.status!=='active' || (!shown && !diceOpen)){ area.style.display='none'; area.innerHTML=''; return; }
+    area.style.display='';
+    const values=shown||[];
+    const editing = !!diceEdit || !game.dice;
+    const head = editing ? 'Stenen intikken'
+      : game.dice.source==='camera' ? '📷 Gezien door de camera' : '🎲 Op tafel';
+    let html='<div class="dice-head"><span>'+head+'</span><button class="x" id="diceClear">✕ Weg</button></div>';
+    html+='<div class="dice-row">'+values.map((v,i)=>'<button class="die-btn" data-i="'+i+'">'+dieHtml(v)+'</button>').join('');
+    for(let i=values.length;i<N_DICE;i++) html+=dieHtml(0,'slot');
+    html+='</div>';
+    if(values.length<N_DICE){
+      html+='<div class="keypad">'+[1,2,3,4,5,6].map(v=>'<button data-add="'+v+'">'+dieHtml(v)+'</button>').join('')+'</div>'
+        +'<div class="dice-info">Tik de ogen van elke steen; tik een steen boven om hem weg te halen.</div>';
+    }else if(game.dice){
+      const tp=turnPlayer();
+      const sum=values.reduce((a,b)=>a+b,0);
+      html+='<div class="dice-info">'+(game.dice.yahtzee?'<span class="yz">Yahtzee!</span> · ':'')
+        +'Samen <b>'+sum+'</b> · tik een vakje van <b>'+esc(game.players[tp])+'</b> aan'
+        +'<br>Klopt een steen niet? Tik hem aan om hem te verbeteren.</div>';
+    }
+    area.innerHTML=html;
+  }
+
+  $('#diceArea').addEventListener('click',e=>{
+    if(!game) return;
+    if(e.target.closest('#diceClear')){
+      const had = !!game.dice;
+      diceEdit=null; diceOpen=false;
+      if(had) postDice(null,'hand');
+      else renderGame();
+      return;
+    }
+    const die=e.target.closest('.die-btn');
+    if(die){
+      const base = diceEdit || (game.dice ? game.dice.values.slice() : []);
+      base.splice(+die.dataset.i,1);
+      startEdit(base);
+      return;
+    }
+    const add=e.target.closest('button[data-add]');
+    if(add){
+      const base=(diceEdit||[]).concat(+add.dataset.add);
+      if(base.length===N_DICE){ diceEdit=null; postDice(base,'hand'); }
+      else startEdit(base);
+    }
+  });
+
+  function startEdit(values){
+    if(!diceEdit) diceEditBase = game.dice ? game.dice.at : null;
+    diceEdit=values;
+    renderGame();
+  }
+
+  function postDice(values, source){
+    attempt(async()=>{
+      accept(await api('POST','/games/'+game.id+'/dice',{revision:game.revision, dice:values, source}));
+      renderGame();
+    },'#gameConn');
+  }
+
+  $('#diceBtn').addEventListener('click',()=>{
+    diceOpen=true;
+    if(!game.dice) startEdit([]);
+    else renderGame();
+  });
+
+  // ---- camera ----
+  // De herkenning (DiceVision, hierboven) draait helemaal op dit toestel: er
+  // gaan geen beelden over de lijn, alleen de vijf getallen als de worp stil ligt.
+  const cam={on:false, wanted:false, stream:null, timer:null, tracker:null, revision:null, sending:false};
+  const proc=document.createElement('canvas');
+  const pctx=proc.getContext('2d',{willReadFrequently:true});
+  const PROC_SIZE=560; // zijde van het vierkant dat de herkenning krijgt
+
+  function camSetStatus(text, kind){
+    const el=$('#camStatus');
+    el.textContent=text;
+    el.className='cam-status'+(kind?' '+kind:'');
+  }
+
+  async function camStart(){
+    $('#camArea').style.display='';
+    if(!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      camSetStatus('De camera werkt alleen via het https-adres van de Spellenhoek. Open de pagina daar en probeer het opnieuw.','bad');
+      $('#camView').style.display='none';
+      return;
+    }
+    $('#camView').style.display='';
+    camSetStatus('Camera starten…');
+    try{
+      cam.stream = await navigator.mediaDevices.getUserMedia({
+        audio:false,
+        video:{facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}},
+      });
+    }catch(err){
+      camSetStatus('Geen toegang tot de camera'+(err && err.name==='NotAllowedError'?' — sta het toe in de instellingen':'')+'.','bad');
+      cam.wanted=false;
+      return;
+    }
+    const v=$('#camVideo');
+    v.srcObject=cam.stream;
+    try{ await v.play(); }catch(e){}
+    cam.on=true; cam.wanted=true;
+    cam.tracker=DiceVision.createTracker();
+    cam.revision=game ? game.revision : null;
+    $('#camBtn').classList.add('on');
+    clearTimeout(cam.timer);
+    camTick();
+  }
+
+  function camStop(keepWanted){
+    if(!keepWanted) cam.wanted=false;
+    cam.on=false;
+    clearTimeout(cam.timer);
+    if(cam.stream) cam.stream.getTracks().forEach(t=>t.stop());
+    cam.stream=null;
+    $('#camVideo').srcObject=null;
+    if(!keepWanted) $('#camArea').style.display='none';
+    $('#camBtn').classList.remove('on');
+  }
+
+  function camTick(){
+    cam.timer=setTimeout(camTick, 250);
+    if(!cam.on || !game || game.status!=='active') return;
+    const v=$('#camVideo');
+    if(v.readyState<2 || !v.videoWidth) return;
+    // Het vierkant uit het midden, net als object-fit:cover op het scherm.
+    const side=Math.min(v.videoWidth, v.videoHeight);
+    const sx=(v.videoWidth-side)/2, sy=(v.videoHeight-side)/2;
+    const ps=Math.min(side, PROC_SIZE);
+    if(proc.width!==ps){ proc.width=ps; proc.height=ps; }
+    pctx.drawImage(v, sx, sy, side, side, 0, 0, ps, ps);
+    const res=DiceVision.detect(pctx.getImageData(0,0,ps,ps));
+    // Net ingevuld of teruggenomen? Dan liggen de oude stenen er nog; pas na
+    // nieuwe beweging (iemand pakt ze op) telt de volgende worp.
+    if(game.revision!==cam.revision){ cam.revision=game.revision; cam.tracker.disarm(); }
+    const st=cam.tracker.push(res);
+    drawOverlay(res);
+    const seen=res.dice.length;
+    if(res.problem==='light') camSetStatus('De ondergrond is te licht — leg een donkere doek of bak onder de stenen','bad');
+    else if(st.state==='moving') camSetStatus('Beweging…');
+    else if(!seen) camSetStatus('Geen stenen in beeld');
+    else if(st.state==='incomplete') camSetStatus(seen===N_DICE ? 'Niet alle ogen te lezen' : seen+' van de '+N_DICE+' stenen in beeld','bad');
+    else camSetStatus(st.values.join(' · ')+(st.state==='settling'?' — even stil houden…':''), st.state==='stable'?'ok':'');
+    if(st.fire) camSend(st.values);
+  }
+
+  function camSend(values){
+    if(cam.sending || !game) return;
+    const now=game.dice ? game.dice.values.slice().sort((a,b)=>a-b).join('') : '';
+    if(now===values.join('')) return;
+    cam.sending=true;
+    api('POST','/games/'+game.id+'/dice',{revision:game.revision, dice:values, source:'camera'})
+      .then(g=>{ if(accept(g)) renderGame(); })
+      .catch(()=>{}) // 409: er is net iets ingevuld; de livestream ververst al
+      .finally(()=>{ cam.sending=false; });
+  }
+
+  function drawOverlay(res){
+    const c=$('#camOverlay'), v=$('#camVideo');
+    const W=v.clientWidth, H=v.clientHeight;
+    const dpr=window.devicePixelRatio||1;
+    if(c.width!==Math.round(W*dpr) || c.height!==Math.round(H*dpr)){ c.width=Math.round(W*dpr); c.height=Math.round(H*dpr); }
+    const ctx=c.getContext('2d');
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,W,H);
+    // Scherm en herkenning tonen hetzelfde vierkant.
+    const s=W/res.width, ox=0, oy=(H-res.height*s)/2;
+    ctx.lineWidth=2;
+    ctx.font='bold 16px -apple-system,sans-serif';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    for(const d of res.dice){
+      const x=ox+d.x*s, y=oy+d.y*s, r=d.size*s*0.62;
+      ctx.strokeStyle=d.value?'#4caf50':'#e53935';
+      ctx.strokeRect(x-r,y-r,2*r,2*r);
+      ctx.fillStyle='rgba(0,0,0,.7)';
+      ctx.fillRect(x-11,y-r-24,22,20);
+      ctx.fillStyle=d.value?'#fff':'#ff8a85';
+      ctx.fillText(d.value||'?',x,y-r-14);
+    }
+  }
+
+  $('#camBtn').addEventListener('click',()=>{ if(cam.on || cam.wanted) camStop(); else camStart(); });
+  $('#camRetry').addEventListener('click',()=>{ if(cam.tracker) cam.tracker.arm(); });
+
+  // ---- feestje ----
+  // Alleen bij een nieuwe zet in hetzelfde potje, niet bij herladen.
+  function fxCheck(){
+    const cur={id:game.id, revision:game.revision};
+    const prev=prevFx;
+    prevFx=cur;
+    if(!prev || prev.id!==cur.id || cur.revision!==prev.revision+1) return;
+    const lm=game.lastMove;
+    if(lm && ((lm.category==='yahtzee' && lm.value===50) || lm.bonus)) burst('🎲 Yahtzee!');
+    else if(game.status==='finished') burst('🏆');
+  }
+  function burst(text){
+    if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    $('#fx').innerHTML=''; // één tegelijk, ook als er snel zetten binnenkomen
+    const el=document.createElement('div');
+    el.className='burst';
+    el.textContent=text;
+    $('#fx').appendChild(el);
+    setTimeout(()=>el.remove(),1900);
+  }
+
+  // ---- knoppen onder het spel ----
+  $('#backToStartBtn').addEventListener('click',showStart);
+  $('#abandonBtn').addEventListener('click',()=>{
+    if(game && game.status!=='active'){ showStart(); return; }
+    if(!confirm('Dit potje afbreken? Het telt dan niet mee voor het klassement en de highscores.')) return;
+    attempt(async()=>{
+      await api('POST','/games/'+game.id+'/abandon');
+      showStart();
+    },'#gameConn');
+  });
+
+  // ---- live meekijken (meerdere toestellen) ----
+  let source=null, lastEventAt=Date.now(), startRefresh=null;
+  function connect(){
+    if(source) source.close();
+    source=new EventSource(API+'/events');
+    source.addEventListener('state',e=>{
+      lastEventAt=Date.now();
+      let snap;
+      try{ snap=JSON.parse(e.data); }catch(err){ return; }
+      onSnapshot(snap);
+    });
+    source.addEventListener('ping',()=>{ lastEventAt=Date.now(); });
+    source.onopen=()=>{ lastEventAt=Date.now(); };
+  }
+
+  function onSnapshot(snap){
+    if(!game){
+      // Startscherm: een potje dat elders begint meteen in "meedoen" laten zien.
+      clearTimeout(startRefresh);
+      startRefresh=setTimeout(()=>{ if(!game) loadStartData().catch(()=>{}); },300);
+      return;
+    }
+    // De snapshot bevat het laatst bijgewerkte potje. Is dat het onze, dan
+    // hebben we alles; anders halen we het onze zelf op.
+    if(snap.game && snap.game.id===game.id){
+      if(snap.game.version>game.version && accept(snap.game)) renderGame();
+      return;
+    }
+    refetch();
+  }
+
+  async function refetch(){
+    if(!game) return;
+    try{
+      const fresh=await api('GET','/games/'+game.id);
+      if(game && fresh.id===game.id && fresh.version>game.version && accept(fresh)) renderGame();
+    }catch(e){}
+  }
+
+  // Watchdog: iPhone-Safari laat SSE soms stil doodgaan — na 90 s zonder events opnieuw.
+  setInterval(()=>{
+    if(Date.now()-lastEventAt>90000){ connect(); refetch(); }
+  },15000);
+
+  // Telefoon uit slaapstand: state kan verouderd zijn → refetch; de camera
+  // gaat mee uit en weer aan.
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState!=='visible'){
+      if(cam.on) camStop(true);
+      return;
+    }
+    connect();
+    if(game){
+      refetch();
+      if(cam.wanted && !cam.on) camStart();
+    }
+    else showStart();
+  });
+
+  connect();
+  showStart();
+})();
+</script>
+<!-- Geen zoom. Zelfde blok op elke pagina; zie CLAUDE.md. -->
+<style>
+  /* Knijp- en dubbeltik-zoom eruit. Pagina's die zelf met gebaren werken
+     (wafelwoorden) zetten touch-action op hun eigen elementen strakker;
+     de browser neemt de strengste van de twee. */
+  html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%}
+</style>
+<script>
+(function(){
+  // In een homescreen-app is user-scalable=no genoeg, maar in Safari zelf
+  // negeert iOS dat sinds iOS 10. Dus ook met de hand: gesture* is de
+  // iOS-variant van knijpen, touchmove met twee vingers vangt de rest.
+  // Dubbeltik-zoom doet touch-action hierboven; die blijft uit het JS, omdat
+  // preventDefault op touchend de klik zelf zou opeten (twee keer dezelfde
+  // knop tikken wist bij boerenbridge een keuze).
+  const stop = e => e.preventDefault();
+  for (const type of ['gesturestart','gesturechange','gestureend']) {
+    document.addEventListener(type, stop, {passive:false});
+  }
+  document.addEventListener('touchmove', e => {
+    if (e.touches.length > 1) e.preventDefault();
+  }, {passive:false});
+})();
+</script>
+</body>
+</html>
