@@ -84,6 +84,9 @@
     #nameSuggest .chips{margin:-4px 0 14px}
     #nameSuggest .chip.used{background:var(--accent-dim);border-color:var(--accent);color:var(--text)}
     #nameSuggest .chip.more{color:var(--accent);border-style:dashed}
+    /* "Welke Ilse?" — keuze tussen spelers met dezelfde voornaam */
+    .chips.ask{justify-content:center;margin-top:8px}
+    .chips.ask .chip{font-size:.95rem;padding:8px 14px;color:var(--text);border-color:var(--accent)}
 
     /* eretitels onder het klassement */
     .awards{margin-top:12px;display:flex;flex-direction:column;gap:6px;font-size:.88rem;color:var(--muted)}
@@ -400,13 +403,16 @@
     if(!res.ok){
       const err = new Error((data && data.error) || 'Serverfout');
       err.status = res.status;
+      err.ask = data && data.ask;
       throw err;
     }
     return data;
   }
 
   // Voert een actie uit; bij netwerk/serverfout → banner + retry, bij 409 → refetch.
-  async function attempt(run, connBannerId, warnId){
+  // `onAsk(ask)`: de server wil weten welke speler met een gedeelde voornaam
+  // er bedoeld is (zie askWhich).
+  async function attempt(run, connBannerId, warnId, onAsk){
     lastFailed = null;
     $('#startConn').style.display='none';
     $('#gameConn').style.display='none';
@@ -421,6 +427,7 @@
       }
       if(err.status === 404 && game){ game=null; showStart(); return; }
       if(err.status && err.status < 500){
+        if(err.ask && onAsk){ onAsk(err.ask); return; }
         // validatiefout: toon in het formulier waar de actie vandaan kwam
         const warn = (warnId && $(warnId)) || $('#predWarn') || $('#actWarn') || $('#startWarn');
         if(warn) warn.innerHTML = '<span class="error">'+esc(err.message)+'</span>';
@@ -432,6 +439,30 @@
   }
   $('#startRetry').addEventListener('click',()=>{ if(lastFailed) attempt(lastFailed,'#startConn'); });
   $('#gameRetry').addEventListener('click',()=>{ if(lastFailed) attempt(lastFailed,'#gameConn'); });
+
+  // Twee spelers met dezelfde voornaam (beheer: Spelers-pagina): bij een kale
+  // voornaam vraagt de server welke er bedoeld is. Een tik zet de volledige
+  // naam in het veld en probeert het opnieuw.
+  function askWhich(warn, ask, inputs, again){
+    warn.innerHTML='<div class="error">Welke '+esc(ask.first)+'?</div>';
+    const chips=document.createElement('div');
+    chips.className='chips ask';
+    ask.choices.forEach(choice=>{
+      const btn=document.createElement('button');
+      btn.type='button';
+      btn.className='chip';
+      btn.textContent=choice;
+      btn.addEventListener('click',()=>{
+        const key=ask.name.toLowerCase();
+        const inp=inputs.find(i=>i.value.trim().toLowerCase()===key);
+        if(inp) inp.value=choice;
+        warn.innerHTML='';
+        again();
+      });
+      chips.appendChild(btn);
+    });
+    warn.appendChild(chips);
+  }
 
   // ---- feestjes ----
   // Confetti en een oplichtende rij: puur versiering. Wat er afgaat volgt uit
@@ -667,7 +698,8 @@
     attempt(async()=>{
       game = await api('POST','/games',{players:names});
       renderGame();
-    },'#startConn');
+    },'#startConn','#startWarn',ask=>askWhich($('#startWarn'),ask,[...nameDiv.querySelectorAll('input')],
+      ()=>{ renderNameSuggest(); $('#startBtn').click(); }));
   });
 
   // ---- spelscherm ----
@@ -970,7 +1002,7 @@
           game = await api('POST','/games/'+game.id+'/swap',
             {round:game.currentRound, seat:seat, name:nieuw});
           renderGame(name+' is vervangen door '+nieuw);
-        },'#gameConn','#swapWarn');
+        },'#gameConn','#swapWarn',ask=>askWhich($('#swapWarn'),ask,[input],go));
       };
       row.querySelector('button').addEventListener('click',go);
       input.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); go(); } });

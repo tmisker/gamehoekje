@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f0f12">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Spelers">
+  <title>Spelers – Spellenhoek</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    :root{
+      --bg:#0f0f12;--card:#1b1b20;--card2:#232329;--line:#2e2e36;
+      --text:#f4f4f6;--muted:#9a9aa3;--accent:#5b8cff;--accent-dim:rgba(91,140,255,.15);
+      --red:#e53935;
+    }
+    html{height:100%}
+    body{
+      min-height:100%;background:var(--bg);color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+      display:flex;flex-direction:column;align-items:center;padding:16px 16px 60px;
+    }
+    a.backlink{
+      align-self:flex-start;color:var(--muted);text-decoration:none;font-size:.9rem;margin-bottom:12px;
+    }
+    a.backlink:hover{color:var(--accent)}
+    h1{font-size:1.5rem;margin-bottom:4px;text-align:center}
+    .sub{color:var(--muted);font-size:.85rem;margin-bottom:16px;text-align:center;max-width:420px;line-height:1.45}
+    main{max-width:440px;width:100%;display:flex;flex-direction:column;gap:14px}
+    .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+    .panel h2{font-size:1rem;margin-bottom:8px}
+    .hint{color:var(--muted);font-size:.82rem;line-height:1.5;margin-bottom:12px}
+    .empty{color:var(--muted);font-size:.9rem}
+    input{
+      width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;
+      background:var(--card2);color:var(--text);font-size:1rem;
+    }
+    input[readonly]{color:var(--muted)}
+    label{display:block;font-weight:600;font-size:.9rem;margin:0 0 6px;color:var(--muted)}
+    .names{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+    .field{margin-bottom:12px}
+    button{
+      padding:10px 18px;border:none;border-radius:10px;font-size:.95rem;font-weight:700;
+      cursor:pointer;color:#fff;background:#3a3a3c;transition:background .15s,transform .1s;
+    }
+    button:active{transform:scale(.96)}
+    button:hover{background:#555}
+    .btn-primary{background:var(--accent)}
+    .btn-primary:hover{background:#4a7bef}
+    .btn-link{background:none;color:var(--accent);padding:4px 0;font-weight:600;font-size:.88rem}
+    .btn-link:hover{background:none;text-decoration:underline}
+    .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .error{color:var(--red);font-size:.85rem;margin-top:10px}
+
+    .group{
+      display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);
+    }
+    .group:first-child{padding-top:0}
+    .group .first{font-weight:700;flex:0 0 auto}
+    .group .full{color:var(--muted);font-size:.9rem;flex:1;min-width:0}
+    .group button{padding:6px 12px;font-size:.82rem;border-radius:8px;flex:0 0 auto}
+    #groupForm{margin-top:14px}
+
+    .potje{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:8px}
+    .potje .when{font-weight:700}
+    .potje .with{color:var(--muted);font-size:.85rem;margin:2px 0 10px}
+    .potje .q{font-size:.88rem;margin-bottom:6px}
+    .chips{display:flex;flex-wrap:wrap;gap:6px}
+    .chip{
+      padding:7px 13px;border:1px solid var(--line);border-radius:999px;background:var(--card);
+      color:var(--text);font-size:.9rem;font-weight:600;
+    }
+    .chip:hover{border-color:var(--accent);background:var(--card)}
+    .chip.on{background:var(--accent-dim);border-color:var(--accent)}
+    .potje.done{opacity:.85}
+    .potje .done-note{color:var(--muted);font-size:.8rem;margin-top:8px}
+  </style>
+</head>
+<body>
+  <a class="backlink" href="../index.html">← Alle spellen</a>
+  <h1>Spelers</h1>
+  <p class="sub">Alles gaat op voornaam. Delen twee spelers een voornaam, zet ze dan hier neer: zo houdt
+    ieder een eigen score.</p>
+
+  <main>
+    <section class="panel">
+      <h2>Dubbele voornamen</h2>
+      <p class="hint">Bij de start kies je welke van de twee het is. Aan tafel heet ieder gewoon bij de
+        voornaam, behalve als ze allebei meedoen. In het klassement en de statistiek staan ze voluit.</p>
+      <div id="groups"></div>
+      <button type="button" class="btn-link" id="addGroup">+ Dubbele voornaam</button>
+      <form id="groupForm" hidden>
+        <div class="field">
+          <label for="first">Voornaam</label>
+          <input id="first" autocapitalize="words" autocomplete="off" placeholder="Ilse">
+        </div>
+        <label>Volledige namen</label>
+        <div class="names" id="names"></div>
+        <div class="actions">
+          <button type="submit" class="btn-primary">Opslaan</button>
+          <button type="button" id="moreName">+ naam</button>
+          <button type="button" class="btn-link" id="cancelGroup">annuleren</button>
+        </div>
+        <div id="groupWarn"></div>
+      </form>
+    </section>
+
+    <section class="panel" id="openPanel" hidden>
+      <h2>Oude potjes toewijzen</h2>
+      <p class="hint">In deze potjes staat nog alleen de voornaam. Weet je wie het was? Tik de juiste naam
+        aan; dan telt het potje voortaan voor die speler.</p>
+      <div id="open"></div>
+      <div id="openWarn"></div>
+    </section>
+  </main>
+
+<script>
+(function(){
+  'use strict';
+  const API = '../api/spelers';
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  let state = { groups: [], open: [] };
+  // In deze sessie toegewezen potjes blijven staan, zodat een vergissing met
+  // één tik terug te draaien is: sleutel spel+id → {item, name}.
+  const done = new Map();
+
+  async function api(method, path, body){
+    const res = await fetch(API + path, {
+      method,
+      headers: body ? {'Content-Type':'application/json'} : {},
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    let data = null;
+    try{ data = await res.json(); }catch(e){}
+    if(!res.ok) throw new Error((data && data.error) || 'Serverfout');
+    return data;
+  }
+
+  async function run(warnSel, fn){
+    $(warnSel).innerHTML = '';
+    try{ await fn(); }
+    catch(err){ $(warnSel).innerHTML = '<div class="error">'+esc(err.message)+'</div>'; }
+  }
+
+  // ---- dubbele voornamen ----
+  function renderGroups(){
+    const box = $('#groups');
+    if(!state.groups.length){ box.innerHTML = '<p class="empty">Nog geen.</p>'; return; }
+    box.innerHTML = '';
+    state.groups.forEach(g=>{
+      const row = document.createElement('div');
+      row.className = 'group';
+      row.innerHTML = '<span class="first">'+esc(g.first)+'</span>'
+        +'<span class="full">'+g.names.map(esc).join(' · ')+'</span>'
+        +'<button type="button">Wijzig</button>';
+      row.querySelector('button').addEventListener('click',()=>openForm(g));
+      box.appendChild(row);
+    });
+  }
+
+  function addNameInput(value){
+    const inp = document.createElement('input');
+    inp.autocapitalize = 'words';
+    inp.autocomplete = 'off';
+    inp.value = value || '';
+    const first = $('#first').value.trim() || 'Ilse';
+    inp.placeholder = $('#names').children.length ? first+' de V.' : first+' B.';
+    $('#names').appendChild(inp);
+    return inp;
+  }
+
+  function openForm(group){
+    $('#groupWarn').innerHTML = '';
+    // De voornaam is de sleutel van de groep; een andere = weghalen en opnieuw.
+    $('#first').value = group ? group.first : '';
+    $('#first').readOnly = !!group;
+    $('#names').innerHTML = '';
+    (group ? group.names : ['', '']).forEach(n=>addNameInput(n));
+    $('#groupForm').hidden = false;
+    $('#addGroup').hidden = true;
+    // Bestaande groep: ook weg te halen.
+    let del = $('#delGroup');
+    if(del) del.remove();
+    if(group){
+      del = document.createElement('button');
+      del.type = 'button';
+      del.id = 'delGroup';
+      del.textContent = 'Weghalen';
+      del.addEventListener('click',()=>{
+        if(!confirm(group.first+' weghalen? Bij de start mag dan weer gewoon "'+group.first+'".')) return;
+        save({first: group.first, names: []});
+      });
+      $('#groupForm .actions').appendChild(del);
+    }
+    (group ? $('#names input') : $('#first')).focus();
+  }
+
+  function closeForm(){
+    $('#groupForm').hidden = true;
+    $('#addGroup').hidden = false;
+  }
+
+  function save(group){
+    run('#groupWarn', async()=>{
+      state = await api('POST','/groups',group);
+      closeForm();
+      render();
+    });
+  }
+
+  $('#addGroup').addEventListener('click',()=>openForm(null));
+  $('#cancelGroup').addEventListener('click',closeForm);
+  $('#moreName').addEventListener('click',()=>addNameInput('').focus());
+  $('#groupForm').addEventListener('submit',e=>{
+    e.preventDefault();
+    save({
+      first: $('#first').value,
+      names: [...$('#names').querySelectorAll('input')].map(i=>i.value.trim()).filter(Boolean),
+    });
+  });
+
+  // ---- oude potjes ----
+  function whenTxt(iso){
+    const d = new Date(iso);
+    const opts = {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'};
+    if(d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+    return d.toLocaleString('nl-NL', opts);
+  }
+
+  function groupFor(first){
+    return state.groups.find(g=>g.first.toLowerCase() === first.toLowerCase());
+  }
+
+  function potjeHtml(item, current){
+    const others = item.players.filter(n=>n.toLowerCase() !== (current || item.first).toLowerCase());
+    return '<div class="when">'+esc(item.title)+' · '+esc(whenTxt(item.createdAt))
+      +(item.status === 'active' ? ' (loopt nog)' : '')+'</div>'
+      +'<div class="with">met '+(others.length ? others.map(esc).join(', ') : 'niemand anders')+'</div>'
+      +'<div class="q">Wie was '+esc(item.first)+'?</div>';
+  }
+
+  function renderOpen(){
+    const items = state.open.map(item=>({item, name: null}))
+      .concat([...done.values()].filter(d=>!state.open.some(o=>o.game === d.item.game && o.id === d.item.id)));
+    items.sort((a,b)=>a.item.createdAt < b.item.createdAt ? -1 : 1);
+    $('#openPanel').hidden = !items.length;
+    const box = $('#open');
+    box.innerHTML = '';
+    items.forEach(({item, name})=>{
+      const group = groupFor(item.first);
+      if(!group) return;
+      const card = document.createElement('div');
+      card.className = 'potje'+(name ? ' done' : '');
+      card.innerHTML = potjeHtml(item, name);
+      const chips = document.createElement('div');
+      chips.className = 'chips';
+      group.names.forEach(full=>{
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'chip'+(full === name ? ' on' : '');
+        btn.textContent = full;
+        btn.addEventListener('click',()=>{
+          if(full === name) return;
+          run('#openWarn', async()=>{
+            state = await api('POST','/assign',{game: item.game, id: item.id, from: name || item.first, to: full});
+            done.set(item.game+'/'+item.id, {item, name: full});
+            render();
+          });
+        });
+        chips.appendChild(btn);
+      });
+      card.appendChild(chips);
+      if(name){
+        const note = document.createElement('div');
+        note.className = 'done-note';
+        note.textContent = 'Telt nu voor '+name+' (vergist? tik de andere naam)';
+        card.appendChild(note);
+      }
+      box.appendChild(card);
+    });
+  }
+
+  function render(){
+    renderGroups();
+    renderOpen();
+  }
+
+  run('#groupWarn', async()=>{
+    state = await api('GET','');
+    render();
+  });
+})();
+</script>
+<!-- Geen zoom. Zelfde blok op elke pagina; zie CLAUDE.md. -->
+<style>
+  /* Knijp- en dubbeltik-zoom eruit. Pagina's die zelf met gebaren werken
+     (wafelwoorden) zetten touch-action op hun eigen elementen strakker;
+     de browser neemt de strengste van de twee. */
+  html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%}
+</style>
+<script>
+(function(){
+  // In een homescreen-app is user-scalable=no genoeg, maar in Safari zelf
+  // negeert iOS dat sinds iOS 10. Dus ook met de hand: gesture* is de
+  // iOS-variant van knijpen, touchmove met twee vingers vangt de rest.
+  // Dubbeltik-zoom doet touch-action hierboven; die blijft uit het JS, omdat
+  // preventDefault op touchend de klik zelf zou opeten (twee keer dezelfde
+  // knop tikken wist bij boerenbridge een keuze).
+  const stop = e => e.preventDefault();
+  for (const type of ['gesturestart','gesturechange','gestureend']) {
+    document.addEventListener(type, stop, {passive:false});
+  }
+  document.addEventListener('touchmove', e => {
+    if (e.touches.length > 1) e.preventDefault();
+  }, {passive:false});
+})();
+</script>
+</body>
+</html>

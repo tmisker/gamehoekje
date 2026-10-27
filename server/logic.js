@@ -524,6 +524,12 @@ function historyOf(games) {
   return historyCache.value;
 }
 
+// Een naam achteraf toewijzen (spelers.assign) verandert niets aan de sleutel
+// hierboven, wel aan de inhoud: dan moet de cache er met de hand uit.
+function forgetHistory() {
+  historyCache = { key: null, value: null };
+}
+
 const ORDINAL = ['1e', '2e', '3e', '4e', '5e', '6e', '7e', '8e', '9e', '10e'];
 const ordinal = k => ORDINAL[k - 1] || k + 'e';
 
@@ -950,7 +956,7 @@ module.exports = {
   factCandidates, historyCandidates, draftCandidates, pickFact, pickDraftFact, highlights, daypart,
   leadChanges,
   statsView: (games, exclude) => bbStats.statsView(games, exclude, RULES),
-  historyOf,
+  historyOf, forgetHistory,
   finishedGames: shared.finishedGames,
   leaderboardPlayers: shared.leaderboardPlayers,
   httpError,
