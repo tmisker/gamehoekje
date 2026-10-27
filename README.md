@@ -220,6 +220,21 @@ met één of meer rijtjes); het klassement telt per speler potjes, winst (alleen
 met tegenstanders), het gemiddelde per rijtje, de beste, het aantal Yahtzees en
 hoe vaak de bonus binnenkwam.
 
+## Twee spelers met dezelfde voornaam
+
+Alles gaat op voornaam, en het klassement houdt spelers uit elkaar op naam.
+Heten twee mensen hetzelfde, zet ze dan op de pagina **Spelers** (onderaan de
+homepage) onder één voornaam met elk een eigen volledige naam, bijvoorbeeld
+*Ilse* → *Ilse B.* en *Ilse de V.*. Dat geldt voor alle spellen tegelijk.
+
+- **Bij de start** staan ze allebei voluit tussen de naamsuggesties. Typt
+  iemand toch alleen "Ilse", dan vraagt de pagina welke Ilse het is.
+- **Aan tafel** (invoer, scorebord, weetjes) heet ieder gewoon bij de
+  voornaam, behalve als ze allebei meedoen.
+- **In het klassement en de statistiek** staan ze voluit.
+- **Oude potjes** met alleen "Ilse" erin staan op dezelfde pagina; tik aan wie
+  het was. Vergist? Tik de andere naam.
+
 ## Op de telefoon of tablet
 
 **Geen zoom.** Knijpen en dubbeltikken zoomen niet meer; teksten en knoppen
@@ -267,6 +282,7 @@ node test/klaverjas.test.js
 node test/tafeltennis.test.js
 node test/yahtzee.test.js
 node test/yahtzee-vision.test.js
+node test/spelers.test.js
 node test/solver.test.js
 ```
 
@@ -293,6 +309,9 @@ highscores, SSE en persistentie.
 laat hem synthetische camerabeelden tellen: onscherp, schaduw, glimlicht,
 stenen tegen elkaar, een lamp aan één kant, enzovoort (aantal per scenario
 via `N_VISION`). Dat test het rekenwerk, niet een echte camera.
+`spelers.test.js` test de dubbele voornamen: de vraag bij de start, de
+voornaam aan tafel, de suggesties en het toewijzen van oude potjes, voor alle
+vier de spellen.
 `solver.test.js` lost honderden willekeurige scrambles op met beide
 oplossers en verifieert elke oplossing (aantallen instelbaar via
 `N_KOCIEMBA` / `N_LBL`).
@@ -301,9 +320,11 @@ oplossers en verifieert elke oplossing (aantallen instelbaar via
 
 ```
 index.html                     # homepage / spellenoverzicht
+spelers/index.html             # beheer: twee spelers met dezelfde voornaam
 server/
   server.js                    # statische site + spel-API's + SSE
   shared.js                    # gedeelde helpers (klassement, foutobjecten)
+  spelers.js                   # dubbele voornamen (voor alle spellen)
   logic.js                     # autoritatieve boerenbridge-logica
   klaverjas.js                 # autoritatieve klaverjas-logica
   tafeltennis.js               # autoritatieve toernooilogica (tafeltennis)
@@ -327,6 +348,7 @@ test/klaverjas.test.js         # end-to-end API-test (klaverjas)
 test/tafeltennis.test.js       # end-to-end API-test (tafeltennis)
 test/yahtzee.test.js           # end-to-end API-test (yahtzee)
 test/yahtzee-vision.test.js    # dobbelsteenherkenning op synthetische beelden
+test/spelers.test.js           # dubbele voornamen (alle spellen)
 data/                          # spelgegevens (niet in git; Docker-volume)
 ```
 

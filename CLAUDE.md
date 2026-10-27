@@ -19,9 +19,11 @@ UI-teksten zijn in het **Nederlands**. Houd dat zo.
 
 ```
 index.html                     # homepage: overzicht met een kaartje per spel
+spelers/index.html             # beheer: dubbele voornamen + oude potjes toewijzen
 server/
-  server.js                    # statische site + /api/{boerenbridge,klaverjas,tafeltennis,yahtzee}/* + SSE
+  server.js                    # statische site + /api/{boerenbridge,klaverjas,tafeltennis,yahtzee,spelers}/* + SSE
   shared.js                    # gedeelde, spel-onafhankelijke helpers (klassement, httpError)
+  spelers.js                   # spelers die een voornaam delen (puur, voor alle spellen)
   logic.js                     # autoritatieve boerenbridge-logica (pure functies)
   bb-stats.js                  # statistiek over meerdere boerenbridge-potjes (puur)
   klaverjas.js                 # autoritatieve klaverjas-logica (pure functies)
@@ -52,6 +54,7 @@ test/klaverjas.test.js         # end-to-end test van het klaverjas-API
 test/tafeltennis.test.js       # end-to-end test van het tafeltennis-API
 test/yahtzee.test.js           # end-to-end test van het yahtzee-API
 test/yahtzee-vision.test.js    # dobbelsteenherkenning op synthetische beelden (puur)
+test/spelers.test.js           # dubbele voornamen: pure functies + end-to-end over alle spellen
 test/solver.test.js            # cube-solver op honderden scrambles (node test/solver.test.js)
 data/                          # spelgegevens (gitignored; Docker-volume)
 README.md                      # gebruikersgerichte uitleg
@@ -258,11 +261,43 @@ Dockerfile                     # node:22-alpine, geen npm install
   de **volledige snapshot** over de lijn (nooit deltas), plus een
   `ping`-event elke 25 s. `server.requestTimeout = 0` staat bewust aan —
   Node ≥18 kapt anders long-lived responses na 5 min af.
-- **Persistentie:** `data/boerenbridge.json` en `data/klaverjas.json`, synchrone save via tmp-bestand
-  + atomische rename. Corrupt bestand bij startup wordt gequarantained
-  (hernoemd), nooit crash-loopen.
+- **Twee spelers met dezelfde voornaam** (`server/spelers.js`, beheer op
+  `/spelers/`). Alles koppelt op naam, dus de twee krijgen elk een eigen
+  volledige naam ("Ilse B.", "Ilse de V."); klassement, statistiek en weetjes
+  hoeven daar niets voor te weten. `data/spelers.json` (`{groups: [{first,
+  names}]}`, voor alle spellen samen) regelt de rest, en dat zit allemaal in
+  `server.js`, niet in de spelmodules:
+  - Een kale voornaam bij de start of een wissel → 400 met `ask: {index,
+    name, first, choices}` (`spelers.check`). De pagina's tonen dan "Welke
+    Ilse?" (`askWhich`, vierde/derde argument van `attempt`), zetten de
+    gekozen naam in het veld en proberen het opnieuw.
+  - De naamsuggesties krijgen de volledige namen naast elkaar
+    (`withRoster`). Een groep die in een spel nog nooit meedeed blijft daar
+    weg; dan vangt de vraag het op.
+  - **Aan tafel heet je bij je voornaam** zolang niemand anders aan die tafel
+    hem draagt. Dat is puur weergave aan de rand: `atTable` (via `viewOf`,
+    `summariesOf` en `snapshotOf`) vervangt in de view van één potje de
+    volledige naam door de voornaam, ook midden in teksten (weetjes,
+    hoogtepunten, teamnamen). De context is `spelers.seated(game)`: wie nu
+    zit plus wie via een wissel meedeed. Klassement, statistiek, records en
+    tafelnotities blijven voluit — daar kunnen ze naast elkaar staan. Geen
+    pagina stuurt een naam uit de view terug (de wissel gaat op stoelnummer
+    + nieuwe naam); houd dat zo, anders komt "Ilse" terug als identiteit.
+  - Oude potjes met een kale voornaam: `POST /api/spelers/assign` (`{game,
+    id, from, to}`) zet de naam in `players` en de wissels om; ook een eerder
+    toegewezen naam mag nog wisselen (vergissing). Daarna `forgetHistory()`
+    voor boerenbridge: de cachesleutel van `historyOf` ziet een hernoeming niet.
+- **Persistentie:** `data/boerenbridge.json`, `data/klaverjas.json`,
+  `data/tafeltennis.json`, `data/yahtzee.json` en `data/spelers.json`, synchrone save via
+  tmp-bestand + atomische rename (`readData`/`writeData`). Corrupt bestand bij
+  startup wordt gequarantained (hernoemd), nooit crash-loopen.
 - Nieuw server-backed spel? Namespace het API onder `/api/<spel>/` en houd
-  de logica in een eigen pure module naast `logic.js`.
+  de logica in een eigen pure module naast `logic.js`. Haak het aan op de
+  dubbele voornamen: `spelers.check` vóór `createGame`, `viewOf`/`summariesOf`
+  voor elke potje-response, `withRoster` om de klassement-payload, een regel in
+  `GAMES` (beheerpagina + toewijzen) en `askWhich` op de startpagina. Staan er
+  namen buiten `players` (zoals de wissels van boerenbridge), dan moeten
+  `spelers.seated` en `spelers.assign` die ook kennen.
 
 ## Build
 
@@ -319,6 +354,12 @@ path-traversal. Draai **alle vier** na elke wijziging in `server/` —
 **Dobbelsteenherkenning:** `node test/yahtzee-vision.test.js` (zonder server,
 ~30 s; `N_VISION=60` voor meer beelden per scenario). Draai hem na elke
 wijziging in het `dice-vision`-blok van `games/yahtzee/index.html`.
+
+**Dubbele voornamen:** `node test/spelers.test.js` test eerst de pure functies
+van `spelers.js` (groepen, de vraag, suggesties, voornaam aan tafel,
+toewijzen, de historie-cache) en daarna de keten via de echte server, voor
+alle vier de spellen. Draai hem na elke wijziging in `spelers.js` of aan de
+naam-afhandeling in `server.js`.
 
 **Statistiek:** `node test/stats.test.js` draait zónder server. Het speelt drie
 potjes met een bekende uitkomst en rekent daar de spelersrijen, de tabellen per

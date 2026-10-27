@@ -11,12 +11,36 @@ const logic = require('./logic.js');
 const klaverjas = require('./klaverjas.js');
 const tafeltennis = require('./tafeltennis.js');
 const yahtzee = require('./yahtzee.js');
+const spelers = require('./spelers.js');
 
 const PORT = +(process.env.PORT || 3000);
 const ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(ROOT, 'data'));
 
 // ---------- opslag ----------
+
+// Leest een databestand; `parse` haalt eruit wat nodig is en gooit bij een
+// onverwachte vorm. Geen bestand of een kapot bestand → null.
+function readData(file, parse) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(file)) return null;
+  try {
+    return parse(JSON.parse(fs.readFileSync(file, 'utf8')));
+  } catch (err) {
+    // Nooit crash-loopen op een kapot bestand: opzij zetten en leeg starten.
+    const quarantine = file.replace(/\.json$/, '.corrupt-' + Date.now() + '.json');
+    fs.renameSync(file, quarantine);
+    console.error('FOUT: databestand onleesbaar (' + err.message + '); verplaatst naar ' + quarantine);
+    return null;
+  }
+}
+
+// Synchronous + atomische rename: geen half geschreven bestand na een crash.
+function writeData(file, data) {
+  const tmp = file + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 1));
+  fs.renameSync(tmp, file);
+}
 
 // Eén databestand per spel; elke store houdt zijn eigen lijst potjes bij.
 function createStore(filename, notFound) {
@@ -25,24 +49,14 @@ function createStore(filename, notFound) {
     file,
     games: [],
     load() {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-      if (!fs.existsSync(file)) return;
-      try {
-        const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const games = readData(file, parsed => {
         if (!Array.isArray(parsed.games)) throw new Error('onverwachte vorm');
-        store.games = parsed.games;
-      } catch (err) {
-        // Nooit crash-loopen op een kapot bestand: opzij zetten en leeg starten.
-        const quarantine = file.replace(/\.json$/, '.corrupt-' + Date.now() + '.json');
-        fs.renameSync(file, quarantine);
-        console.error('FOUT: databestand onleesbaar (' + err.message + '); verplaatst naar ' + quarantine);
-      }
+        return parsed.games;
+      });
+      if (games) store.games = games;
     },
     save() {
-      // Synchronous + atomische rename: geen half geschreven bestand na een crash.
-      const tmp = file + '.tmp';
-      fs.writeFileSync(tmp, JSON.stringify({ games: store.games }, null, 1));
-      fs.renameSync(tmp, file);
+      writeData(file, { games: store.games });
     },
     find(id) {
       const game = store.games.find(g => g.id === id);
@@ -58,6 +72,40 @@ const kj = createStore('klaverjas.json', 'Potje niet gevonden');
 const tt = createStore('tafeltennis.json', 'Toernooi niet gevonden');
 const yt = createStore('yahtzee.json', 'Potje niet gevonden');
 
+// Spelers die een voornaam delen (zie spelers.js); geldt voor alle spellen.
+const roster = {
+  file: path.join(DATA_DIR, 'spelers.json'),
+  groups: [],
+  load() {
+    const groups = readData(roster.file, parsed => spelers.parseGroups(parsed.groups));
+    if (groups) roster.groups = groups;
+  },
+  save() {
+    writeData(roster.file, { groups: roster.groups });
+  },
+};
+
+// Een potje zoals de pagina's het te zien krijgen: aan tafel heet je bij je
+// voornaam zolang niemand anders die draagt ("Ilse" i.p.v. "Ilse B.").
+// Alleen de weergave; opgeslagen blijft de volledige naam.
+function atTable(game, view) {
+  return spelers.relabel(view, spelers.tableLabels(spelers.seated(game), roster.groups));
+}
+
+function viewOf(mod, game, games) {
+  return atTable(game, mod.enrich(game, games));
+}
+
+function summariesOf(mod, games) {
+  return games.map(g => atTable(g, mod.gameSummary(g)));
+}
+
+// Klassement-payload met de dubbele voornamen voluit in de naamsuggesties.
+function withRoster(view) {
+  view.suggestions = spelers.withGroups(view.suggestions, roster.groups);
+  return view;
+}
+
 // Zolang het winnaarscherm blijft staan na een afgerond potje.
 const WINNER_WINDOW = 10 * 60 * 1000;
 
@@ -71,13 +119,13 @@ function snapshotOf(store, mod) {
   if (mod.awards) snap.awards = mod.awards(leaderboard);
   const active = store.games.filter(g => g.status === 'active').sort(byUpdated);
   if (active.length) {
-    snap.game = mod.enrich(active[0], store.games);
+    snap.game = viewOf(mod, active[0], store.games);
     return snap;
   }
   const justFinished = store.games
     .filter(g => g.status === 'finished' && Date.now() - Date.parse(g.finishedAt) < WINNER_WINDOW)
     .sort(byUpdated);
-  if (justFinished.length) snap.game = mod.enrich(justFinished[0], store.games);
+  if (justFinished.length) snap.game = viewOf(mod, justFinished[0], store.games);
   // Zonder potje op het scherm is er ruimte voor weetjes over de tafel. Alleen
   // dán meesturen: tijdens het spelen gaat de snapshot bij elke mutatie over
   // de lijn en hoeft die niet dikker te zijn dan nodig.
@@ -197,7 +245,7 @@ async function handleBoerenbridgeApi(req, res, pathname, query) {
     // ?exclude=Naam&exclude=Naam of ?exclude=Naam,Naam — potjes met deze
     // spelers tellen niet mee (zie logic.finishedGames).
     const exclude = query.getAll('exclude').flatMap(v => v.split(','));
-    return sendJson(res, 200, logic.leaderboardView(bb.games, exclude));
+    return sendJson(res, 200, withRoster(logic.leaderboardView(bb.games, exclude)));
   }
 
   // Statistiek over alle afgeronde potjes; zelfde exclude-filter als het klassement.
@@ -211,17 +259,18 @@ async function handleBoerenbridgeApi(req, res, pathname, query) {
       let list = bb.games;
       if (query.get('status')) list = list.filter(g => g.status === query.get('status'));
       list = [...list].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
-      return sendJson(res, 200, { games: list.map(logic.gameSummary) });
+      return sendJson(res, 200, { games: summariesOf(logic, list) });
     }
     if (req.method === 'POST' && sub.length === 1) {
       const body = await readBody(req);
+      spelers.check(body.players, roster.groups);
       const game = logic.createGame(body.players);
       bb.games.push(game);
       bb.save(); bbLive.broadcast();
-      return sendJson(res, 201, logic.enrich(game, bb.games));
+      return sendJson(res, 201, viewOf(logic, game, bb.games));
     }
     if (sub.length === 2 && req.method === 'GET') {
-      return sendJson(res, 200, logic.enrich(bb.find(sub[1]), bb.games));
+      return sendJson(res, 200, viewOf(logic, bb.find(sub[1]), bb.games));
     }
     if (sub.length === 3 && req.method === 'POST') {
       const game = bb.find(sub[1]);
@@ -229,7 +278,10 @@ async function handleBoerenbridgeApi(req, res, pathname, query) {
       switch (sub[2]) {
         case 'predictions': logic.applyPredictions(game, body.round, body.predictions); break;
         case 'draft': logic.applyDraft(game, body.round, body.phase, body.values); break;
-        case 'swap': logic.applySwap(game, body.round, body.seat, body.name); break;
+        case 'swap':
+          spelers.check([body.name], roster.groups);
+          logic.applySwap(game, body.round, body.seat, body.name);
+          break;
         case 'counted': logic.setCounted(game, body.counted); break;
         case 'actuals': logic.applyActuals(game, body.round, body.actuals); break;
         case 'undo': logic.undo(game); break;
@@ -237,7 +289,7 @@ async function handleBoerenbridgeApi(req, res, pathname, query) {
         default: throw logic.httpError(404, 'Onbekende actie');
       }
       bb.save(); bbLive.broadcast();
-      return sendJson(res, 200, logic.enrich(game, bb.games));
+      return sendJson(res, 200, viewOf(logic, game, bb.games));
     }
   }
 
@@ -259,7 +311,7 @@ async function handleKlaverjasApi(req, res, pathname, query) {
     // ?exclude=Naam&exclude=Naam of ?exclude=Naam,Naam — potjes met deze
     // spelers tellen niet mee (zie shared.finishedGames).
     const exclude = query.getAll('exclude').flatMap(v => v.split(','));
-    return sendJson(res, 200, klaverjas.leaderboardView(kj.games, exclude));
+    return sendJson(res, 200, withRoster(klaverjas.leaderboardView(kj.games, exclude)));
   }
 
   if (sub[0] === 'games') {
@@ -267,17 +319,18 @@ async function handleKlaverjasApi(req, res, pathname, query) {
       let list = kj.games;
       if (query.get('status')) list = list.filter(g => g.status === query.get('status'));
       list = [...list].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
-      return sendJson(res, 200, { games: list.map(klaverjas.gameSummary) });
+      return sendJson(res, 200, { games: summariesOf(klaverjas, list) });
     }
     if (req.method === 'POST' && sub.length === 1) {
       const body = await readBody(req);
+      spelers.check(body.players, roster.groups);
       const game = klaverjas.createGame(body.players);
       kj.games.push(game);
       kj.save(); kjLive.broadcast();
-      return sendJson(res, 201, klaverjas.enrich(game));
+      return sendJson(res, 201, viewOf(klaverjas, game));
     }
     if (sub.length === 2 && req.method === 'GET') {
-      return sendJson(res, 200, klaverjas.enrich(kj.find(sub[1])));
+      return sendJson(res, 200, viewOf(klaverjas, kj.find(sub[1])));
     }
     if (sub.length === 3 && req.method === 'POST') {
       const game = kj.find(sub[1]);
@@ -290,7 +343,7 @@ async function handleKlaverjasApi(req, res, pathname, query) {
         default: throw shared.httpError(404, 'Onbekende actie');
       }
       kj.save(); kjLive.broadcast();
-      return sendJson(res, 200, klaverjas.enrich(game));
+      return sendJson(res, 200, viewOf(klaverjas, game));
     }
   }
 
@@ -316,7 +369,7 @@ async function handleTafeltennisApi(req, res, pathname, query) {
 
   if (req.method === 'GET' && sub[0] === 'leaderboard' && sub.length === 1) {
     const exclude = query.getAll('exclude').flatMap(v => v.split(','));
-    return sendJson(res, 200, tafeltennis.leaderboardView(tt.games, exclude));
+    return sendJson(res, 200, withRoster(tafeltennis.leaderboardView(tt.games, exclude)));
   }
 
   if (sub[0] === 'games') {
@@ -324,17 +377,18 @@ async function handleTafeltennisApi(req, res, pathname, query) {
       let list = tt.games;
       if (query.get('status')) list = list.filter(g => g.status === query.get('status'));
       list = [...list].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
-      return sendJson(res, 200, { games: list.map(tafeltennis.gameSummary) });
+      return sendJson(res, 200, { games: summariesOf(tafeltennis, list) });
     }
     if (req.method === 'POST' && sub.length === 1) {
       const body = await readBody(req);
+      spelers.check(body && body.players, roster.groups);
       const game = tafeltennis.createGame(body);
       tt.games.push(game);
       tt.save(); ttLive.broadcast();
-      return sendJson(res, 201, tafeltennis.enrich(game));
+      return sendJson(res, 201, viewOf(tafeltennis, game));
     }
     if (sub.length === 2 && req.method === 'GET') {
-      return sendJson(res, 200, tafeltennis.enrich(tt.find(sub[1])));
+      return sendJson(res, 200, viewOf(tafeltennis, tt.find(sub[1])));
     }
     if (sub.length === 3 && req.method === 'POST') {
       const game = tt.find(sub[1]);
@@ -347,7 +401,7 @@ async function handleTafeltennisApi(req, res, pathname, query) {
         default: throw shared.httpError(404, 'Onbekende actie');
       }
       tt.save(); ttLive.broadcast();
-      return sendJson(res, 200, tafeltennis.enrich(game));
+      return sendJson(res, 200, viewOf(tafeltennis, game));
     }
   }
 
@@ -374,7 +428,7 @@ async function handleYahtzeeApi(req, res, pathname, query) {
   // Klassement + highscores (beste rijtjes); zelfde exclude-filter als elders.
   if (req.method === 'GET' && sub[0] === 'leaderboard' && sub.length === 1) {
     const exclude = query.getAll('exclude').flatMap(v => v.split(','));
-    return sendJson(res, 200, yahtzee.leaderboardView(yt.games, exclude));
+    return sendJson(res, 200, withRoster(yahtzee.leaderboardView(yt.games, exclude)));
   }
 
   if (sub[0] === 'games') {
@@ -382,17 +436,18 @@ async function handleYahtzeeApi(req, res, pathname, query) {
       let list = yt.games;
       if (query.get('status')) list = list.filter(g => g.status === query.get('status'));
       list = [...list].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
-      return sendJson(res, 200, { games: list.map(yahtzee.gameSummary) });
+      return sendJson(res, 200, { games: summariesOf(yahtzee, list) });
     }
     if (req.method === 'POST' && sub.length === 1) {
       const body = await readBody(req);
+      spelers.check(body && body.players, roster.groups);
       const game = yahtzee.createGame(body);
       yt.games.push(game);
       yt.save(); ytLive.broadcast();
-      return sendJson(res, 201, yahtzee.enrich(game, yt.games));
+      return sendJson(res, 201, viewOf(yahtzee, game, yt.games));
     }
     if (sub.length === 2 && req.method === 'GET') {
-      return sendJson(res, 200, yahtzee.enrich(yt.find(sub[1]), yt.games));
+      return sendJson(res, 200, viewOf(yahtzee, yt.find(sub[1]), yt.games));
     }
     if (sub.length === 3 && req.method === 'POST') {
       const game = yt.find(sub[1]);
@@ -405,8 +460,62 @@ async function handleYahtzeeApi(req, res, pathname, query) {
         default: throw shared.httpError(404, 'Onbekende actie');
       }
       yt.save(); ytLive.broadcast();
-      return sendJson(res, 200, yahtzee.enrich(game, yt.games));
+      return sendJson(res, 200, viewOf(yahtzee, game, yt.games));
     }
+  }
+
+  throw shared.httpError(404, 'Niet gevonden');
+}
+
+// Spellen met spelersnamen, voor het beheer van de dubbele voornamen.
+const GAMES = {
+  boerenbridge: { title: 'Boerenbridge', store: bb, live: bbLive },
+  klaverjas: { title: 'Klaverjas', store: kj, live: kjLive },
+  tafeltennis: { title: 'Tafeltennis', store: tt, live: ttLive },
+  yahtzee: { title: 'Yahtzee', store: yt, live: ytLive },
+};
+
+// Beheerpagina: de groepen plus de oude potjes waar nog een kale voornaam in staat.
+function rosterView() {
+  const open = [];
+  for (const [key, { title, store }] of Object.entries(GAMES)) {
+    for (const { game, first } of spelers.unassigned(store.games, roster.groups)) {
+      open.push({
+        game: key, title, id: game.id, createdAt: game.createdAt, status: game.status,
+        players: [...new Set(spelers.seated(game))], first,
+      });
+    }
+  }
+  open.sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  return { groups: roster.groups, open };
+}
+
+async function handleSpelersApi(req, res, pathname) {
+  const sub = pathname.split('/').filter(Boolean).slice(2); // na ['api','spelers']
+
+  if (req.method === 'GET' && sub.length === 0) {
+    return sendJson(res, 200, rosterView());
+  }
+
+  // {first, names}: groep toevoegen of wijzigen; lege `names` haalt hem weg.
+  if (req.method === 'POST' && sub[0] === 'groups' && sub.length === 1) {
+    roster.groups = spelers.setGroup(roster.groups, await readBody(req));
+    roster.save();
+    // Wie aan tafel bij de voornaam heet kan veranderd zijn.
+    for (const { live } of Object.values(GAMES)) live.broadcast();
+    return sendJson(res, 200, rosterView());
+  }
+
+  // {game, id, from, to}: wie de kale voornaam in dat potje was.
+  if (req.method === 'POST' && sub[0] === 'assign' && sub.length === 1) {
+    const body = await readBody(req);
+    const entry = Object.prototype.hasOwnProperty.call(GAMES, body.game) ? GAMES[body.game] : null;
+    if (!entry) throw shared.httpError(404, 'Onbekend spel');
+    spelers.assign(entry.store.find(body.id), body.from, body.to, roster.groups);
+    entry.store.save();
+    if (entry.store === bb) logic.forgetHistory();
+    entry.live.broadcast();
+    return sendJson(res, 200, rosterView());
   }
 
   throw shared.httpError(404, 'Niet gevonden');
@@ -485,13 +594,18 @@ const server = http.createServer(async (req, res) => {
       await handleTafeltennisApi(req, res, pathname, url.searchParams);
     } else if (pathname.startsWith('/api/yahtzee/')) {
       await handleYahtzeeApi(req, res, pathname, url.searchParams);
+    } else if (pathname === '/api/spelers' || pathname.startsWith('/api/spelers/')) {
+      await handleSpelersApi(req, res, pathname);
     } else {
       serveStatic(req, res, pathname);
     }
   } catch (err) {
     const status = err.status || 500;
     if (status === 500) console.error(err);
-    if (!res.headersSent) sendJson(res, status, { error: err.status ? err.message : 'Serverfout' });
+    // `ask`: een kale dubbele voornaam; de pagina vraagt welke er bedoeld is.
+    const body = { error: err.status ? err.message : 'Serverfout' };
+    if (err.ask) body.ask = err.ask;
+    if (!res.headersSent) sendJson(res, status, body);
     else res.end();
   }
 });
@@ -503,6 +617,7 @@ bb.load();
 kj.load();
 tt.load();
 yt.load();
+roster.load();
 server.listen(PORT, () => {
   console.log('Spellenhoek draait op http://localhost:' + PORT + ' (data: ' + DATA_DIR + ')');
 });
