@@ -1,5 +1,5 @@
 // Spellenhoek-server: statische site + spel-API's (boerenbridge, klaverjas,
-// tafeltennis) + SSE.
+// tafeltennis, yahtzee) + SSE.
 // Zero dependencies — alleen Node-ingebouwde modules. Start: node server/server.js
 'use strict';
 
@@ -10,6 +10,7 @@ const shared = require('./shared.js');
 const logic = require('./logic.js');
 const klaverjas = require('./klaverjas.js');
 const tafeltennis = require('./tafeltennis.js');
+const yahtzee = require('./yahtzee.js');
 
 const PORT = +(process.env.PORT || 3000);
 const ROOT = path.resolve(__dirname, '..');
@@ -55,6 +56,7 @@ function createStore(filename, notFound) {
 const bb = createStore('boerenbridge.json', 'Spel niet gevonden');
 const kj = createStore('klaverjas.json', 'Potje niet gevonden');
 const tt = createStore('tafeltennis.json', 'Toernooi niet gevonden');
+const yt = createStore('yahtzee.json', 'Potje niet gevonden');
 
 // Zolang het winnaarscherm blijft staan na een afgerond potje.
 const WINNER_WINDOW = 10 * 60 * 1000;
@@ -142,8 +144,9 @@ function createChannel(snapshotFn) {
 const bbLive = createChannel(() => snapshotOf(bb, logic));
 const kjLive = createChannel(() => snapshotOf(kj, klaverjas));
 const ttLive = createChannel(() => snapshotOf(tt, tafeltennis));
+const ytLive = createChannel(() => snapshotOf(yt, yahtzee));
 
-setInterval(() => { bbLive.ping(); kjLive.ping(); ttLive.ping(); }, 25000).unref();
+setInterval(() => { bbLive.ping(); kjLive.ping(); ttLive.ping(); ytLive.ping(); }, 25000).unref();
 
 // ---------- HTTP-helpers ----------
 
@@ -351,6 +354,64 @@ async function handleTafeltennisApi(req, res, pathname, query) {
   throw shared.httpError(404, 'Niet gevonden');
 }
 
+async function handleYahtzeeApi(req, res, pathname, query) {
+  const sub = pathname.split('/').filter(Boolean).slice(2); // na ['api','yahtzee']
+
+  // Ook de invoerpagina's luisteren mee: zo kun je met meerdere telefoons
+  // aan hetzelfde potje invullen.
+  if (req.method === 'GET' && sub[0] === 'events' && sub.length === 1) {
+    return ytLive.attach(req, res);
+  }
+
+  if (req.method === 'GET' && sub[0] === 'current' && sub.length === 1) {
+    return sendJson(res, 200, snapshotOf(yt, yahtzee));
+  }
+
+  if (req.method === 'GET' && sub[0] === 'options' && sub.length === 1) {
+    return sendJson(res, 200, yahtzee.OPTIONS);
+  }
+
+  // Klassement + highscores (beste rijtjes); zelfde exclude-filter als elders.
+  if (req.method === 'GET' && sub[0] === 'leaderboard' && sub.length === 1) {
+    const exclude = query.getAll('exclude').flatMap(v => v.split(','));
+    return sendJson(res, 200, yahtzee.leaderboardView(yt.games, exclude));
+  }
+
+  if (sub[0] === 'games') {
+    if (req.method === 'GET' && sub.length === 1) {
+      let list = yt.games;
+      if (query.get('status')) list = list.filter(g => g.status === query.get('status'));
+      list = [...list].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+      return sendJson(res, 200, { games: list.map(yahtzee.gameSummary) });
+    }
+    if (req.method === 'POST' && sub.length === 1) {
+      const body = await readBody(req);
+      const game = yahtzee.createGame(body);
+      yt.games.push(game);
+      yt.save(); ytLive.broadcast();
+      return sendJson(res, 201, yahtzee.enrich(game, yt.games));
+    }
+    if (sub.length === 2 && req.method === 'GET') {
+      return sendJson(res, 200, yahtzee.enrich(yt.find(sub[1]), yt.games));
+    }
+    if (sub.length === 3 && req.method === 'POST') {
+      const game = yt.find(sub[1]);
+      const body = await readBody(req);
+      switch (sub[2]) {
+        case 'score': yahtzee.applyScore(game, body); break;
+        case 'dice': yahtzee.applyDice(game, body); break;
+        case 'undo': yahtzee.undo(game, body.revision); break;
+        case 'abandon': yahtzee.abandon(game); break;
+        default: throw shared.httpError(404, 'Onbekende actie');
+      }
+      yt.save(); ytLive.broadcast();
+      return sendJson(res, 200, yahtzee.enrich(game, yt.games));
+    }
+  }
+
+  throw shared.httpError(404, 'Niet gevonden');
+}
+
 // ---------- statische bestanden ----------
 
 const MIME = {
@@ -422,6 +483,8 @@ const server = http.createServer(async (req, res) => {
       await handleKlaverjasApi(req, res, pathname, url.searchParams);
     } else if (pathname.startsWith('/api/tafeltennis/')) {
       await handleTafeltennisApi(req, res, pathname, url.searchParams);
+    } else if (pathname.startsWith('/api/yahtzee/')) {
+      await handleYahtzeeApi(req, res, pathname, url.searchParams);
     } else {
       serveStatic(req, res, pathname);
     }
@@ -439,6 +502,7 @@ server.requestTimeout = 0;
 bb.load();
 kj.load();
 tt.load();
+yt.load();
 server.listen(PORT, () => {
   console.log('Spellenhoek draait op http://localhost:' + PORT + ' (data: ' + DATA_DIR + ')');
 });

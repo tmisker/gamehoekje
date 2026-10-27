@@ -14,6 +14,7 @@ offline als losse pagina's.
 | 🃏 **Boerenbridge** | `games/boerenbridge/` | Score bijhouden met twee apparaten: invoer op je telefoon, live scorebord op een tweede scherm. Met klassement over alle potjes. |
 | 🂡 **Klaverjas** | `games/klaverjas/` | Een boompje van 16 rondes met twee teams: troef, punten, roem, nat en pit. Met live scorebord op een tweede scherm en klassement. |
 | 🏓 **Tafeltennis** | `games/tafeltennis/` | Toernooitracker (4T): poule, poule + eindronde of knock-out, uitslagen per game met deuce-controle, live scorebord met stand, kruistabel en schema, en een klassement over toernooien heen. |
+| 🎲 **Yahtzee** | `games/yahtzee/` | Digitaal scoreblok: 1–8 spelers, 1–6 rijtjes tegelijk, op één telefoon of op meerdere tegelijk, highscores per rijtje — en optioneel de camera die de stenen telt. |
 
 Elk spel is een zelfstandige pagina onder `games/<naam>/index.html` met een
 link terug naar de homepage.
@@ -26,12 +27,12 @@ node server/server.js
 
 De server (Node ≥ 18, geen npm-dependencies) serveert de hele site op
 `http://localhost:3000` en biedt de spel-API's onder `/api/boerenbridge/`,
-`/api/klaverjas/` en `/api/tafeltennis/`, elk met een eigen SSE-kanaal voor het
-scorebord. Configuratie via omgevingsvariabelen:
+`/api/klaverjas/`, `/api/tafeltennis/` en `/api/yahtzee/`, elk met een eigen
+SSE-kanaal voor het scorebord (bij yahtzee luisteren de invoerpagina's zelf mee). Configuratie via omgevingsvariabelen:
 
 - `PORT` – poort (standaard `3000`)
 - `DATA_DIR` – map voor de databestanden `boerenbridge.json`,
-  `klaverjas.json` en `tafeltennis.json` (standaard `./data`)
+  `klaverjas.json`, `tafeltennis.json` en `yahtzee.json` (standaard `./data`)
 
 ## Boerenbridge met twee apparaten
 
@@ -182,6 +183,43 @@ de poule weer uit is. Het klassement telt per speler toernooien, titels,
 podiumplaatsen en het winstpercentage over alle wedstrijden; ook hier kun je
 spelers uitsluiten.
 
+## Yahtzee
+
+1. Open `games/yahtzee/`, vul de spelers in op volgorde van gooien (1–8) en
+   kies het aantal **rijtjes** per speler (1–6). Met meer rijtjes kies je elke
+   beurt zelf in welk rijtje je worp komt; elk rijtje heeft zijn eigen bonus.
+2. **Eén telefoon voor iedereen:** het blok volgt de beurt vanzelf. Tik een
+   leeg vakje aan en kies de score (bij de bovenste vakjes "3× ⚃ = 12", bij
+   drie/vier gelijk en kans de som, anders de vaste waarde of een streep).
+3. **Meerdere telefoons:** kies op de andere telefoon hetzelfde potje onder
+   *Verder spelen of meedoen*. Alles loopt live mee; iedereen mag invullen.
+4. **Stenen intikken** (optioneel): tik de vijf stenen in, dan staat in elk
+   leeg vakje van wie aan de beurt is wat die worp oplevert, en is één tik op
+   het vakje genoeg. Dat scheelt rekenwerk bij kans en drie/vier gelijk.
+5. **Camera** (optioneel, experimenteel): hang een telefoon recht boven de
+   bak en zet de camera aan. Ligt de worp stil, dan telt de pagina de ogen en
+   verschijnen de stenen op alle schermen — dan hoef je alleen het vakje nog aan
+   te tikken. Klopt een steen niet, tik hem aan en verbeter hem. De herkenning
+   draait helemaal op de telefoon (er gaan geen beelden over de lijn) en werkt
+   het best met witte stenen met zwarte ogen op een donkere ondergrond, met
+   alle vijf stenen in het vierkant (alleen dat stuk uit het midden van het
+   camerabeeld telt mee). De camera werkt alleen via het **https**-adres;
+   op een kaal `http://`-adres in huis staat de browser hem niet toe.
+
+De regels zijn de officiële: 35 bonus bij 63 of meer in het bovenste deel
+(onder de bovenste vakjes staat hoeveel je voor of achter ligt op "drie van
+elk"), +100 per extra Yahtzee als het Yahtzee-vakje van dat rijtje 50 heeft,
+en de jokerregel (vijf gelijk telt als full house of straat zodra het
+Yahtzee-vakje vol is). Vul je in met de stenen, dan rekent de server dat
+allemaal zelf uit; met de hand vink je een extra Yahtzee aan in het
+keuzevenster. **↶ Ongedaan** neemt de laatste zet terug, ook na afloop — en
+kwam die zet uit een worp, dan liggen die stenen weer op tafel.
+
+De **highscores** zijn de tien beste rijtjes ooit (dus eerlijk tussen potjes
+met één of meer rijtjes); het klassement telt per speler potjes, winst (alleen
+met tegenstanders), het gemiddelde per rijtje, de beste, het aantal Yahtzees en
+hoe vaak de bonus binnenkwam.
+
 ## Op de telefoon of tablet
 
 **Geen zoom.** Knijpen en dubbeltikken zoomen niet meer; teksten en knoppen
@@ -217,8 +255,8 @@ spellenhoek:
 ```
 
 Achter een reverse proxy: zet response-buffering uit voor
-`/api/boerenbridge/events`, `/api/klaverjas/events` en
-`/api/tafeltennis/events` (SSE); de server stuurt
+`/api/boerenbridge/events`, `/api/klaverjas/events`,
+`/api/tafeltennis/events` en `/api/yahtzee/events` (SSE); de server stuurt
 daarvoor zelf al `X-Accel-Buffering: no` en een heartbeat elke 25 s.
 
 ## Testen
@@ -227,6 +265,8 @@ daarvoor zelf al `X-Accel-Buffering: no` en een heartbeat elke 25 s.
 node test/api.test.js
 node test/klaverjas.test.js
 node test/tafeltennis.test.js
+node test/yahtzee.test.js
+node test/yahtzee-vision.test.js
 node test/solver.test.js
 ```
 
@@ -244,6 +284,15 @@ herimplementatie van de tiebreak-regels, en test verder de game-validatie
 (deuce, best-of), seeding en doorschuiven in de eindronde, vrije rondes,
 undo over de fasegrens, de live tussenstand, het klassement, SSE en
 persistentie.
+`yahtzee.test.js` speelt een heel potje (3 spelers × 2 rijtjes) met
+willekeurige worpen en vergelijkt elke tussenstand met een onafhankelijke
+herimplementatie van de telling (bonus, Yahtzee-bonus, jokerregel), en test
+verder de invoer per waarde, de 409-guards, undo, het klassement en de
+highscores, SSE en persistentie.
+`yahtzee-vision.test.js` haalt de dobbelsteenherkenning uit de pagina en
+laat hem synthetische camerabeelden tellen: onscherp, schaduw, glimlicht,
+stenen tegen elkaar, een lamp aan één kant, enzovoort (aantal per scenario
+via `N_VISION`). Dat test het rekenwerk, niet een echte camera.
 `solver.test.js` lost honderden willekeurige scrambles op met beide
 oplossers en verifieert elke oplossing (aantallen instelbaar via
 `N_KOCIEMBA` / `N_LBL`).
@@ -258,6 +307,7 @@ server/
   logic.js                     # autoritatieve boerenbridge-logica
   klaverjas.js                 # autoritatieve klaverjas-logica
   tafeltennis.js               # autoritatieve toernooilogica (tafeltennis)
+  yahtzee.js                   # autoritatieve yahtzee-telling
 games/
   boerenbridge/index.html      # invoerpagina (telefoon)
   boerenbridge/display/        # live scorebord (tweede scherm)
@@ -265,6 +315,7 @@ games/
   klaverjas/display/           # live scorebord (tweede scherm)
   tafeltennis/index.html       # toernooi-invoerpagina (telefoon)
   tafeltennis/display/         # live scorebord: tafels, stand, schema
+  yahtzee/index.html           # scoreblok + stenen + camera (telefoon)
   cube-solver/index.html       # zelfstandige (gebouwde) solver-pagina
   wafelwoorden/index.html      # woordspel
 src/
@@ -274,6 +325,8 @@ build.js                       # bouwt de cube-solver naar games/cube-solver/
 test/api.test.js               # end-to-end API-test (boerenbridge)
 test/klaverjas.test.js         # end-to-end API-test (klaverjas)
 test/tafeltennis.test.js       # end-to-end API-test (tafeltennis)
+test/yahtzee.test.js           # end-to-end API-test (yahtzee)
+test/yahtzee-vision.test.js    # dobbelsteenherkenning op synthetische beelden
 data/                          # spelgegevens (niet in git; Docker-volume)
 ```
 
