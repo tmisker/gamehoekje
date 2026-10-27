@@ -295,6 +295,112 @@
   });
 })();
 </script>
+<!-- Scherm wakker. Zelfde blok op elke pagina; zie CLAUDE.md. -->
+<style>
+  /* Rechtsboven, en alleen even zichtbaar: op de displays is elke hoek
+     bezet, dus hij verdwijnt na een paar tellen en komt terug bij een tik. */
+  #wakker{
+    position:absolute;top:8px;right:8px;z-index:9;margin:0;box-sizing:border-box;
+    display:flex;align-items:center;justify-content:center;gap:6px;height:36px;min-width:36px;padding:0 8px;
+    border-radius:18px;border:1px solid rgba(255,255,255,.18);background:rgba(24,24,28,.9);
+    color:#f4f4f6;font:600 .82rem/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+    cursor:pointer;-webkit-tap-highlight-color:transparent;transition:opacity .4s;
+  }
+  #wakker .i{font-size:1.05rem;filter:grayscale(1);opacity:.5}
+  #wakker[aria-pressed="true"]{border-color:var(--accent,#4caf50)}
+  #wakker[aria-pressed="true"] .i{filter:none;opacity:1}
+  #wakker .t{display:none;white-space:nowrap}
+  #wakker.zegt .t{display:inline}
+  #wakker.weg{opacity:0;pointer-events:none}
+  #wakker.weg:focus-visible{opacity:1;pointer-events:auto}
+  /* Op de displays zit het verbindingsbolletje op dezelfde plek; dat wijkt
+     zolang de knop er staat. */
+  body:has(#wakker:not(.weg)) #connDot{opacity:0}
+  @media (prefers-reduced-motion:reduce){#wakker{transition:none}}
+</style>
+<script>
+(function(){
+  // Houdt het scherm aan met de Screen Wake Lock API. Aan of uit geldt per
+  // toestel en voor alle pagina's (localStorage), zodat een display één keer
+  // aangezet hoeft te worden. Werkt alleen in een secure context (het
+  // https-adres); een onzichtbaar loopend filmpje als terugval is bewust
+  // afgewezen. De browser laat het slot los zodra de pagina uit beeld gaat,
+  // dus bij terugkomst vragen we opnieuw — en na elke tik, voor browsers die
+  // er een gebruikersactie bij willen.
+  const KEY = 'spellenhoek:wakker';
+  const kan = 'wakeLock' in navigator;
+  let wil = false, slot = null, wacht = null, verberg = 0, zwijg = 0;
+  try { wil = localStorage.getItem(KEY) === '1'; } catch (e) {}
+
+  const knop = document.createElement('button');
+  knop.id = 'wakker';
+  knop.type = 'button';
+  knop.setAttribute('aria-label', 'Scherm wakker houden');
+  knop.innerHTML = '<span class="i" aria-hidden="true">☕</span><span class="t"></span>';
+  document.body.appendChild(knop);
+
+  function teken() {
+    const aan = kan && wil;
+    knop.setAttribute('aria-pressed', String(aan));
+    knop.title = aan ? 'Scherm blijft aan — tik om uit te zetten' : 'Scherm wakker houden';
+  }
+  function toon() {
+    knop.classList.remove('weg');
+    clearTimeout(verberg);
+    verberg = setTimeout(() => knop.classList.add('weg'), 4000);
+  }
+  function zeg(tekst) {
+    knop.querySelector('.t').textContent = tekst;
+    knop.classList.add('zegt');
+    clearTimeout(zwijg);
+    zwijg = setTimeout(() => knop.classList.remove('zegt'), 2500);
+    toon();
+  }
+  function vraag() {
+    if (!kan || !wil || slot || document.visibilityState !== 'visible') return Promise.resolve();
+    if (!wacht) {
+      wacht = navigator.wakeLock.request('screen').then(s => {
+        s.addEventListener('release', () => { if (slot === s) slot = null; });
+        if (wil) slot = s; else s.release();   // intussen weer uitgezet
+      }, () => {}).then(() => { wacht = null; });
+    }
+    return wacht;
+  }
+  function laatLos() {
+    const s = slot;
+    slot = null;
+    if (s) s.release();
+  }
+
+  knop.addEventListener('click', async () => {
+    if (!kan) {
+      zeg(window.isSecureContext ? 'Kan niet in deze browser' : 'Alleen via het https-adres');
+      return;
+    }
+    wil = !wil;
+    if (wil) await vraag(); else laatLos();
+    if (wil && !slot) { wil = false; teken(); zeg('Lukt nu niet'); return; }
+    try { localStorage.setItem(KEY, wil ? '1' : '0'); } catch (e) {}
+    teken();
+    zeg(wil ? 'Scherm blijft aan' : 'Scherm mag weer uit');
+  });
+  document.addEventListener('pointerup', () => { toon(); vraag(); }, true);
+  document.addEventListener('visibilitychange', vraag);
+  window.addEventListener('pageshow', vraag);
+  // Op een ander tabblad aan- of uitgezet.
+  window.addEventListener('storage', e => {
+    if (e.key !== KEY) return;
+    wil = e.newValue === '1';
+    if (!wil) laatLos();
+    teken();
+    vraag();
+  });
+
+  teken();
+  toon();
+  vraag();
+})();
+</script>
 <!-- Geen zoom. Zelfde blok op elke pagina; zie CLAUDE.md. -->
 <style>
   /* Knijp- en dubbeltik-zoom eruit. Pagina's die zelf met gebaren werken

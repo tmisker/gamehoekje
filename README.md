@@ -104,8 +104,10 @@ Er is bewust geen authenticatie of koppelcode: dit is bedoeld voor een
 vertrouwd thuisnetwerk. Zet het niet zonder extra maatregelen (reverse proxy
 met auth) open naar internet.
 
-Tip voor het display: zet automatische schermvergrendeling uit op het
-apparaat, dat kan de pagina zelf niet regelen.
+Tip voor het display: tik ☕ rechtsboven aan, dan blijft het scherm aan (zie
+"Op de telefoon of tablet"). Lukt dat niet — bijvoorbeeld op een oud iPad of
+via een `http://`-adres — zet dan automatische schermvergrendeling uit op het
+apparaat.
 
 ## Klaverjas met twee apparaten
 
@@ -240,6 +242,11 @@ homepage) onder één voornaam met elk een eigen volledige naam, bijvoorbeeld
 **Geen zoom.** Knijpen en dubbeltikken zoomen niet meer; teksten en knoppen
 blijven staan waar je ze verwacht. Scrollen en slepen (wafelwoorden) werken
 gewoon.
+
+**Scherm wakker.** Tik ☕ rechtsboven aan en het scherm gaat niet meer op
+slot zolang de pagina openstaat. Dat onthoudt het toestel, voor alle spellen;
+nog een tik zet het weer uit. Het knopje verdwijnt na een paar tellen — tik
+ergens op het scherm en het is er weer. Werkt alleen via het https-adres.
 
 Zet je de site op je beginscherm (*Deel → Zet op beginscherm*), dan start hij
 zonder Safari-balken, als een app. Stond hij er al vóór deze wijziging op?
