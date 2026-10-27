@@ -454,6 +454,33 @@ Safari-balken starten — en pas in zo'n homescreen-app houdt iOS zich ook echt
 aan `user-scalable=no`. iOS onthoudt die keuze bij het toevoegen, dus na een
 wijziging moet je het icoon opnieuw aanmaken.
 
+## Scherm wakker (elke pagina)
+
+Vlak vóór het zoom-blokje staat een tweede identiek blokje (comment "Scherm
+wakker"), met dezelfde regels: letterlijk overnemen, alleen in alle pagina's
+tegelijk wijzigen, in `template.html` en dan `node build.js`.
+
+Het zet een knop ☕ rechtsboven (`#wakker`) die met de Screen Wake Lock API
+het scherm aan houdt. De keuze staat per toestel in `localStorage`
+(`spellenhoek:wakker`) en geldt dus voor elke pagina: een display zet je één
+keer aan. De browser laat het slot los zodra de pagina uit beeld is; het blok
+vraagt het opnieuw bij `visibilitychange`/`pageshow` en na elke tik (sommige
+browsers willen een gebruikersactie).
+
+- **Alleen in een secure context.** Via het https-adres werkt het; op een
+  kaal `http://`-adres bestaat `navigator.wakeLock` niet en zegt de knop dat.
+  Een terugval met een onzichtbaar loopend filmpje (NoSleep.js) is eerder
+  gebouwd en **bewust afgewezen** — niet opnieuw toevoegen.
+- **De knop verdwijnt na 4 s** en komt terug bij elke tik: op de displays is
+  elke hoek bezet. Zolang hij er staat wijkt het verbindingsbolletje
+  (`#connDot`) op die plek (`body:has(...)`).
+- **`z-index:9`**, onder de kiezer van yahtzee (10): die staat vóór het blok
+  in de DOM, dus met een gelijke z-index zou de knop erbovenop komen.
+- **Testen:** de headless shell van Playwright weigert elk slot ("permission
+  request denied"); start met `chromium.launch({channel: 'chromium'})`, dan
+  werkt de echte API. Een `http://`-adres zonder secure context krijg je met
+  `--host-resolver-rules=MAP thuis.test 127.0.0.1`.
+
 ## Een spel toevoegen
 
 1. Maak `games/<naam>/index.html` als zelfstandige pagina. Zet bovenin een
@@ -468,7 +495,7 @@ wijziging moet je het icoon opnieuw aanmaken.
 - Nederlands in de UI; commit-berichten mogen Nederlands of Engels.
 - Self-contained pagina's, geen externe requests of CDN's. Requests naar de
   eigen server (relatieve `/api/...`-paden) zijn de enige uitzondering.
-- Nieuwe pagina? Neem het zoom-blokje van hierboven over.
+- Nieuwe pagina? Neem het wakker- en het zoom-blokje van hierboven over.
 - Mobiel-eerst, donker thema. Homepage-accent `#5b8cff`; spel-accent groen.
 - Geen auth: bedoeld voor een vertrouwd thuisnetwerk (staat ook in README).
 - Commit & push alleen wanneer de gebruiker erom vraagt; ontwikkel op de
