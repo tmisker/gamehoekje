@@ -474,6 +474,16 @@ browsers willen een gebruikersactie).
 - **De knop verdwijnt na 4 s** en komt terug bij elke tik: op de displays is
   elke hoek bezet. Zolang hij er staat wijkt het verbindingsbolletje
   (`#connDot`) op die plek (`body:has(...)`).
+- **Hij komt pas 500 ms ná de tik terug, nooit tijdens de tik** (echt
+  gebeurd). Wordt een klikbaar element zichtbaar tussen touchstart en de
+  nagebootste muisklik, dan denkt iOS dat de tik een hover-menu opende en
+  stuurt het geen klik: de eerste tik op elke knop deed dan niets. WebKit
+  (`ContentChangeObserver`) let op zo'n wissel van onzichtbaar (o.a.
+  `opacity:0`) naar zichtbaar, en wacht tot 400 ms op timers die tijdens de
+  tik gezet zijn. Een nieuwe `pointerdown` breekt het terugkomen af. Staat de
+  knop er al, dan wordt alleen zijn timer verlengd: dat verandert niets aan
+  het beeld en mag dus meteen. In Chromium is dit niet na te spelen. De
+  iOS-simulator met safaridriver gaf ook geen bruikbare tikken.
 - **`z-index:9`**, onder de kiezer van yahtzee (10): die staat vóór het blok
   in de DOM, dus met een gelijke z-index zou de knop erbovenop komen.
 - **Testen:** de headless shell van Playwright weigert elk slot ("permission
