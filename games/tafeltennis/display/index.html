@@ -383,7 +383,7 @@
   // er een gebruikersactie bij willen.
   const KEY = 'spellenhoek:wakker';
   const kan = 'wakeLock' in navigator;
-  let wil = false, slot = null, wacht = null, verberg = 0, zwijg = 0;
+  let wil = false, slot = null, wacht = null, verberg = 0, zwijg = 0, terug = 0;
   try { wil = localStorage.getItem(KEY) === '1'; } catch (e) {}
 
   const knop = document.createElement('button');
@@ -438,7 +438,18 @@
     teken();
     zeg(wil ? 'Scherm blijft aan' : 'Scherm mag weer uit');
   });
-  document.addEventListener('pointerup', () => { toon(); vraag(); }, true);
+  // Na een tik komt de knop pas terug als de tik zelf verwerkt is. Verschijnt
+  // er tijdens een tik een knop, dan houdt iOS de tik voor het openen van een
+  // hover-menu en slikt het de klik in: de eerste tik deed dan niets. iOS kijkt
+  // tot zo'n 400 ms na de tik of er iets verschijnt, vandaar de 500 ms. Staat
+  // de knop er al, dan verandert er niets aan het beeld en mag het meteen.
+  document.addEventListener('pointerdown', () => clearTimeout(terug), true);
+  document.addEventListener('pointerup', () => {
+    clearTimeout(terug);
+    if (knop.classList.contains('weg')) terug = setTimeout(toon, 500);
+    else toon();
+    vraag();
+  }, true);
   document.addEventListener('visibilitychange', vraag);
   window.addEventListener('pageshow', vraag);
   // Op een ander tabblad aan- of uitgezet.
